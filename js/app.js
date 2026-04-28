@@ -1,361 +1,393 @@
 /* ═══════════════════════════════════════════════════════════
-   MY EXAMS APP — Application Logic v1.0
+   MY EXAMS APP — v2.0
    WAEC · NECO · GCE · NABTEB
-   Objective + Theory | Practice + Exam mode
+   Fixes: timer bug, free-counter bug, exit flow
+   New:   keyboard nav, flag questions, streak, confirm submit,
+          mobile sidebar, beforeunload guard, better results
 ═══════════════════════════════════════════════════════════ */
-
 (() => {
 
-  /* ── STORAGE KEYS ── */
+  /* ─── STORAGE KEYS ─── */
   const SK = {
-    users:    'mea-users-v1',
-    current:  'mea-current-v1',
-    access:   'mea-access-v1',
-    freeUsed: 'mea-free-v1',
+    users:   'mea-users-v1',
+    current: 'mea-current-v1',
+    access:  'mea-access-v1',
+    free:    'mea-free-v1',
+    streak:  'mea-streak-v1',
   };
 
-  /* ── CONSTANTS ── */
-  const FREE_DAILY_LIMIT = 10;
+  const FREE_DAILY_LIMIT = 10; // free sessions per day (not per question)
 
-  /* ── STATE ── */
+  /* ─── STATE ─── */
   const S = {
-    currentUser:    loadSafe(SK.current) || '',
-    users:          loadSafe(SK.users, {}),
-    hasAccess:      checkAccess(),
-    freeUsedToday:  getFreeUsed(),
+    // Persistent
+    currentUser:  loadSafe(SK.current) || '',
+    users:        loadSafe(SK.users, {}),
+    hasAccess:    checkAccess(),
+    freeToday:    getFreeToday(),
+    streak:       loadSafe(SK.streak, { count: 0, lastDate: '' }),
 
-    // Session
-    selectedExam:    'WAEC',
-    selectedSubject: '',
-    selectedMode:    'practice',
-    selectedType:    'objective',
-    selectedCount:   20,
-    selectedDuration: null,
+    // Setup
+    exam:     'WAEC',
+    subject:  '',
+    mode:     'practice',
+    type:     'objective',
+    count:    20,
+    duration: 'auto',
 
-    // Active quiz
-    questions:   [],
-    answers:     [],
-    currentIdx:  0,
-    reviewMode:  false,
-    showAnswer:  false,
-    timerSecs:   0,
-    timerId:     null,
+    // Active session
+    questions:    [],
+    answers:      [],
+    flagged:      [],
+    idx:          0,
+    reviewMode:   false,
+    showAnswer:   false,
+    timerSecs:    0,
+    timerId:      null,
+    inSession:    false,   // true while a session is active (for beforeunload)
   };
 
-  /* ── ELEMENT REFS ── */
-  const el = {
-    // Home
-    homeScreen:    q('#homeScreen'),
-    quizScreen:    q('#quizScreen'),
-    resultScreen:  q('#resultScreen'),
-    studentInput:  q('#studentNameInput'),
-    loginBtn:      q('#loginBtn'),
-    studentPill:   q('#studentPill'),
-    examPills:     qAll('.exam-pill'),
-    subjectGrid:   q('#subjectGrid'),
-    modeToggle:    q('#modeToggle'),
-    typeToggle:    q('#typeToggle'),
-    qCountSelect:  q('#qCountSelect'),
-    durationSelect:q('#durationSelect'),
-    startBtn:      q('#startBtn'),
-    startBtnText:  q('#startBtnText'),
-    historyList:   q('#historyList'),
-    clearHistory:  q('#clearHistoryBtn'),
-    hStatSessions: q('#hStatSessions'),
-    hStatAvg:      q('#hStatAvg'),
-    hStatBest:     q('#hStatBest'),
-    hStatQs:       q('#hStatQs'),
-    // Paywall
-    paywallOverlay:q('#paywallOverlay'),
-    payBtn:        q('#payBtn'),
-    accessCodeInput:q('#accessCodeInput'),
-    redeemBtn:     q('#redeemBtn'),
-    closePaywall:  q('#closePaywall'),
-    // Sidebar
-    exitBtn:       q('#exitBtn'),
-    sbStudent:     q('#sbStudent'),
-    sbSubject:     q('#sbSubject'),
-    sbMode:        q('#sbMode'),
-    sbExam:        q('#sbExam'),
-    timerCard:     q('#timerCard'),
-    timerDisplay:  q('#timerDisplay'),
-    progressBar:   q('#progressBar'),
-    progressFraction:q('#progressFraction'),
-    progressSub:   q('#progressSub'),
-    pillsLabel:    q('#pillsLabel'),
-    qPills:        q('#qPills'),
-    submitQuizBtn: q('#submitQuizBtn'),
-    // Quiz main
-    qtypeBanner:   q('#qtypeBanner'),
-    qNumBadge:     q('#qNumBadge'),
-    qSubjectTag:   q('#qSubjectTag'),
-    qYearTag:      q('#qYearTag'),
-    qPosIndicator: q('#qPosIndicator'),
-    objectivePanel:q('#objectivePanel'),
-    theoryPanel:   q('#theoryPanel'),
-    objectiveQ:    q('#objectiveQuestion'),
-    optionsList:   q('#optionsList'),
-    explanationArea:q('#explanationArea'),
-    theoryQ:       q('#theoryQuestion'),
-    markingScheme: q('#markingScheme'),
-    toggleAnswerBtn:q('#toggleAnswerBtn'),
-    modelAnswer:   q('#modelAnswer'),
-    examTipBox:    q('#examTipBox'),
-    prevBtn:       q('#prevBtn'),
-    nextBtn:       q('#nextBtn'),
-    // Results
-    resultBadge:   q('#resultBadge'),
-    resultScore:   q('#resultScore'),
-    resultGrade:   q('#resultGrade'),
-    resultSummary: q('#resultSummary'),
-    resultStatsGrid:q('#resultStatsGrid'),
-    reviewBtn:     q('#reviewBtn'),
-    homeBtn:       q('#homeBtn'),
-    shareBtn:      q('#shareBtn'),
-  };
+  /* ─── ELEMENT CACHE ─── */
+  const E = {};
+  const IDS = [
+    'homeScreen','quizScreen','resultScreen',
+    'studentNameInput','loginBtn','studentPill','streakDisplay',
+    'subjectGrid','modeToggle','typeToggle','qCountSelect','durationSelect',
+    'startBtn','startBtnText',
+    'historyList','clearHistoryBtn',
+    'hStatSessions','hStatAvg','hStatBest','hStatQs',
+    'paywallOverlay','payBtn','accessCodeInput','redeemBtn','closePaywall',
+    'sidebarToggle','sidebarBackdrop','quizSidebar','exitBtn',
+    'sbStudent','sbSubject','sbMode','sbExam',
+    'timerCard','timerDisplay',
+    'progressBar','progressFraction','progressSub',
+    'qPills','submitQuizBtn',
+    'qtypeBanner','qNumBadge','qSubjectTag','qYearTag','qPosIndicator','flagBtn',
+    'objectivePanel','objectiveQuestion','optionsList','explanationArea','keyHint',
+    'theoryPanel','theoryQuestion','markingScheme','toggleAnswerBtn','modelAnswer','examTipBox',
+    'prevBtn','nextBtn',
+    'resultEmoji','resultScore','resultGrade','resultSummary','resultStatsGrid','resultBreakdown',
+    'reviewBtn','homeBtn','shareBtn',
+  ];
+  IDS.forEach(id => { E[id] = document.getElementById(id); });
 
-  /* ══════════════════════════════════════════
+  /* ════════════════════════════════════════
      INIT
-  ══════════════════════════════════════════ */
+  ════════════════════════════════════════ */
   function init() {
     buildSubjectGrid();
     bindEvents();
     restoreUser();
-    updateHeroStats();
-    updateStartBtn();
-    totalQCount();
+    refreshStats();
+    renderHistory();
+    renderStreak();
+    countQuestions();
   }
 
-  function totalQCount() {
+  function countQuestions() {
     let t = 0;
     Object.values(EXAM_BANK).forEach(s => {
       t += (s.objective?.length || 0) + (s.theory?.length || 0);
     });
-    el.hStatQs.textContent = String(t);
+    E.hStatQs.textContent = t;
   }
 
-  /* ── BUILD SUBJECT GRID ── */
+  /* ─── SUBJECT GRID ─── */
   function buildSubjectGrid() {
-    el.subjectGrid.innerHTML = '';
+    E.subjectGrid.innerHTML = '';
     Object.entries(SUBJECTS).forEach(([key, meta]) => {
-      const bank = EXAM_BANK[key];
-      if (!bank) return;
-      const objCount = bank.objective?.length || 0;
-      const thCount  = bank.theory?.length || 0;
+      if (!EXAM_BANK[key]) return;
+      const n = EXAM_BANK[key].objective?.length || 0;
       const btn = document.createElement('button');
       btn.className = 'subject-btn';
       btn.dataset.subject = key;
-      btn.innerHTML = `
-        <span class="sub-icon">${meta.icon}</span>
-        <span>${meta.name}</span>
-        <span class="sub-count">${objCount}Q</span>
-      `;
-      btn.addEventListener('click', () => selectSubject(key, btn));
-      el.subjectGrid.appendChild(btn);
+      btn.innerHTML =
+        `<span class="sub-icon">${meta.icon}</span>` +
+        `<span class="sub-name">${meta.name}</span>` +
+        `<span class="sub-count">${n}Q</span>`;
+      btn.addEventListener('click', () => pickSubject(key, btn));
+      E.subjectGrid.appendChild(btn);
     });
   }
 
-  /* ── BIND EVENTS ── */
+  /* ─── EVENTS ─── */
   function bindEvents() {
-    el.loginBtn.addEventListener('click', loginStudent);
-    el.studentInput.addEventListener('keydown', e => { if (e.key === 'Enter') loginStudent(); });
+    // Login
+    E.loginBtn.addEventListener('click', loginStudent);
+    E.studentNameInput.addEventListener('keydown', e => { if (e.key === 'Enter') loginStudent(); });
 
-    el.examPills.forEach(p => p.addEventListener('click', () => {
-      el.examPills.forEach(x => x.classList.remove('active'));
-      p.classList.add('active');
-      S.selectedExam = p.dataset.exam;
-    }));
+    // Exam pills
+    document.querySelectorAll('.exam-pill').forEach(p =>
+      p.addEventListener('click', () => {
+        document.querySelectorAll('.exam-pill').forEach(x => x.classList.remove('active'));
+        p.classList.add('active');
+        S.exam = p.dataset.exam;
+      })
+    );
 
-    el.modeToggle.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => {
-      el.modeToggle.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
-      b.classList.add('active');
-      S.selectedMode = b.dataset.mode;
-      el.durationSelect.disabled = S.selectedMode !== 'exam';
-      updateStartBtn();
-    }));
+    // Mode toggle
+    E.modeToggle.querySelectorAll('.mode-btn').forEach(b =>
+      b.addEventListener('click', () => {
+        E.modeToggle.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        S.mode = b.dataset.mode;
+        E.durationSelect.disabled = S.mode !== 'exam';
+        refreshStartBtn();
+      })
+    );
 
-    el.typeToggle.querySelectorAll('.mode-btn').forEach(b => b.addEventListener('click', () => {
-      el.typeToggle.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
-      b.classList.add('active');
-      S.selectedType = b.dataset.type;
-      updateSubjectGrid();
-      updateStartBtn();
-    }));
+    // Type toggle
+    E.typeToggle.querySelectorAll('.mode-btn').forEach(b =>
+      b.addEventListener('click', () => {
+        E.typeToggle.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        S.type = b.dataset.type;
+        updateSubjectCounts();
+        refreshStartBtn();
+      })
+    );
 
-    el.qCountSelect.addEventListener('change', () => {
-      S.selectedCount = el.qCountSelect.value === 'all' ? 'all' : parseInt(el.qCountSelect.value);
+    E.qCountSelect.addEventListener('change', () => {
+      S.count = E.qCountSelect.value === 'all' ? 'all' : Number(E.qCountSelect.value);
     });
+    E.durationSelect.addEventListener('change', () => { S.duration = E.durationSelect.value; });
 
-    el.durationSelect.addEventListener('change', () => {
-      S.selectedDuration = el.durationSelect.value;
-    });
-
-    el.startBtn.addEventListener('click', startSession);
-    el.clearHistory.addEventListener('click', clearHistory);
+    E.startBtn.addEventListener('click', startSession);
+    E.clearHistoryBtn.addEventListener('click', clearHistory);
 
     // Paywall
-    el.payBtn.addEventListener('click', handlePayment);
-    el.redeemBtn.addEventListener('click', redeemCode);
-    el.closePaywall.addEventListener('click', () => el.paywallOverlay.classList.add('hidden'));
+    E.payBtn.addEventListener('click', handlePayment);
+    E.redeemBtn.addEventListener('click', redeemCode);
+    E.closePaywall.addEventListener('click', () => E.paywallOverlay.classList.add('hidden'));
 
     // Quiz
-    el.exitBtn.addEventListener('click', confirmExit);
-    el.submitQuizBtn.addEventListener('click', finishSession);
-    el.prevBtn.addEventListener('click', () => navigate(-1));
-    el.nextBtn.addEventListener('click', () => navigate(1));
-    el.toggleAnswerBtn.addEventListener('click', toggleModelAnswer);
+    E.exitBtn.addEventListener('click', confirmExit);
+    E.submitQuizBtn.addEventListener('click', confirmSubmit);
+    E.prevBtn.addEventListener('click', () => navigate(-1));
+    E.nextBtn.addEventListener('click', () => navigate(1));
+    E.toggleAnswerBtn.addEventListener('click', toggleAnswer);
+    E.flagBtn.addEventListener('click', toggleFlag);
+
+    // Mobile sidebar
+    E.sidebarToggle.addEventListener('click', openSidebar);
+    E.sidebarBackdrop.addEventListener('click', closeSidebar);
 
     // Results
-    el.reviewBtn.addEventListener('click', enterReview);
-    el.homeBtn.addEventListener('click', () => showScreen('home'));
-    el.shareBtn.addEventListener('click', shareApp);
+    E.reviewBtn.addEventListener('click', enterReview);
+    E.homeBtn.addEventListener('click', goHome);
+    E.shareBtn.addEventListener('click', shareApp);
+
+    // Keyboard
+    document.addEventListener('keydown', onKey);
+
+    // Warn before closing mid exam
+    window.addEventListener('beforeunload', e => {
+      if (S.inSession && S.mode === 'exam' && !S.reviewMode) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
   }
 
-  /* ══════════════════════════════════════════
-     STUDENT / LOGIN
-  ══════════════════════════════════════════ */
+  /* ─── KEYBOARD ─── */
+  function onKey(e) {
+    if (!E.quizScreen.classList.contains('active')) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const q = S.questions[S.idx];
+    switch (e.key) {
+      case 'ArrowRight': case 'ArrowDown':
+        e.preventDefault(); navigate(1); break;
+      case 'ArrowLeft': case 'ArrowUp':
+        e.preventDefault(); navigate(-1); break;
+      case '1': case '2': case '3': case '4':
+        if (!S.reviewMode && q?._type === 'objective' && S.answers[S.idx] === null) {
+          const i = Number(e.key) - 1;
+          if (i < (q.options?.length || 0)) { S.answers[S.idx] = i; renderQ(); }
+        }
+        break;
+      case 'f': case 'F':
+        toggleFlag(); break;
+      case 'Escape':
+        if (E.quizSidebar.classList.contains('sidebar-open')) closeSidebar();
+        else confirmExit();
+        break;
+    }
+  }
+
+  /* ════════════════════════════════════════
+     AUTH / STUDENT
+  ════════════════════════════════════════ */
   function loginStudent() {
-    const name = el.studentInput.value.trim().replace(/\s+/,' ');
-    if (!name) { el.studentInput.focus(); return; }
-    if (!S.users[name]) S.users[name] = { history:[] };
+    const name = E.studentNameInput.value.trim().replace(/\s+/g, ' ');
+    if (!name) { E.studentNameInput.focus(); return; }
+    if (!S.users[name]) S.users[name] = { history: [] };
     S.currentUser = name;
     saveSafe(SK.users, S.users);
     saveSafe(SK.current, name);
-    renderCurrentUser();
-    updateHeroStats();
+    tickStreak();
+    renderUser();
+    refreshStats();
     renderHistory();
   }
 
   function restoreUser() {
     if (S.currentUser) {
-      el.studentInput.value = S.currentUser;
-      renderCurrentUser();
+      E.studentNameInput.value = S.currentUser;
+      renderUser();
       renderHistory();
     }
-    updateHeroStats();
+    refreshStats();
   }
 
-  function renderCurrentUser() {
+  function renderUser() {
     if (S.currentUser) {
-      el.studentPill.textContent = '✓ Logged in as: ' + S.currentUser;
-      el.studentPill.className = 'student-status active';
+      E.studentPill.textContent = '✓  ' + S.currentUser;
+      E.studentPill.className = 'student-status active';
     } else {
-      el.studentPill.textContent = 'No student logged in';
-      el.studentPill.className = 'student-status';
+      E.studentPill.textContent = 'No student logged in';
+      E.studentPill.className = 'student-status';
     }
   }
 
-  /* ══════════════════════════════════════════
-     SUBJECT SELECTION
-  ══════════════════════════════════════════ */
-  function selectSubject(key, btn) {
-    qAll('.subject-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    S.selectedSubject = key;
-    updateStartBtn();
+  /* ─── STREAK ─── */
+  function tickStreak() {
+    const today = todayStr();
+    const prev  = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    if (S.streak.lastDate === today) return;
+    S.streak.count = S.streak.lastDate === prev ? S.streak.count + 1 : 1;
+    S.streak.lastDate = today;
+    saveSafe(SK.streak, S.streak);
+    renderStreak();
   }
 
-  function updateSubjectGrid() {
-    qAll('.subject-btn').forEach(btn => {
-      const key = btn.dataset.subject;
+  function renderStreak() {
+    if (!E.streakDisplay) return;
+    const c = S.streak.count || 0;
+    if (c > 0) {
+      E.streakDisplay.textContent = `🔥 ${c} day${c > 1 ? 's' : ''}`;
+      E.streakDisplay.style.display = 'inline-flex';
+    } else {
+      E.streakDisplay.style.display = 'none';
+    }
+  }
+
+  /* ════════════════════════════════════════
+     SUBJECT SELECTION
+  ════════════════════════════════════════ */
+  function pickSubject(key, btn) {
+    document.querySelectorAll('.subject-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    S.subject = key;
+    refreshStartBtn();
+  }
+
+  function updateSubjectCounts() {
+    document.querySelectorAll('.subject-btn').forEach(btn => {
+      const key  = btn.dataset.subject;
       const bank = EXAM_BANK[key];
       if (!bank) { btn.disabled = true; return; }
       const hasObj = (bank.objective?.length || 0) > 0;
       const hasTh  = (bank.theory?.length || 0) > 0;
-      const type   = S.selectedType;
-      const available = (type==='objective' && hasObj) || (type==='theory' && hasTh) || (type==='both' && (hasObj||hasTh));
-      btn.disabled = !available;
-      const count = type==='objective' ? bank.objective?.length : type==='theory' ? bank.theory?.length : (bank.objective?.length||0)+(bank.theory?.length||0);
-      const countEl = btn.querySelector('.sub-count');
-      if (countEl) countEl.textContent = (count||0)+'Q';
+      const ok = S.type === 'objective' ? hasObj
+               : S.type === 'theory'    ? hasTh
+               : hasObj || hasTh;
+      btn.disabled = !ok;
+      btn.style.opacity = ok ? '' : '0.35';
+      const n = S.type === 'objective' ? (bank.objective?.length || 0)
+              : S.type === 'theory'    ? (bank.theory?.length || 0)
+              : (bank.objective?.length || 0) + (bank.theory?.length || 0);
+      const c = btn.querySelector('.sub-count');
+      if (c) c.textContent = n + 'Q';
     });
-    // Deselect if current subject no longer valid
-    if (S.selectedSubject) {
-      const activeBtns = qAll('.subject-btn.active');
-      if (activeBtns.length === 0 || activeBtns[0]?.disabled) {
-        S.selectedSubject = '';
-        updateStartBtn();
-      }
+    // Deselect if current subject is now disabled
+    if (S.subject) {
+      const active = document.querySelector('.subject-btn.active');
+      if (!active || active.disabled) { S.subject = ''; refreshStartBtn(); }
     }
   }
 
-  function updateStartBtn() {
-    const hasSubject = Boolean(S.selectedSubject);
-    el.startBtn.disabled = !hasSubject;
-    if (!hasSubject) {
-      el.startBtnText.textContent = 'Select a subject to begin';
-    } else {
-      const subName = SUBJECTS[S.selectedSubject]?.name || S.selectedSubject;
-      const action  = S.selectedMode === 'exam' ? 'Start Exam' : 'Start Practice';
-      el.startBtnText.textContent = `${action} — ${subName}`;
-    }
+  function refreshStartBtn() {
+    const ok = Boolean(S.subject);
+    E.startBtn.disabled = !ok;
+    E.startBtnText.textContent = !ok
+      ? 'Select a subject to begin'
+      : `${S.mode === 'exam' ? 'Start Exam' : 'Start Practice'} — ${SUBJECTS[S.subject]?.name || S.subject}`;
   }
 
-  /* ══════════════════════════════════════════
-     SESSION START
-  ══════════════════════════════════════════ */
+  /* ════════════════════════════════════════
+     SESSION
+  ════════════════════════════════════════ */
   function startSession() {
     if (!S.currentUser) { loginStudent(); if (!S.currentUser) return; }
-    if (!S.selectedSubject) return;
+    if (!S.subject) return;
 
-    // Free tier check
-    if (!S.hasAccess) {
-      if (S.freeUsedToday >= FREE_DAILY_LIMIT) {
-        el.paywallOverlay.classList.remove('hidden');
-        return;
-      }
+    // Paywall check — one session counts as one free use
+    if (!S.hasAccess && S.freeToday >= FREE_DAILY_LIMIT) {
+      E.paywallOverlay.classList.remove('hidden');
+      return;
     }
 
-    const bank = EXAM_BANK[S.selectedSubject];
+    const bank = EXAM_BANK[S.subject];
     let pool = [];
-
-    if (S.selectedType === 'objective') {
-      pool = shuffle([...(bank.objective||[])]).map(q => ({...q, _type:'objective'}));
-    } else if (S.selectedType === 'theory') {
-      pool = shuffle([...(bank.theory||[])]).map(q => ({...q, _type:'theory'}));
+    if (S.type === 'objective') {
+      pool = shuffle(bank.objective || []).map(q => ({ ...q, _type: 'objective' }));
+    } else if (S.type === 'theory') {
+      pool = shuffle(bank.theory || []).map(q => ({ ...q, _type: 'theory' }));
     } else {
-      const obj = shuffle([...(bank.objective||[])]).map(q => ({...q, _type:'objective'}));
-      const th  = shuffle([...(bank.theory||[])]).map(q => ({...q, _type:'theory'}));
-      pool = shuffle([...obj, ...th]);
+      // Both: objective first, then theory (not shuffled together — keeps groups coherent)
+      pool = [
+        ...shuffle(bank.objective || []).map(q => ({ ...q, _type: 'objective' })),
+        ...shuffle(bank.theory    || []).map(q => ({ ...q, _type: 'theory'    })),
+      ];
     }
 
     if (!pool.length) { alert('No questions available for this selection.'); return; }
 
-    const count = S.selectedCount === 'all' ? pool.length : Math.min(S.selectedCount, pool.length);
-    S.questions   = pool.slice(0, count);
-    S.answers     = new Array(count).fill(null);
-    S.currentIdx  = 0;
-    S.reviewMode  = false;
-    S.showAnswer  = false;
+    const n = S.count === 'all' ? pool.length : Math.min(Number(S.count), pool.length);
+    S.questions  = pool.slice(0, n);
+    S.answers    = new Array(n).fill(null);
+    S.flagged    = new Array(n).fill(false);
+    S.idx        = 0;
+    S.reviewMode = false;
+    S.showAnswer = false;
+    S.inSession  = true;
 
-    // Timer
+    // ── TIMER FIX: read el.durationSelect, not S.durationSelect ──
     if (S.timerId) { clearInterval(S.timerId); S.timerId = null; }
-    if (S.selectedMode === 'exam') {
-      const dur = S.durationSelect?.value === 'auto' ? count : (parseInt(el.durationSelect.value)||count);
-      S.timerSecs = dur * 60;
-      startTimer();
+    if (S.mode === 'exam') {
+      const raw  = E.durationSelect.value;           // <-- correct reference
+      const mins = raw === 'auto' ? n : (parseInt(raw) || n);
+      S.timerSecs = mins * 60;
+      E.timerCard.style.display = 'block';
+      runTimer();
     } else {
       S.timerSecs = 0;
+      E.timerCard.style.display = 'none';
+    }
+
+    // Consume one free session
+    if (!S.hasAccess) {
+      S.freeToday++;
+      saveSafe(SK.free, { date: todayStr(), n: S.freeToday });
     }
 
     // Sidebar meta
-    el.sbStudent.textContent = S.currentUser;
-    el.sbSubject.textContent = SUBJECTS[S.selectedSubject]?.name || S.selectedSubject;
-    el.sbMode.textContent    = S.selectedMode === 'exam' ? 'Exam Mode' : 'Practice';
-    el.sbExam.textContent    = S.selectedExam;
-    el.timerCard.style.display = S.selectedMode === 'exam' ? 'block' : 'none';
+    E.sbStudent.textContent = S.currentUser;
+    E.sbSubject.textContent = SUBJECTS[S.subject]?.name || S.subject;
+    E.sbMode.textContent    = S.mode === 'exam' ? 'Exam Mode' : 'Practice';
+    E.sbExam.textContent    = S.exam;
 
     buildPills();
-    renderQuestion();
+    renderQ();
     showScreen('quiz');
   }
 
-  /* ── TIMER ── */
-  function startTimer() {
-    updateTimerDisplay();
+  /* ─── TIMER ─── */
+  function runTimer() {
+    tickClock();
     S.timerId = setInterval(() => {
       S.timerSecs--;
-      updateTimerDisplay();
+      tickClock();
       if (S.timerSecs <= 0) {
         clearInterval(S.timerId);
         S.timerId = null;
@@ -364,431 +396,535 @@
     }, 1000);
   }
 
-  function updateTimerDisplay() {
+  function tickClock() {
     const t = Math.max(S.timerSecs, 0);
-    const m = Math.floor(t/60);
-    const s = t % 60;
-    el.timerDisplay.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    el.timerDisplay.classList.toggle('urgent', S.timerSecs < 300 && S.timerSecs > 0 && S.selectedMode === 'exam');
+    const m = Math.floor(t / 60), s = t % 60;
+    E.timerDisplay.textContent = `${pad(m)}:${pad(s)}`;
+    const urgent = S.mode === 'exam' && S.timerSecs > 0 && S.timerSecs < 300;
+    E.timerDisplay.classList.toggle('urgent', urgent);
   }
 
-  /* ── PILLS ── */
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  /* ─── FLAG ─── */
+  function toggleFlag() {
+    if (S.reviewMode) return;
+    S.flagged[S.idx] = !S.flagged[S.idx];
+    syncFlagBtn();
+    syncPills();
+  }
+
+  function syncFlagBtn() {
+    const on = S.flagged[S.idx];
+    E.flagBtn.textContent = on ? '🚩 Flagged' : '🏳 Flag';
+    E.flagBtn.classList.toggle('flag-on', on);
+  }
+
+  /* ─── PILLS ─── */
   function buildPills() {
-    el.qPills.innerHTML = '';
-    S.questions.forEach((q,i) => {
-      const btn = document.createElement('button');
-      btn.className = 'qpill' + (q._type === 'theory' ? ' theory-pill' : '');
-      btn.textContent = i+1;
-      btn.title = `Q${i+1} — ${q._type}`;
-      btn.addEventListener('click', () => { S.currentIdx = i; renderQuestion(); });
-      el.qPills.appendChild(btn);
+    E.qPills.innerHTML = '';
+    S.questions.forEach((q, i) => {
+      const b = document.createElement('button');
+      b.className = 'qpill' + (q._type === 'theory' ? ' theory-pill' : '');
+      b.textContent = i + 1;
+      b.title = `Q${i + 1} · ${q._type === 'theory' ? 'Theory' : 'Obj'}${q.year ? ' · ' + q.year : ''}`;
+      b.addEventListener('click', () => { S.idx = i; closeSidebar(); renderQ(); });
+      E.qPills.appendChild(b);
     });
     syncPills();
   }
 
   function syncPills() {
-    const pills = el.qPills.querySelectorAll('.qpill');
-    pills.forEach((p,i) => {
-      p.classList.toggle('current', i === S.currentIdx);
-      p.classList.toggle('answered', S.answers[i] !== null);
+    E.qPills.querySelectorAll('.qpill').forEach((p, i) => {
+      p.classList.toggle('p-current',  i === S.idx);
+      p.classList.toggle('p-answered', S.answers[i] !== null);
+      p.classList.toggle('p-flagged',  S.flagged[i]);
     });
-    const answered = S.answers.filter(a => a !== null).length;
-    const total    = S.questions.length;
-    el.progressBar.style.width = total ? `${(answered/total)*100}%` : '0%';
-    el.progressFraction.textContent = `${S.currentIdx+1}/${total}`;
-    el.progressSub.textContent = `${answered} answered`;
+    const done  = S.answers.filter(a => a !== null).length;
+    const total = S.questions.length;
+    E.progressBar.style.width = total ? `${(done / total) * 100}%` : '0%';
+    E.progressFraction.textContent = `${S.idx + 1} / ${total}`;
+    E.progressSub.textContent = `${done} of ${total} answered`;
   }
 
-  /* ══════════════════════════════════════════
+  /* ════════════════════════════════════════
      RENDER QUESTION
-  ══════════════════════════════════════════ */
-  function renderQuestion() {
-    const q   = S.questions[S.currentIdx];
-    const ans = S.answers[S.currentIdx];
-    const isObj = q._type === 'objective';
+  ════════════════════════════════════════ */
+  function renderQ() {
+    const q   = S.questions[S.idx];
+    const ans = S.answers[S.idx];
+    const obj = q._type === 'objective';
 
-    // Header
-    el.qNumBadge.textContent    = `Q${S.currentIdx+1}`;
-    el.qSubjectTag.textContent  = SUBJECTS[S.selectedSubject]?.name || '';
-    el.qYearTag.textContent     = `${q.exam||S.selectedExam} ${q.year||''}`.trim();
-    el.qPosIndicator.textContent = `${S.currentIdx+1} of ${S.questions.length}`;
+    E.qNumBadge.textContent     = `Q${S.idx + 1}`;
+    E.qSubjectTag.textContent   = SUBJECTS[S.subject]?.name || S.subject;
+    E.qYearTag.textContent      = [q.exam || S.exam, q.year].filter(Boolean).join(' · ');
+    E.qPosIndicator.textContent = `${S.idx + 1} of ${S.questions.length}`;
 
-    // Type banner
-    el.qtypeBanner.textContent = isObj ? 'Objective Question' : 'Theory / Essay Question';
-    el.qtypeBanner.className   = `qtype-banner ${isObj ? 'objective' : 'theory'}`;
+    E.qtypeBanner.textContent = obj ? 'Objective Question' : 'Theory / Essay Question';
+    E.qtypeBanner.className   = `qtype-banner ${obj ? 'obj' : 'theory'}`;
 
-    // Toggle panels
-    el.objectivePanel.classList.toggle('hidden', !isObj);
-    el.theoryPanel.classList.toggle('hidden',  isObj);
+    E.objectivePanel.classList.toggle('hidden', !obj);
+    E.theoryPanel.classList.toggle('hidden', obj);
 
-    if (isObj) renderObjective(q, ans);
-    else        renderTheory(q);
+    E.flagBtn.style.display = S.reviewMode ? 'none' : '';
+    syncFlagBtn();
 
-    // Nav
-    el.prevBtn.disabled = S.currentIdx === 0;
-    el.nextBtn.textContent = S.currentIdx === S.questions.length - 1 ? 'Finish ✓' : 'Next →';
+    if (obj) renderObjective(q, ans);
+    else     renderTheory(q);
 
-    // Free usage track
-    if (!S.hasAccess && !S.reviewMode) {
-      S.freeUsedToday++;
-      saveSafe(SK.freeUsed, { date: todayStr(), count: S.freeUsedToday });
+    E.prevBtn.disabled    = S.idx === 0;
+    E.nextBtn.textContent = S.idx === S.questions.length - 1
+      ? (S.reviewMode ? '← Back to Results' : 'Finish ✓')
+      : 'Next →';
+
+    // Keyboard hint — show only for unanswered objective in practice
+    if (E.keyHint) {
+      E.keyHint.style.display =
+        obj && !S.reviewMode && ans === null ? 'block' : 'none';
     }
 
     syncPills();
   }
 
+  /* ─── OBJECTIVE ─── */
   function renderObjective(q, ans) {
-    el.objectiveQ.innerHTML = escHtml(q.question).replace(/\n/g,'<br>');
-    el.optionsList.innerHTML = '';
-    el.explanationArea.className = 'explanation-area';
+    E.objectiveQ.innerHTML = safe(q.question).replace(/\n/g, '<br>');
+    E.optionsList.innerHTML = '';
+    E.explanationArea.innerHTML = '';
+    E.explanationArea.className = 'explanation-area';
 
-    const showResult = S.reviewMode || (S.selectedMode === 'practice' && ans !== null);
+    const locked    = S.reviewMode || (S.mode === 'practice' && ans !== null);
+    const showRes   = S.reviewMode || (S.mode === 'practice' && ans !== null);
 
-    q.options.forEach((opt, idx) => {
+    q.options.forEach((opt, i) => {
       const btn = document.createElement('button');
       btn.className = 'option-btn';
-      btn.innerHTML = `<span class="opt-letter">${String.fromCharCode(65+idx)}.</span> ${escHtml(opt)}`;
+      btn.innerHTML =
+        `<span class="opt-letter">${String.fromCharCode(65 + i)}.</span>` +
+        `<span class="opt-text">${safe(opt)}</span>`;
 
-      if (showResult) {
-        if (idx === q.answer)              btn.classList.add('correct');
-        if (idx === ans && ans !== q.answer) btn.classList.add('wrong');
-      } else if (idx === ans) {
-        btn.classList.add('selected');
+      if (showRes) {
+        if (i === q.answer)                   btn.classList.add('opt-correct');
+        if (i === ans && ans !== q.answer)    btn.classList.add('opt-wrong');
+        if (i === ans && ans === q.answer)    btn.classList.add('opt-your-right');
+      } else if (i === ans) {
+        btn.classList.add('opt-selected');
       }
 
-      btn.disabled = S.reviewMode || (S.selectedMode === 'practice' && ans !== null);
-      btn.addEventListener('click', () => {
-        if (S.reviewMode || (S.selectedMode === 'practice' && S.answers[S.currentIdx] !== null)) return;
-        S.answers[S.currentIdx] = idx;
-        renderQuestion();
-      });
-      el.optionsList.appendChild(btn);
+      btn.disabled = locked;
+      if (!locked) {
+        btn.addEventListener('click', () => {
+          S.answers[S.idx] = i;
+          renderQ();
+        });
+      }
+      E.optionsList.appendChild(btn);
     });
 
-    if (showResult && q.explanation) {
-      el.explanationArea.textContent = '💡 ' + q.explanation;
-      el.explanationArea.classList.add('visible');
+    // Explanation
+    if (showRes && q.explanation) {
+      const right = ans === q.answer;
+      E.explanationArea.innerHTML =
+        `<div class="exp-head ${right ? 'exp-right' : 'exp-wrong'}">` +
+          (right ? '✅ Correct!' : `❌ Incorrect — Answer: <strong>${String.fromCharCode(65 + q.answer)}</strong>`) +
+        `</div>` +
+        `<div class="exp-body">💡 ${safe(q.explanation)}</div>`;
+      E.explanationArea.classList.add('visible');
     }
   }
 
+  /* ─── THEORY ─── */
   function renderTheory(q) {
-    el.theoryQ.innerHTML = escHtml(q.question).replace(/\n/g,'<br>');
+    E.theoryQ.innerHTML = safe(q.question).replace(/\n/g, '<br>');
 
-    // Marking scheme
-    el.markingScheme.innerHTML = `
-      <div class="ms-title">📋 Marking Scheme</div>
-      <div class="ms-total">Total: ${q.totalMarks} mark${q.totalMarks !== 1 ? 's' : ''}</div>
-      <div class="ms-points">
-        ${(q.markingScheme||[]).map(pt => `
-          <div class="ms-point">
-            <span class="ms-mark">${pt.marks}mk</span>
-            <span>${escHtml(pt.point)}</span>
-          </div>
-        `).join('')}
-      </div>
-    `;
+    const total = q.totalMarks ||
+      (q.markingScheme || []).reduce((s, p) => s + (p.marks || 0), 0);
 
-    // Model answer (hidden by default unless review mode)
-    el.modelAnswer.textContent = q.modelAnswer || '';
-    el.modelAnswer.className   = 'model-answer' + (S.reviewMode ? ' visible' : '');
-    el.toggleAnswerBtn.textContent = S.reviewMode ? '🙈 Hide Model Answer' : '📄 Show Model Answer';
-    S.showAnswer = S.reviewMode;
+    E.markingScheme.innerHTML =
+      `<div class="ms-head">` +
+        `<span class="ms-title">📋 Marking Scheme</span>` +
+        `<span class="ms-badge">${total} mark${total !== 1 ? 's' : ''}</span>` +
+      `</div>` +
+      `<div class="ms-list">` +
+      (q.markingScheme || []).map((pt, i) =>
+        `<div class="ms-pt">` +
+          `<span class="ms-n">${i + 1}</span>` +
+          `<span class="ms-txt">${safe(pt.point)}</span>` +
+          `<span class="ms-mk">${pt.marks}mk</span>` +
+        `</div>`
+      ).join('') +
+      `</div>`;
+
+    // Model answer
+    E.modelAnswer.innerHTML = q.modelAnswer
+      ? q.modelAnswer.split('\n').map(l =>
+          l.trim() === '' ? '<br>' : `<p>${safe(l)}</p>`
+        ).join('')
+      : '<p><em>No model answer available.</em></p>';
+
+    const showAns = S.reviewMode;
+    E.modelAnswer.classList.toggle('visible', showAns);
+    E.toggleAnswerBtn.textContent = showAns ? '🙈 Hide Model Answer' : '📄 Show Model Answer';
+    S.showAnswer = showAns;
 
     // Exam tip
     if (q.examTip) {
-      el.examTipBox.innerHTML = `<div class="exam-tip-label">⚡ Examiner's Tip</div>${escHtml(q.examTip)}`;
-      el.examTipBox.style.display = 'block';
+      E.examTipBox.innerHTML =
+        `<div class="tip-head">⚡ Examiner's Tip</div>` +
+        `<div class="tip-body">${safe(q.examTip)}</div>`;
+      E.examTipBox.style.display = 'block';
     } else {
-      el.examTipBox.style.display = 'none';
+      E.examTipBox.style.display = 'none';
     }
 
-    // Mark theory as "answered" (seen) immediately
-    if (S.answers[S.currentIdx] === null) {
-      S.answers[S.currentIdx] = 'seen';
-    }
+    // Mark theory as seen
+    if (S.answers[S.idx] === null) S.answers[S.idx] = 'seen';
   }
 
-  function toggleModelAnswer() {
+  function toggleAnswer() {
     S.showAnswer = !S.showAnswer;
-    el.modelAnswer.classList.toggle('visible', S.showAnswer);
-    el.toggleAnswerBtn.textContent = S.showAnswer ? '🙈 Hide Model Answer' : '📄 Show Model Answer';
+    E.modelAnswer.classList.toggle('visible', S.showAnswer);
+    E.toggleAnswerBtn.textContent = S.showAnswer ? '🙈 Hide Model Answer' : '📄 Show Model Answer';
   }
 
-  /* ── NAVIGATE ── */
-  function navigate(step) {
-    if (step > 0 && S.currentIdx === S.questions.length - 1) {
-      finishSession(false);
+  /* ─── NAVIGATE ─── */
+  function navigate(dir) {
+    // Last question → finish or back to results
+    if (dir > 0 && S.idx === S.questions.length - 1) {
+      if (S.reviewMode) showScreen('result');
+      else confirmSubmit();
       return;
     }
-    S.currentIdx = Math.max(0, Math.min(S.questions.length-1, S.currentIdx + step));
-    S.showAnswer = false;
-    renderQuestion();
+    S.idx = Math.max(0, Math.min(S.questions.length - 1, S.idx + dir));
+    S.showAnswer = S.reviewMode;
+    closeSidebar();
+    renderQ();
   }
 
-  /* ══════════════════════════════════════════
+  /* ─── SUBMIT ─── */
+  function confirmSubmit() {
+    if (S.reviewMode) { showScreen('result'); return; }
+    const unanswered = S.answers.filter((a, i) =>
+      S.questions[i]._type === 'objective' && a === null
+    ).length;
+    if (unanswered > 0) {
+      const go = confirm(
+        `You have ${unanswered} unanswered question${unanswered > 1 ? 's' : ''}.\nSubmit anyway?`
+      );
+      if (!go) return;
+    }
+    finishSession(false);
+  }
+
+  /* ════════════════════════════════════════
      FINISH / RESULTS
-  ══════════════════════════════════════════ */
-  function finishSession(fromTimeout = false) {
+  ════════════════════════════════════════ */
+  function finishSession(timeout = false) {
     if (S.timerId) { clearInterval(S.timerId); S.timerId = null; }
+    S.inSession = false;
 
-    const objQs  = S.questions.filter(q => q._type === 'objective');
-    const correct = objQs.reduce((sum, q, i) => {
-      const globalIdx = S.questions.indexOf(q);
-      return sum + (S.answers[globalIdx] === q.answer ? 1 : 0);
-    }, 0);
-    const wrong   = objQs.reduce((sum, q, i) => {
-      const globalIdx = S.questions.indexOf(q);
-      const a = S.answers[globalIdx];
-      return sum + (a !== null && a !== 'seen' && a !== q.answer ? 1 : 0);
-    }, 0);
-    const skipped = S.questions.filter((q,i) => q._type==='objective' && S.answers[i]===null).length;
-    const theoryCount = S.questions.filter(q => q._type==='theory').length;
-
+    const objQs   = S.questions.filter(q => q._type === 'objective');
+    const correct = objQs.filter(q => S.answers[S.questions.indexOf(q)] === q.answer).length;
+    const wrong   = objQs.filter(q => {
+      const a = S.answers[S.questions.indexOf(q)];
+      return a !== null && a !== 'seen' && a !== q.answer;
+    }).length;
+    const skipped = objQs.filter(q => S.answers[S.questions.indexOf(q)] === null).length;
+    const thCount = S.questions.filter(q => q._type === 'theory').length;
     const total   = objQs.length;
-    const pct     = total ? Math.round((correct/total)*100) : null;
+    const pct     = total > 0 ? Math.round((correct / total) * 100) : null;
+    const flags   = S.flagged.filter(Boolean).length;
 
-    // Save to history
-    const record = {
-      student:  S.currentUser,
-      subject:  SUBJECTS[S.selectedSubject]?.name || S.selectedSubject,
-      exam:     S.selectedExam,
-      mode:     S.selectedMode,
-      type:     S.selectedType,
-      total,
-      correct,
-      wrong,
-      skipped,
-      theoryCount,
-      pct,
-      date:     new Date().toLocaleString(),
-      timeout:  fromTimeout,
+    const rec = {
+      student: S.currentUser,
+      subject: SUBJECTS[S.subject]?.name || S.subject,
+      exam: S.exam, mode: S.mode, type: S.type,
+      total, correct, wrong, skipped, thCount, pct, flags,
+      date: new Date().toLocaleString(), timeout,
     };
 
-    if (!S.users[S.currentUser]) S.users[S.currentUser] = { history:[] };
-    S.users[S.currentUser].history.unshift(record);
+    if (!S.users[S.currentUser]) S.users[S.currentUser] = { history: [] };
+    S.users[S.currentUser].history.unshift(rec);
     S.users[S.currentUser].history = S.users[S.currentUser].history.slice(0, 60);
     saveSafe(SK.users, S.users);
 
-    renderResults(record);
-    updateHeroStats();
+    paintResults(rec);
+    refreshStats();
     renderHistory();
     showScreen('result');
   }
 
-  function renderResults(r) {
-    const scoreStr = r.pct !== null ? r.pct + '%' : 'N/A';
-    const grade    = r.pct === null ? 'Theory' : r.pct >= 75 ? 'Distinction' : r.pct >= 60 ? 'Credit' : r.pct >= 50 ? 'Pass' : 'Below Pass';
-    const emoji    = r.pct === null ? '📖' : r.pct >= 75 ? '🏆' : r.pct >= 50 ? '✅' : '💪';
-    const color    = r.pct === null ? 'var(--ink)' : r.pct >= 50 ? 'var(--green)' : 'var(--red)';
+  function paintResults(r) {
+    const hasObj = r.pct !== null;
+    const pct = r.pct || 0;
 
-    el.resultBadge.textContent  = emoji;
-    el.resultScore.textContent  = scoreStr;
-    el.resultScore.style.color  = color;
-    el.resultGrade.textContent  = grade;
-    el.resultGrade.style.color  = color;
+    const grade = !hasObj  ? 'Theory Study'
+                : pct >= 75 ? 'Distinction'
+                : pct >= 60 ? 'Credit'
+                : pct >= 50 ? 'Pass'
+                :             'Below Pass';
 
-    el.resultSummary.textContent = r.timeout
-      ? `Time elapsed — ${r.student} completed ${r.correct + r.wrong + r.skipped} of ${r.total} questions in ${r.subject} (${r.exam}).`
-      : `${r.student} scored ${r.correct} out of ${r.total} objective question${r.total!==1?'s':''} in ${r.subject} (${r.exam}).`;
+    const emoji = !hasObj  ? '📖'
+                : pct >= 75 ? '🏆'
+                : pct >= 60 ? '🎯'
+                : pct >= 50 ? '✅'
+                :             '💪';
 
-    el.resultStatsGrid.innerHTML = [
-      r.pct !== null ? `<div class="rstat"><strong>${r.correct}</strong><span>Correct</span></div>` : '',
-      r.pct !== null ? `<div class="rstat"><strong>${r.wrong}</strong><span>Wrong</span></div>` : '',
-      r.pct !== null ? `<div class="rstat"><strong>${r.skipped}</strong><span>Skipped</span></div>` : '',
-      r.theoryCount  ? `<div class="rstat"><strong>${r.theoryCount}</strong><span>Theory Q${r.theoryCount!==1?'s':''}</span></div>` : '',
-      `<div class="rstat"><strong>${r.mode==='exam'?'Exam':'Pract.'}</strong><span>Mode</span></div>`,
-    ].join('');
+    const color = !hasObj  ? 'var(--ink)'
+                : pct >= 50 ? 'var(--green)'
+                :             'var(--red)';
+
+    const msg = !hasObj   ? 'Study the model answers and marking schemes carefully.'
+              : pct >= 75 ? "Outstanding! You're well prepared."
+              : pct >= 60 ? 'Good work — keep pushing, you\'re nearly there.'
+              : pct >= 50 ? 'You passed! A few more sessions will build your confidence.'
+              :             'Keep going — review the explanations and try again.';
+
+    E.resultEmoji.textContent = emoji;
+    E.resultScore.textContent = hasObj ? `${pct}%` : 'Theory';
+    E.resultScore.style.color = color;
+    E.resultGrade.textContent = grade;
+    E.resultGrade.style.color = color;
+
+    E.resultSummary.innerHTML =
+      `<strong>${safe(r.student)}</strong> · ${safe(r.subject)} · ${safe(r.exam)}` +
+      (r.timeout ? ' <span class="tag-timeout">Time elapsed</span>' : '') +
+      `<br><span class="res-msg">${msg}</span>`;
+
+    // Stats row
+    const stats = [
+      hasObj && { label: 'Correct',  val: r.correct,  cls: 'green' },
+      hasObj && { label: 'Wrong',    val: r.wrong,    cls: 'red'   },
+      hasObj && { label: 'Skipped',  val: r.skipped,  cls: ''      },
+      r.thCount && { label: 'Theory', val: r.thCount, cls: ''      },
+      r.flags   && { label: 'Flagged', val: r.flags,  cls: 'amber' },
+    ].filter(Boolean);
+
+    E.resultStatsGrid.innerHTML = stats.map(s =>
+      `<div class="rstat ${s.cls}"><strong>${s.val}</strong><span>${safe(s.label)}</span></div>`
+    ).join('');
+
+    // Breakdown bar
+    if (hasObj) {
+      E.resultBreakdown.style.display = 'block';
+      E.resultBreakdown.innerHTML =
+        `<div class="bk-bar"><div class="bk-fill" style="width:${pct}%;background:${color}"></div></div>` +
+        `<div class="bk-lbl">${r.correct} correct · ${r.wrong} wrong · ${r.skipped} skipped</div>` +
+        (r.flags ? `<div class="bk-flag">🚩 ${r.flags} question${r.flags > 1 ? 's' : ''} flagged for review</div>` : '');
+    } else {
+      E.resultBreakdown.style.display = 'none';
+    }
   }
 
+  /* ─── REVIEW ─── */
   function enterReview() {
     S.reviewMode = true;
-    S.currentIdx = 0;
-    S.showAnswer  = true;
+    S.idx = 0;
+    S.showAnswer = true;
     buildPills();
-    renderQuestion();
+    renderQ();
     showScreen('quiz');
   }
 
+  /* ─── EXIT ─── */
   function confirmExit() {
-    const leave = confirm('Exit this session? Your progress will be saved to history.');
-    if (leave) {
-      if (S.questions.length > 0 && !S.reviewMode) finishSession(false);
-      else {
-        if (S.timerId) { clearInterval(S.timerId); S.timerId = null; }
-        showScreen('home');
-      }
+    if (S.mode === 'exam' && S.inSession && !S.reviewMode) {
+      if (!confirm('Exit exam? Your current answers will be submitted.')) return;
+      finishSession(false);
+    } else if (S.inSession && !S.reviewMode) {
+      if (!confirm('Exit this session?')) return;
+      if (S.timerId) { clearInterval(S.timerId); S.timerId = null; }
+      S.inSession = false;
+      showScreen('home');
+    } else {
+      if (S.timerId) { clearInterval(S.timerId); S.timerId = null; }
+      S.inSession = false;
+      showScreen('home');
     }
   }
 
-  /* ══════════════════════════════════════════
+  function goHome() {
+    if (S.timerId) { clearInterval(S.timerId); S.timerId = null; }
+    S.inSession = false;
+    showScreen('home');
+  }
+
+  /* ════════════════════════════════════════
      HISTORY
-  ══════════════════════════════════════════ */
+  ════════════════════════════════════════ */
   function renderHistory() {
-    const history = currentHistory();
+    const hist = getHistory();
     if (!S.currentUser) {
-      el.historyList.innerHTML = '<div class="empty-history">Login to view your history.</div>';
+      E.historyList.innerHTML = '<div class="empty-history">Login to see your history.</div>';
       return;
     }
-    if (!history.length) {
-      el.historyList.innerHTML = '<div class="empty-history">No sessions yet. Start your first practice!</div>';
+    if (!hist.length) {
+      E.historyList.innerHTML = '<div class="empty-history">No sessions yet — start your first practice!</div>';
       return;
     }
-    el.historyList.innerHTML = history.slice(0,20).map(r => `
-      <div class="history-item">
-        <div>
-          <div class="hi-subject">${escHtml(r.subject)}</div>
-          <div class="hi-meta">${escHtml(r.exam)} · ${escHtml(r.mode)} · ${r.type}</div>
+    E.historyList.innerHTML = hist.slice(0, 25).map(r => `
+      <div class="hi-item">
+        <div class="hi-main">
+          <div class="hi-sub">${safe(r.subject)}</div>
+          <div class="hi-meta">${safe(r.exam)} · ${safe(r.mode)} · ${safe(r.type || 'objective')}</div>
+          <div class="hi-date">${safe(r.date)}</div>
         </div>
-        <div>
-          <div class="hi-score ${r.pct===null?'':r.pct>=50?'pass':'fail'}">${r.pct!==null ? r.pct+'%' : '—'}</div>
-          <div class="hi-date">${escHtml(r.date)}</div>
+        <div class="hi-right">
+          <div class="hi-score ${r.pct == null ? '' : r.pct >= 50 ? 'pass' : 'fail'}">
+            ${r.pct != null ? r.pct + '%' : '—'}
+          </div>
+          ${r.pct != null ? `<div class="hi-fraction">${r.correct}/${r.total}</div>` : ''}
         </div>
       </div>
     `).join('');
   }
 
   function clearHistory() {
-    if (!S.currentUser) return;
-    if (!confirm('Clear all history for ' + S.currentUser + '?')) return;
-    if (!S.users[S.currentUser]) return;
-    S.users[S.currentUser].history = [];
+    if (!S.currentUser || !confirm('Clear all history for ' + S.currentUser + '?')) return;
+    if (S.users[S.currentUser]) S.users[S.currentUser].history = [];
     saveSafe(SK.users, S.users);
     renderHistory();
-    updateHeroStats();
+    refreshStats();
   }
 
-  function currentHistory() {
-    return S.users[S.currentUser]?.history || [];
+  function getHistory() { return S.users[S.currentUser]?.history || []; }
+
+  function refreshStats() {
+    const hist    = getHistory();
+    const objH    = hist.filter(r => r.pct != null);
+    E.hStatSessions.textContent = hist.length;
+    E.hStatAvg.textContent = objH.length
+      ? Math.round(objH.reduce((s, r) => s + r.pct, 0) / objH.length) + '%' : '—';
+    E.hStatBest.textContent = objH.length
+      ? Math.max(...objH.map(r => r.pct)) + '%' : '—';
   }
 
-  function updateHeroStats() {
-    const hist = currentHistory();
-    const objHist = hist.filter(r => r.pct !== null);
-    el.hStatSessions.textContent = hist.length || 0;
-    el.hStatAvg.textContent = objHist.length
-      ? Math.round(objHist.reduce((s,r) => s+r.pct, 0) / objHist.length) + '%'
-      : '—';
-    el.hStatBest.textContent = objHist.length
-      ? Math.max(...objHist.map(r => r.pct)) + '%'
-      : '—';
-  }
-
-  /* ══════════════════════════════════════════
-     PAYWALL / ACCESS
-  ══════════════════════════════════════════ */
+  /* ════════════════════════════════════════
+     PAYWALL
+  ════════════════════════════════════════ */
   function checkAccess() {
-    const data = loadSafe(SK.access);
-    if (!data) return false;
-    // Simple: if access key exists and is not expired
-    if (data.expires && new Date(data.expires) > new Date()) return true;
-    return false;
+    const d = loadSafe(SK.access);
+    return d?.expires && new Date(d.expires) > new Date();
   }
 
-  function getFreeUsed() {
-    const data = loadSafe(SK.freeUsed);
-    if (!data) return 0;
-    if (data.date !== todayStr()) return 0; // Reset daily
-    return data.count || 0;
+  function getFreeToday() {
+    const d = loadSafe(SK.free);
+    return (!d || d.date !== todayStr()) ? 0 : (d.n || 0);
+  }
+
+  function grantAccess(days) {
+    const exp = new Date();
+    exp.setDate(exp.getDate() + days);
+    saveSafe(SK.access, { expires: exp.toISOString() });
+    S.hasAccess = true;
+    E.paywallOverlay.classList.add('hidden');
+    alert(`✅ Access granted for ${days} days! Enjoy unlimited practice.`);
   }
 
   function handlePayment() {
-    // Generate unique reference
-    const ref = 'MEA-' + Date.now() + '-' + Math.random().toString(36).slice(2,8).toUpperCase();
+    const email = prompt('Enter your email to proceed with payment:');
+    if (!email?.includes('@')) { if (email !== null) alert('Please enter a valid email.'); return; }
+
+    /* ── PAYSTACK INTEGRATION ──
+       Uncomment and replace key when ready:
+
+    const handler = window.PaystackPop.setup({
+      key: 'pk_live_YOUR_PUBLIC_KEY',
+      email,
+      amount: 100000,          // ₦1,000 in kobo
+      currency: 'NGN',
+      ref: 'MEA-' + Date.now(),
+      onClose() {},
+      callback(resp) {
+        // After verifying payment server-side, call:
+        grantAccess(90);
+      }
+    });
+    handler.openIframe();
+    ── END PAYSTACK ── */
+
     alert(
-      'Paystack integration:\n\n' +
-      'In production, this button will open the Paystack payment modal.\n\n' +
-      'Amount: ₦1,000\n' +
-      'Reference: ' + ref + '\n\n' +
-      'After payment, you will receive an access code via SMS/email.\n' +
-      'Enter the code in the "Already paid?" field below.'
+      '💳 Paystack ready to integrate!\n\n' +
+      'Email: ' + email + '\n' +
+      'Amount: ₦1,000 (90 days)\n\n' +
+      'Add your Paystack public key in app.js to go live.\n' +
+      'Demo code: MEA-DEMO-2025'
     );
-    // TODO: integrate actual Paystack popup
-    // window.PaystackPop.setup({ key: 'pk_live_...', email, amount: 100000, ref, callback: grantAccess });
   }
 
   function redeemCode() {
-    const code = el.accessCodeInput.value.trim().toUpperCase();
-    // Demo codes for testing — replace with server-side verification in production
-    const validCodes = {
-      'MEA-DEMO-2025': 90,
-      'WAEC-PROMO-001': 30,
-      'NECO-PROMO-001': 30,
-      'TEST-ACCESS': 7,
-    };
-    if (validCodes[code]) {
-      const days = validCodes[code];
-      const expires = new Date();
-      expires.setDate(expires.getDate() + days);
-      saveSafe(SK.access, { code, expires: expires.toISOString() });
-      S.hasAccess = true;
-      el.paywallOverlay.classList.add('hidden');
-      alert('✅ Access granted for ' + days + ' days! Enjoy unlimited practice.');
+    const code = (E.accessCodeInput.value || '').trim().toUpperCase();
+    if (!code) { E.accessCodeInput.focus(); return; }
+    // Demo codes — replace with server-side validation in production
+    const codes = { 'MEA-DEMO-2025': 90, 'WAEC-PROMO': 30, 'NECO-PROMO': 30, 'TEST7': 7 };
+    if (codes[code]) {
+      grantAccess(codes[code]);
     } else {
-      alert('Invalid or expired access code. Please check and try again.');
+      E.accessCodeInput.style.borderColor = 'var(--red)';
+      setTimeout(() => { E.accessCodeInput.style.borderColor = ''; }, 1500);
+      alert('Invalid or expired access code.');
     }
   }
 
-  /* ══════════════════════════════════════════
-     SHARE
-  ══════════════════════════════════════════ */
+  /* ─── SHARE ─── */
   function shareApp() {
-    const text = '🎓 I\'m using My Exams App to prepare for WAEC/NECO!\n\nPast questions + full model answers for all major subjects.\n\nGet it now — only ₦1,000 for 3 months: [your-link-here]';
+    const url  = window.location.href;
+    const text =
+      '🎓 Preparing for WAEC/NECO? Try My Exams App!\n\n' +
+      'Past questions + full model answers for 15 subjects.\n' +
+      'Only ₦1,000 for 3 months — less than one lesson.\n\n' + url;
     if (navigator.share) {
-      navigator.share({ title:'My Exams App', text, url: window.location.href });
+      navigator.share({ title: 'My Exams App', text, url }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text)
+        .then(() => alert('📋 Share message copied! Paste in WhatsApp or SMS.'));
     } else {
-      navigator.clipboard?.writeText(text).then(() => alert('Share message copied! Paste it in WhatsApp or SMS.'));
+      prompt('Copy and share:', text);
     }
   }
 
-  /* ══════════════════════════════════════════
-     SCREEN MANAGEMENT
-  ══════════════════════════════════════════ */
+  /* ─── MOBILE SIDEBAR ─── */
+  function openSidebar() {
+    E.quizSidebar.classList.add('sidebar-open');
+    E.sidebarBackdrop.classList.remove('hidden');
+  }
+  function closeSidebar() {
+    E.quizSidebar.classList.remove('sidebar-open');
+    E.sidebarBackdrop.classList.add('hidden');
+  }
+
+  /* ─── SCREENS ─── */
   function showScreen(name) {
-    el.homeScreen.classList.toggle('active', name === 'home');
-    el.quizScreen.classList.toggle('active', name === 'quiz');
-    el.resultScreen.classList.toggle('active', name === 'result');
-    if (name === 'home') {
-      renderHistory();
-      updateHeroStats();
-    }
+    ['home', 'quiz', 'result'].forEach(n => {
+      document.getElementById(n + 'Screen').classList.toggle('active', n === name);
+    });
+    window.scrollTo(0, 0);
+    if (name === 'home') { renderHistory(); refreshStats(); renderStreak(); }
   }
 
-  /* ══════════════════════════════════════════
-     UTILITIES
-  ══════════════════════════════════════════ */
-  function q(sel) { return document.querySelector(sel); }
-  function qAll(sel) { return document.querySelectorAll(sel); }
-
-  function escHtml(s) {
-    return String(s||'')
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+  /* ─── UTILITIES ─── */
+  function safe(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
   }
 
   function shuffle(arr) {
-    for (let i = arr.length-1; i > 0; i--) {
-      const j = Math.floor(Math.random()*(i+1));
-      [arr[i],arr[j]] = [arr[j],arr[i]];
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
     }
-    return arr;
+    return a;
   }
 
-  function saveSafe(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {}
+  function saveSafe(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} }
+  function loadSafe(k, d = null) {
+    try { const v = localStorage.getItem(k); return v !== null ? JSON.parse(v) : d; }
+    catch(e) { return d; }
   }
+  function todayStr() { return new Date().toISOString().slice(0, 10); }
 
-  function loadSafe(key, def = null) {
-    try {
-      const v = localStorage.getItem(key);
-      return v ? JSON.parse(v) : def;
-    } catch(e) { return def; }
-  }
-
-  function todayStr() {
-    return new Date().toISOString().slice(0,10);
-  }
-
-  /* ── START ── */
+  /* ─── GO ─── */
   init();
 
 })();
