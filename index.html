@@ -4,8 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <meta name="theme-color" content="#0a1628"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="description" content="My Exams App — WAEC, NECO, GCE & NABTEB Past Questions with Full Model Answers"/>
+  <meta name="description" content="My Exams App — WAEC, NECO, GCE & NABTEB Past Questions with Full Answers"/>
   <title>My Exams App</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,75 +13,81 @@
   <link rel="manifest" href="manifest.json"/>
 </head>
 <body>
+
 <div id="app">
 
-  <!-- ════════════════ HOME SCREEN ════════════════ -->
+  <!-- ══════════════════════════════════
+       SCREEN 1: HOME / SETUP
+  ══════════════════════════════════ -->
   <section id="homeScreen" class="screen active">
 
+    <!-- HERO -->
     <div class="home-hero">
       <div class="hero-bg-pattern"></div>
       <div class="hero-content">
         <div class="app-brand">
           <span class="brand-star">★</span>
-          <div class="brand-text">
+          <div>
             <h1 class="brand-name">My<span class="brand-em">Exams</span>App</h1>
             <p class="brand-tagline">WAEC · NECO · GCE · NABTEB</p>
           </div>
-          <span id="streakDisplay" class="streak-badge"></span>
         </div>
-        <div class="hero-stats-row">
+        <div class="hero-stats-row" id="heroStats">
           <div class="hstat"><span id="hStatSessions">0</span><label>Sessions</label></div>
           <div class="hstat-div"></div>
           <div class="hstat"><span id="hStatAvg">—</span><label>Average</label></div>
           <div class="hstat-div"></div>
-          <div class="hstat"><span id="hStatBest">—</span><label>Best</label></div>
+          <div class="hstat"><span id="hStatBest">—</span><label>Best Score</label></div>
           <div class="hstat-div"></div>
-          <div class="hstat"><span id="hStatQs">223</span><label>Questions</label></div>
+          <div class="hstat"><span id="hStatQs">205</span><label>Questions</label></div>
         </div>
       </div>
     </div>
 
+    <!-- MAIN SETUP AREA -->
     <div class="home-body">
 
-      <!-- Student login -->
+      <!-- Student Panel -->
       <div class="setup-panel card" id="studentPanel">
         <div class="panel-head">
           <span class="panel-label">Student</span>
         </div>
         <div class="student-input-row">
-          <input id="studentNameInput" class="text-field" type="text"
-            placeholder="Enter your full name…" maxlength="60" autocomplete="name"/>
+          <input id="studentNameInput" class="text-field" type="text" placeholder="Enter your full name…" maxlength="60" autocomplete="name"/>
           <button id="loginBtn" class="btn-primary">Go</button>
         </div>
         <div id="studentPill" class="student-status">No student logged in</div>
       </div>
 
-      <!-- Configure session -->
+      <!-- Config Panel -->
       <div class="setup-panel card" id="configPanel">
         <div class="panel-head">
           <span class="panel-label">Configure Session</span>
         </div>
 
+        <!-- Step 1: Exam -->
         <div class="config-step">
           <span class="step-num">1</span>
           <span class="step-label">Choose Exam</span>
         </div>
-        <div class="exam-pills" id="examPillsContainer">
+        <div class="exam-pills" id="examPills">
           <button class="exam-pill active" data-exam="WAEC">WAEC</button>
           <button class="exam-pill" data-exam="NECO">NECO</button>
           <button class="exam-pill" data-exam="GCE">GCE</button>
           <button class="exam-pill" data-exam="NABTEB">NABTEB</button>
         </div>
 
+        <!-- Step 2: Subject -->
         <div class="config-step">
           <span class="step-num">2</span>
           <span class="step-label">Choose Subject</span>
         </div>
         <div class="subject-grid" id="subjectGrid"></div>
 
+        <!-- Step 3: Mode + Options -->
         <div class="config-step">
           <span class="step-num">3</span>
-          <span class="step-label">Options</span>
+          <span class="step-label">Session Options</span>
         </div>
         <div class="options-row">
           <div class="option-group">
@@ -93,7 +98,7 @@
             </div>
           </div>
           <div class="option-group">
-            <label class="opt-label">Type</label>
+            <label class="opt-label">Question Type</label>
             <div class="mode-toggle" id="typeToggle">
               <button class="mode-btn active" data-type="objective">Objective</button>
               <button class="mode-btn" data-type="theory">Theory</button>
@@ -101,9 +106,9 @@
             </div>
           </div>
         </div>
-        <div class="options-row" style="margin-top:0.6rem">
+        <div class="options-row mt-sm">
           <div class="option-group">
-            <label class="opt-label">Questions</label>
+            <label class="opt-label">No. of Questions</label>
             <select id="qCountSelect" class="select-field">
               <option value="10">10 Questions</option>
               <option value="20" selected>20 Questions</option>
@@ -111,10 +116,10 @@
               <option value="all">All Available</option>
             </select>
           </div>
-          <div class="option-group">
-            <label class="opt-label">Duration (Exam only)</label>
+          <div class="option-group" id="durationGroup">
+            <label class="opt-label">Duration</label>
             <select id="durationSelect" class="select-field" disabled>
-              <option value="auto">Auto (1 min / Q)</option>
+              <option value="auto">Auto (1 min/Q)</option>
               <option value="15">15 Minutes</option>
               <option value="30">30 Minutes</option>
               <option value="45">45 Minutes</option>
@@ -131,69 +136,62 @@
         </button>
       </div>
 
-      <!-- History -->
+      <!-- History Panel -->
       <div class="setup-panel card history-panel">
         <div class="panel-head">
-          <span class="panel-label">Session History</span>
-          <button id="clearHistoryBtn" class="ghost-link">Clear all</button>
+          <span class="panel-label">Recent History</span>
+          <button id="clearHistoryBtn" class="ghost-link">Clear</button>
         </div>
         <div id="historyList" class="history-list">
-          <div class="empty-history">Login to see your history.</div>
+          <div class="empty-history">Login to view your history.</div>
         </div>
       </div>
 
-    </div><!-- .home-body -->
+    </div>
 
     <!-- PAYWALL OVERLAY -->
     <div id="paywallOverlay" class="paywall-overlay hidden">
       <div class="paywall-card">
-        <button id="closePaywall" class="paywall-close-x">✕</button>
-        <div class="paywall-badge">FREE SESSIONS USED</div>
+        <div class="paywall-badge">FREE LIMIT REACHED</div>
         <h2 class="paywall-title">Unlock Full Access</h2>
-        <p class="paywall-sub">Get unlimited practice across all 15 subjects, all 4 exams, with full theory model answers and marking schemes.</p>
-        <div class="price-card">
-          <div class="price-top">
+        <p class="paywall-sub">You've used your 10 free questions for today. Get unlimited access to all subjects, all exams, and full theory solutions.</p>
+        <div class="pricing-cards">
+          <div class="price-card featured">
             <div class="price-tag">₦1,000</div>
-            <div class="price-period">3 Months · All Access</div>
+            <div class="price-period">3 Months — All Access</div>
+            <ul class="price-perks">
+              <li>✓ All 15 subjects</li>
+              <li>✓ WAEC, NECO, GCE, NABTEB</li>
+              <li>✓ Objective + Theory + Model Answers</li>
+              <li>✓ Marking scheme breakdowns</li>
+              <li>✓ Works offline</li>
+            </ul>
+            <button class="btn-pay" id="payBtn">Pay with Paystack →</button>
           </div>
-          <ul class="price-perks">
-            <li>✓ All 15 subjects — WAEC, NECO, GCE, NABTEB</li>
-            <li>✓ Objective + Theory + Full Model Answers</li>
-            <li>✓ Point-by-point marking schemes</li>
-            <li>✓ Examiner tips for every theory question</li>
-            <li>✓ Unlimited sessions · Works offline (PWA)</li>
-          </ul>
-          <button class="btn-pay" id="payBtn">Pay ₦1,000 with Paystack →</button>
         </div>
         <div class="access-code-row">
-          <span class="code-label">Already paid?</span>
-          <input id="accessCodeInput" class="code-input" placeholder="Enter access code" autocomplete="off" spellcheck="false"/>
+          <span>Already paid?</span>
+          <input id="accessCodeInput" class="code-input" placeholder="Enter access code"/>
           <button id="redeemBtn" class="btn-redeem">Redeem</button>
         </div>
-        <p class="paywall-note">Demo code: <strong>MEA-DEMO-2025</strong> (90 days free)</p>
+        <button id="closePaywall" class="paywall-close">✕ Maybe later</button>
       </div>
     </div>
 
-  </section><!-- #homeScreen -->
+  </section>
 
-  <!-- ════════════════ QUIZ SCREEN ════════════════ -->
+  <!-- ══════════════════════════════════
+       SCREEN 2: QUIZ
+  ══════════════════════════════════ -->
   <section id="quizScreen" class="screen">
-
-    <!-- Mobile sidebar toggle -->
-    <button id="sidebarToggle" class="sidebar-toggle" aria-label="Open navigation">☰</button>
-
-    <!-- Sidebar backdrop (mobile) -->
-    <div id="sidebarBackdrop" class="sidebar-backdrop hidden"></div>
-
     <div class="quiz-layout">
 
-      <aside class="quiz-sidebar" id="quizSidebar">
-        <div class="sidebar-top">
-          <div class="sidebar-brand">
-            <span class="brand-star sm">★</span>
-            <span class="sidebar-brand-name">MyExamsApp</span>
-          </div>
-          <button id="exitBtn" class="exit-btn">✕ Exit</button>
+      <!-- SIDEBAR -->
+      <aside class="quiz-sidebar">
+        <div class="sidebar-brand">
+          <span class="brand-star sm">★</span>
+          <span class="sidebar-brand-name">MyExamsApp</span>
+          <button id="exitBtn" class="exit-btn" title="Exit">✕</button>
         </div>
 
         <div class="sidebar-meta-block">
@@ -203,39 +201,33 @@
           <div class="smeta"><span class="smeta-label">Exam</span><strong id="sbExam">—</strong></div>
         </div>
 
-        <div class="timer-card" id="timerCard" style="display:none">
+        <div class="timer-card" id="timerCard">
           <div class="timer-label-txt">Time Remaining</div>
-          <div class="timer-digits" id="timerDisplay">00:00</div>
+          <div class="timer-digits" id="timerDisplay">—:——</div>
         </div>
 
         <div class="progress-section">
           <div class="progress-header">
             <span>Progress</span>
-            <span id="progressFraction">1/0</span>
+            <span id="progressFraction">0/0</span>
           </div>
           <div class="progress-track"><div id="progressBar" class="progress-fill"></div></div>
           <div class="progress-sub" id="progressSub">0 answered</div>
         </div>
 
         <div class="pills-section">
-          <div class="pills-meta">
-            <span class="pills-label">Questions</span>
-            <div class="pills-legend">
-              <span class="leg"><span class="leg-dot ld-current"></span>Now</span>
-              <span class="leg"><span class="leg-dot ld-done"></span>Done</span>
-              <span class="leg"><span class="leg-dot ld-flag"></span>Flag</span>
-              <span class="leg"><span class="leg-dot ld-theory"></span>Theory</span>
-            </div>
-          </div>
+          <div class="pills-label" id="pillsLabel">Questions</div>
           <div class="q-pills" id="qPills"></div>
         </div>
 
-        <button id="submitQuizBtn" class="btn-submit">Submit Session</button>
+        <button id="submitQuizBtn" class="btn-submit">Submit</button>
       </aside>
 
+      <!-- MAIN QUESTION AREA -->
       <main class="quiz-main">
 
-        <div class="qtype-banner" id="qtypeBanner">Objective</div>
+        <!-- Question type indicator (Theory vs Objective) -->
+        <div class="qtype-banner" id="qtypeBanner"></div>
 
         <div class="question-header">
           <div class="qh-left">
@@ -244,74 +236,72 @@
             <span class="qyear-tag" id="qYearTag"></span>
           </div>
           <div class="qh-right">
-            <span class="qpos-indicator" id="qPosIndicator">1 of 20</span>
-            <button id="flagBtn" class="flag-btn" title="Flag this question for review (press F)">🏳 Flag</button>
+            <span class="qpos-indicator" id="qPosIndicator"></span>
           </div>
         </div>
 
-        <!-- OBJECTIVE PANEL -->
-        <div id="objectivePanel" class="q-panel">
-          <p class="question-text" id="objectiveQuestion"></p>
+        <!-- OBJECTIVE QUESTION -->
+        <div id="objectivePanel">
+          <div class="question-text" id="objectiveQuestion"></div>
           <div class="options-list" id="optionsList"></div>
           <div class="explanation-area" id="explanationArea"></div>
-          <div class="key-hint" id="keyHint">
-            Keyboard: <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd> answer &nbsp;·&nbsp;
-            <kbd>←</kbd><kbd>→</kbd> navigate &nbsp;·&nbsp; <kbd>F</kbd> flag
-          </div>
         </div>
 
-        <!-- THEORY PANEL -->
-        <div id="theoryPanel" class="q-panel hidden">
-          <p class="question-text theory-q" id="theoryQuestion"></p>
+        <!-- THEORY QUESTION -->
+        <div id="theoryPanel" class="hidden">
+          <div class="question-text theory-q" id="theoryQuestion"></div>
           <div class="theory-body">
-            <div class="marking-scheme card-inset" id="markingScheme"></div>
+            <div class="marking-scheme" id="markingScheme"></div>
             <div class="model-answer-wrap">
               <button class="toggle-answer-btn" id="toggleAnswerBtn">📄 Show Model Answer</button>
               <div class="model-answer" id="modelAnswer"></div>
             </div>
-            <div class="exam-tip-box" id="examTipBox" style="display:none"></div>
+            <div class="exam-tip-box" id="examTipBox"></div>
           </div>
         </div>
 
         <div class="nav-footer">
-          <button id="prevBtn" class="btn-nav btn-ghost" disabled>← Prev</button>
-          <button id="nextBtn" class="btn-nav btn-gold">Next →</button>
+          <button id="prevBtn" class="btn-nav ghost">← Previous</button>
+          <button id="nextBtn" class="btn-nav primary">Next →</button>
         </div>
 
       </main>
     </div>
-  </section><!-- #quizScreen -->
+  </section>
 
-  <!-- ════════════════ RESULT SCREEN ════════════════ -->
+  <!-- ══════════════════════════════════
+       SCREEN 3: RESULTS
+  ══════════════════════════════════ -->
   <section id="resultScreen" class="screen">
     <div class="result-page">
-
       <div class="result-card card">
-        <div class="result-emoji" id="resultEmoji">★</div>
-        <div class="result-score" id="resultScore">—</div>
+        <div class="result-badge" id="resultBadge">★</div>
+        <div class="result-score" id="resultScore">0%</div>
         <div class="result-grade" id="resultGrade"></div>
-        <div class="result-summary" id="resultSummary"></div>
+        <p class="result-summary" id="resultSummary"></p>
+
         <div class="result-stats-grid" id="resultStatsGrid"></div>
-        <div id="resultBreakdown" class="result-breakdown"></div>
+
         <div class="result-actions">
-          <button id="reviewBtn" class="btn-secondary">📖 Review Answers</button>
-          <button id="homeBtn" class="btn-primary">New Session →</button>
+          <button id="reviewBtn" class="btn-secondary">Review Answers</button>
+          <button id="homeBtn" class="btn-primary">New Session</button>
         </div>
       </div>
 
       <div class="share-nudge">
-        <p>Know a student writing WAEC or NECO? Share this!</p>
-        <button id="shareBtn" class="btn-share">📤 Share My Exams App</button>
+        <p>Know a student writing WAEC or NECO?</p>
+        <button class="btn-share" id="shareBtn">📤 Share My Exams App</button>
       </div>
 
       <footer class="app-footer">
         <span class="footer-logo">★ MyExamsApp</span>
-        <span>Questions from WAEC / NECO / GCE / NABTEB past papers — publicly available materials.</span>
+        <span>Questions sourced from WAEC/NECO/GCE/NABTEB past examinations — publicly available materials.</span>
       </footer>
     </div>
-  </section><!-- #resultScreen -->
+  </section>
 
 </div><!-- #app -->
+
 <script src="data/questions.js"></script>
 <script src="js/app.js"></script>
 </body>
