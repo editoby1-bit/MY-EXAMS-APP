@@ -86,17 +86,28 @@
     E.subjectGrid.innerHTML = '';
     Object.entries(SUBJECTS).forEach(([key, meta]) => {
       if (!EXAM_BANK[key]) return;
-      const n = EXAM_BANK[key].objective?.length || 0;
       const btn = document.createElement('button');
       btn.className = 'subject-btn';
       btn.dataset.subject = key;
       btn.innerHTML =
         `<span class="sub-icon">${meta.icon}</span>` +
         `<span class="sub-name">${meta.name}</span>` +
-        `<span class="sub-count">${n}Q</span>`;
+        `<span class="sub-count" data-subject-count="${key}">0Q</span>`;
       btn.addEventListener('click', () => pickSubject(key, btn));
       E.subjectGrid.appendChild(btn);
     });
+    updateSubjectCounts(); // populate counts for current exam
+  }
+
+  function getExamCount(key) {
+    const bank = EXAM_BANK[key];
+    if (!bank) return 0;
+    const examFilter = q => !q.exam || q.exam === S.exam;
+    const obj = (bank.objective||[]).filter(examFilter).length;
+    const th  = (bank.theory||[]).filter(examFilter).length;
+    if (S.type === 'objective') return obj;
+    if (S.type === 'theory')    return th;
+    return obj + th;
   }
 
   /* ════════ EVENTS ════════ */
@@ -109,6 +120,7 @@
         document.querySelectorAll('.exam-pill').forEach(x => x.classList.remove('active'));
         p.classList.add('active');
         S.exam = p.dataset.exam;
+        updateSubjectCounts();
       })
     );
 
@@ -269,11 +281,9 @@
                : hasObj||hasTh;
       btn.disabled = !ok;
       btn.style.opacity = ok ? '' : '0.35';
-      const n = S.type==='objective' ? (bank.objective?.length||0)
-              : S.type==='theory'    ? (bank.theory?.length||0)
-              : (bank.objective?.length||0)+(bank.theory?.length||0);
+      const n = getExamCount(key);
       const c = btn.querySelector('.sub-count');
-      if (c) c.textContent = n+'Q';
+      if (c) c.textContent = (n||'0')+'Q';
     });
     if (S.subject) {
       const active = document.querySelector('.subject-btn.active');
@@ -329,20 +339,31 @@
     const bank = EXAM_BANK[S.subject];
     if (!bank) { alert('Subject data not found. Please try another.'); return; }
 
+    // Filter by selected exam — fall back to all if selected exam has no questions for this subject
+    const examFilter = q => !q.exam || q.exam === S.exam;
+
     let pool = [];
     if (S.type === 'objective') {
-      pool = shuffle([...(bank.objective||[])]).map(q => ({...q, _type:'objective'}));
+      let qs = (bank.objective||[]).filter(examFilter);
+      if (!qs.length) qs = [...(bank.objective||[])]; // fallback: all exams
+      pool = shuffle(qs).map(q => ({...q, _type:'objective'}));
     } else if (S.type === 'theory') {
-      pool = shuffle([...(bank.theory||[])]).map(q => ({...q, _type:'theory'}));
+      let qs = (bank.theory||[]).filter(examFilter);
+      if (!qs.length) qs = [...(bank.theory||[])];
+      pool = shuffle(qs).map(q => ({...q, _type:'theory'}));
     } else {
+      let objQs = (bank.objective||[]).filter(examFilter);
+      if (!objQs.length) objQs = [...(bank.objective||[])];
+      let thQs  = (bank.theory||[]).filter(examFilter);
+      if (!thQs.length)  thQs  = [...(bank.theory||[])];
       pool = [
-        ...shuffle([...(bank.objective||[])]).map(q => ({...q, _type:'objective'})),
-        ...shuffle([...(bank.theory||[])]).map(q => ({...q, _type:'theory'})),
+        ...shuffle(objQs).map(q => ({...q, _type:'objective'})),
+        ...shuffle(thQs).map(q =>  ({...q, _type:'theory'})),
       ];
     }
 
     if (!pool.length) {
-      alert('No questions available for this subject and type. Try Objective or a different subject.');
+      alert('No questions available for this selection. Try a different subject or type.');
       return;
     }
 
@@ -483,7 +504,7 @@
 
   /* ════════ OBJECTIVE ════════ */
   function renderObjective(q, ans) {
-    E.objectiveQ.innerHTML = safe(q.question).replace(/\n/g,'<br>');
+    E.objectiveQuestion.innerHTML = safe(q.question).replace(/\n/g,'<br>');
     E.optionsList.innerHTML = '';
     E.explanationArea.innerHTML = '';
     E.explanationArea.className = 'explanation-area';
@@ -526,7 +547,7 @@
 
   /* ════════ THEORY ════════ */
   function renderTheory(q) {
-    E.theoryQ.innerHTML = safe(q.question).replace(/\n/g,'<br>');
+    E.theoryQuestion.innerHTML = safe(q.question).replace(/\n/g,'<br>');
 
     const total = q.totalMarks ||
       (q.markingScheme||[]).reduce((s,p) => s+(p.marks||0), 0);
