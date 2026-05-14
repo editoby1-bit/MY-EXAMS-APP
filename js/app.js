@@ -8,18 +8,26 @@
     users:   'mea-users-v1',
     current: 'mea-current-v1',
     access:  'mea-access-v1',
-    free:    'mea-free-v1',
+    free:    'mea-free-lifetime-v1',   // lifetime trial counter
     streak:  'mea-streak-v1',
+    tier:    'mea-tier-v1',            // 'student' | 'plus'
   };
-  const FREE_DAILY_LIMIT = 10;
+  const FREE_TRIAL_LIMIT    = 10;   // lifetime questions, not daily
+  const FREE_SNAP_LIMIT     = 3;    // lifetime snaps on free tier
+  const EARLY_ADOPTER_PRICE = 200000; // ₦2,000 in kobo
+  const STANDARD_PRICE      = 250000; // ₦2,500 in kobo
+  const EARLY_ADOPTER_CAP   = 100;    // first 100 students
 
   const S = {
     currentUser: loadSafe(SK.current) || '',
     users:       loadSafe(SK.users, {}),
     hasAccess:   checkAccess(),
-    freeToday:   getFreeToday(),
+    tier:        loadSafe(SK.tier) || 'free',
+    freeUsed:    getFreeUsed(),       // lifetime questions used on free tier
+    freeSnaps:   getFreeSnaps(),      // lifetime snaps used on free tier
     streak:      loadSafe(SK.streak, { count:0, lastDate:'' }),
     exam:        'WAEC',
+    year:        'random',            // 'random' or e.g. 2023
     subject:     '',
     mode:        'practice',
     type:        'objective',
@@ -44,7 +52,9 @@
     'startBtn','startBtnText',
     'historyList','clearHistoryBtn',
     'hStatSessions','hStatAvg','hStatBest','hStatQs',
-    'paywallOverlay','payBtn','accessCodeInput','redeemBtn','closePaywall',
+    'paywallOverlay','paywallBadge','payBtn','payBtnPlus','accessCodeInput','redeemBtn','closePaywall',
+    'earlyAdopterBanner','earlyAdopterCounter',
+    'yearPillsContainer',
     'sidebarToggle','sidebarBackdrop','quizSidebar','exitBtn',
     'sbStudent','sbSubject','sbMode','sbExam',
     'timerCard','timerDisplay',
@@ -115,11 +125,21 @@
     E.loginBtn.addEventListener('click', loginStudent);
     E.studentNameInput.addEventListener('keydown', e => { if (e.key==='Enter') loginStudent(); });
 
-    document.querySelectorAll('.exam-pill').forEach(p =>
+    document.querySelectorAll('#examPillsContainer .exam-pill').forEach(p =>
       p.addEventListener('click', () => {
-        document.querySelectorAll('.exam-pill').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('#examPillsContainer .exam-pill').forEach(x => x.classList.remove('active'));
         p.classList.add('active');
         S.exam = p.dataset.exam;
+        updateSubjectCounts();
+      })
+    );
+
+    // Year pills
+    document.querySelectorAll('#yearPillsContainer .year-pill').forEach(p =>
+      p.addEventListener('click', () => {
+        document.querySelectorAll('#yearPillsContainer .year-pill').forEach(x => x.classList.remove('active'));
+        p.classList.add('active');
+        S.year = p.dataset.year === 'random' ? 'random' : Number(p.dataset.year);
         updateSubjectCounts();
       })
     );
@@ -151,7 +171,8 @@
     E.startBtn.addEventListener('click', startSession);
     E.clearHistoryBtn.addEventListener('click', clearHistory);
 
-    E.payBtn.addEventListener('click', handlePayment);
+    E.payBtn.addEventListener('click', () => handlePayment('student'));
+    if (E.payBtnPlus) E.payBtnPlus.addEventListener('click', () => handlePayment('plus'));
     E.redeemBtn.addEventListener('click', redeemCode);
     E.closePaywall.addEventListener('click', () => E.paywallOverlay.classList.add('hidden'));
 
@@ -233,6 +254,7 @@
     if (S.currentUser) {
       E.studentPill.textContent = '✓  ' + S.currentUser;
       E.studentPill.className = 'student-status active';
+      updateFreeTrialIndicator();
     } else {
       E.studentPill.textContent = 'No student logged in';
       E.studentPill.className = 'student-status';
@@ -330,31 +352,36 @@
       return;
     }
 
-    // Paywall
-    if (!S.hasAccess && S.freeToday >= FREE_DAILY_LIMIT) {
-      E.paywallOverlay.classList.remove('hidden');
+    // Paywall — lifetime trial check
+    if (!S.hasAccess && S.freeUsed >= FREE_TRIAL_LIMIT) {
+      showPaywall('trial');
       return;
     }
 
     const bank = EXAM_BANK[S.subject];
     if (!bank) { alert('Subject data not found. Please try another.'); return; }
 
-    // Filter by selected exam — fall back to all if selected exam has no questions for this subject
-    const examFilter = q => !q.exam || q.exam === S.exam;
+    // Filter by exam AND year (random = all years)
+    const examFilter = q => (!q.exam || q.exam === S.exam) &&
+                            (S.year === 'random' || !q.year || q.year === S.year);
 
     let pool = [];
     if (S.type === 'objective') {
       let qs = (bank.objective||[]).filter(examFilter);
-      if (!qs.length) qs = [...(bank.objective||[])]; // fallback: all exams
+      if (!qs.length) qs = (bank.objective||[]).filter(q => !q.exam || q.exam === S.exam); // drop year fallback
+      if (!qs.length) qs = [...(bank.objective||[])]; // final fallback: all
       pool = shuffle(qs).map(q => ({...q, _type:'objective'}));
     } else if (S.type === 'theory') {
       let qs = (bank.theory||[]).filter(examFilter);
+      if (!qs.length) qs = (bank.theory||[]).filter(q => !q.exam || q.exam === S.exam);
       if (!qs.length) qs = [...(bank.theory||[])];
       pool = shuffle(qs).map(q => ({...q, _type:'theory'}));
     } else {
       let objQs = (bank.objective||[]).filter(examFilter);
+      if (!objQs.length) objQs = (bank.objective||[]).filter(q => !q.exam || q.exam === S.exam);
       if (!objQs.length) objQs = [...(bank.objective||[])];
       let thQs  = (bank.theory||[]).filter(examFilter);
+      if (!thQs.length)  thQs  = (bank.theory||[]).filter(q => !q.exam || q.exam === S.exam);
       if (!thQs.length)  thQs  = [...(bank.theory||[])];
       pool = [
         ...shuffle(objQs).map(q => ({...q, _type:'objective'})),
@@ -389,10 +416,11 @@
       E.timerCard.style.display = 'none';
     }
 
-    // Count free usage per session start (not per question)
+    // Count free usage — lifetime, per session start
     if (!S.hasAccess) {
-      S.freeToday++;
-      saveSafe(SK.free, { date: todayStr(), n: S.freeToday });
+      S.freeUsed++;
+      saveSafe(SK.free, { n: S.freeUsed });
+      updateFreeTrialIndicator();
     }
 
     E.sbStudent.textContent = S.currentUser;
@@ -775,47 +803,120 @@
   /* ════════ PAYWALL ════════ */
   function checkAccess() {
     const d = loadSafe(SK.access);
-    return !!(d?.expires && new Date(d.expires)>new Date());
+    return !!(d?.expires && new Date(d.expires) > new Date());
   }
 
-  function getFreeToday() {
+  function getFreeUsed() {
     const d = loadSafe(SK.free);
-    return (!d||d.date!==todayStr()) ? 0 : (d.n||0);
+    return d?.n || 0;
   }
 
-  function grantAccess(days) {
+  function getFreeSnaps() {
+    const d = loadSafe(SK.free);
+    return d?.snaps || 0;
+  }
+
+  function updateFreeTrialIndicator() {
+    // Show a subtle indicator on home screen of remaining trial questions
+    const remaining = Math.max(0, FREE_TRIAL_LIMIT - S.freeUsed);
+    const pill = E.studentPill;
+    if (pill && !S.hasAccess && S.currentUser) {
+      const orig = pill.textContent;
+      if (remaining <= 3 && remaining > 0) {
+        pill.innerHTML = `${S.currentUser} &nbsp;·&nbsp; <span style="color:var(--amber);font-weight:600">${remaining} free question${remaining===1?'':'s'} left</span>`;
+      } else if (remaining === 0) {
+        pill.innerHTML = `${S.currentUser} &nbsp;·&nbsp; <span style="color:var(--red,#e55)">Free trial complete</span>`;
+      }
+    }
+  }
+
+  function showPaywall(reason) {
+    if (E.paywallBadge) {
+      E.paywallBadge.textContent = reason === 'trial' ? 'FREE TRIAL COMPLETE' : 'PREMIUM FEATURE';
+    }
+    // Show early adopter counter
+    updateEarlyAdopterBanner();
+    E.paywallOverlay.classList.remove('hidden');
+  }
+
+  function updateEarlyAdopterBanner() {
+    // In production this would fetch from backend. For now simulate with localStorage count.
+    const sold = loadSafe('mea-ea-sold') || 0;
+    const remaining = Math.max(0, EARLY_ADOPTER_CAP - sold);
+    if (E.earlyAdopterCounter) {
+      if (remaining > 0) {
+        E.earlyAdopterCounter.textContent = `${remaining} of 100 spots remaining`;
+        if (E.earlyAdopterBanner) E.earlyAdopterBanner.style.display = '';
+        if (E.payBtn) {
+          E.payBtn.textContent = `Get Early Access — ₦2,000/quarter →`;
+        }
+      } else {
+        // Early adopter cap reached — show standard price
+        if (E.earlyAdopterBanner) E.earlyAdopterBanner.style.display = 'none';
+        if (E.payBtn) E.payBtn.textContent = `Get Student Pass — ₦2,500/quarter →`;
+      }
+    }
+  }
+
+  function grantAccess(days, tier) {
     const exp = new Date();
-    exp.setDate(exp.getDate()+days);
-    saveSafe(SK.access, {expires:exp.toISOString()});
-    S.hasAccess=true;
+    exp.setDate(exp.getDate() + days);
+    saveSafe(SK.access, { expires: exp.toISOString() });
+    saveSafe(SK.tier, tier || 'student');
+    S.hasAccess = true;
+    S.tier = tier || 'student';
     E.paywallOverlay.classList.add('hidden');
-    alert(`✅ Access granted for ${days} days!`);
+    alert(`✅ Access granted for ${days} days! Welcome to My Exams App.`);
   }
 
-  function handlePayment() {
-    const email = prompt('Enter your email to proceed:');
-    if (!email?.includes('@')) { if(email!==null) alert('Enter a valid email.'); return; }
-    /* Paystack integration:
+  function handlePayment(tier) {
+    tier = tier || 'student';
+    const sold = loadSafe('mea-ea-sold') || 0;
+    const isEarlyAdopter = sold < EARLY_ADOPTER_CAP;
+    const amount = tier === 'plus' ? 350000 : (isEarlyAdopter ? EARLY_ADOPTER_PRICE : STANDARD_PRICE);
+    const label  = tier === 'plus' ? 'Student Pass Plus' : 'Student Pass';
+
+    const email = prompt(`Enter your email to pay for ${label}:`);
+    if (!email?.includes('@')) { if (email !== null) alert('Enter a valid email.'); return; }
+
+    /* Paystack integration — insert your public key below:
     const handler = window.PaystackPop.setup({
-      key: 'pk_live_YOUR_KEY',
-      email, amount:100000, currency:'NGN',
-      ref:'MEA-'+Date.now(),
-      onClose(){},
-      callback(){ grantAccess(90); }
+      key: 'pk_live_YOUR_KEY_HERE',
+      email,
+      amount,
+      currency: 'NGN',
+      ref: 'MEA-' + tier.toUpperCase() + '-' + Date.now(),
+      onClose() {},
+      callback(response) {
+        // Increment early adopter counter
+        if (tier !== 'plus' && isEarlyAdopter) {
+          saveSafe('mea-ea-sold', sold + 1);
+        }
+        grantAccess(90, tier);
+      }
     });
-    handler.openIframe(); */
-    alert('Paystack integration ready.\nDemo code: MEA-DEMO-2025');
+    handler.openIframe();
+    */
+
+    // Demo mode — remove when Paystack is live
+    alert(`Paystack integration ready for ${label}.\nAmount: ₦${(amount/100).toLocaleString()}\nDemo code: MEA-DEMO-2025`);
   }
 
   function redeemCode() {
     const code = (E.accessCodeInput.value||'').trim().toUpperCase();
     if (!code) { E.accessCodeInput.focus(); return; }
-    const codes = {'MEA-DEMO-2025':90,'WAEC-PROMO':30,'NECO-PROMO':30,'TEST7':7};
+    const codes = {
+      'MEA-DEMO-2025': { days:90, tier:'student' },
+      'WAEC-PROMO':    { days:30, tier:'student' },
+      'NECO-PROMO':    { days:30, tier:'student' },
+      'MEA-PLUS-DEMO': { days:90, tier:'plus' },
+      'TEST7':         { days:7,  tier:'student' },
+    };
     if (codes[code]) {
-      grantAccess(codes[code]);
+      grantAccess(codes[code].days, codes[code].tier);
     } else {
-      E.accessCodeInput.style.borderColor='var(--red)';
-      setTimeout(()=>{ E.accessCodeInput.style.borderColor=''; },1500);
+      E.accessCodeInput.style.borderColor = 'var(--red, #e55)';
+      setTimeout(() => { E.accessCodeInput.style.borderColor = ''; }, 1500);
       alert('Invalid or expired code.');
     }
   }
@@ -823,7 +924,7 @@
   /* ════════ SHARE ════════ */
   function shareApp() {
     const url  = window.location.href;
-    const text = '🎓 Preparing for WAEC/NECO? Try My Exams App!\nPast questions + model answers for 15 subjects.\n₦1,000 for 3 months.\n\n'+url;
+    const text = '🎓 Preparing for WAEC/NECO? Try My Exams App!\nPast questions + model answers for 15 subjects + snap-and-mark theory.\n₦2,500 for 3 months — early access at ₦2,000.\n\n'+url;
     if (navigator.share) navigator.share({title:'My Exams App',text,url}).catch(()=>{});
     else if (navigator.clipboard) navigator.clipboard.writeText(text)
       .then(()=>alert('📋 Copied! Paste in WhatsApp or SMS.'));
