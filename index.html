@@ -12,6 +12,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css"/>
   <link rel="manifest" href="manifest.json"/>
+  <link rel="icon" type="image/x-icon" href="favicon.ico"/>
+  <link rel="apple-touch-icon" href="icon-192.png"/>
 </head>
 <body>
 <div id="app">
@@ -74,14 +76,27 @@
           <button class="exam-pill" data-exam="NABTEB">NABTEB</button>
         </div>
 
-        <div class="config-step">
+        <div class="config-step" style="margin-top:0.9rem">
           <span class="step-num">2</span>
+          <span class="step-label">Choose Year</span>
+        </div>
+        <div class="exam-pills" id="yearPillsContainer">
+          <button class="exam-pill year-pill active" data-year="random">Random</button>
+          <button class="exam-pill year-pill" data-year="2023">2023</button>
+          <button class="exam-pill year-pill" data-year="2022">2022</button>
+          <button class="exam-pill year-pill" data-year="2021">2021</button>
+          <button class="exam-pill year-pill" data-year="2020">2020</button>
+          <button class="exam-pill year-pill" data-year="2019">2019</button>
+        </div>
+
+        <div class="config-step" style="margin-top:0.9rem">
+          <span class="step-num">3</span>
           <span class="step-label">Choose Subject</span>
         </div>
         <div class="subject-grid" id="subjectGrid"></div>
 
-        <div class="config-step">
-          <span class="step-num">3</span>
+        <div class="config-step" style="margin-top:0.9rem">
+          <span class="step-num">4</span>
           <span class="step-label">Options</span>
         </div>
         <div class="options-row">
@@ -148,29 +163,67 @@
     <div id="paywallOverlay" class="paywall-overlay hidden">
       <div class="paywall-card">
         <button id="closePaywall" class="paywall-close-x">✕</button>
-        <div class="paywall-badge">FREE SESSIONS USED</div>
+        <div class="paywall-badge" id="paywallBadge">FREE TRIAL COMPLETE</div>
         <h2 class="paywall-title">Unlock Full Access</h2>
-        <p class="paywall-sub">Get unlimited practice across all 15 subjects, all 4 exams, with full theory model answers and marking schemes.</p>
-        <div class="price-card">
-          <div class="price-top">
-            <div class="price-tag">₦1,000</div>
-            <div class="price-period">3 Months · All Access</div>
-          </div>
-          <ul class="price-perks">
-            <li>✓ All 15 subjects — WAEC, NECO, GCE, NABTEB</li>
-            <li>✓ Objective + Theory + Full Model Answers</li>
-            <li>✓ Point-by-point marking schemes</li>
-            <li>✓ Examiner tips for every theory question</li>
-            <li>✓ Unlimited sessions · Works offline (PWA)</li>
-          </ul>
-          <button class="btn-pay" id="payBtn">Pay ₦1,000 with Paystack →</button>
+        <p class="paywall-sub">You've used your free trial. Unlock unlimited practice across all 15 subjects, all 4 exams, with full model answers, marking schemes — and snap-and-mark for theory.</p>
+
+        <!-- Early adopter banner -->
+        <div class="early-adopter-banner" id="earlyAdopterBanner">
+          🔥 <strong>Early Access:</strong> First 100 students pay ₦2,000/quarter — locked in forever.
+          <span id="earlyAdopterCounter" class="ea-counter">Loading...</span>
         </div>
+
+        <!-- Tier cards -->
+        <div class="paywall-tiers">
+
+          <div class="tier-card tier-featured" id="tierStudentPass">
+            <div class="tier-badge-top">MOST POPULAR</div>
+            <div class="tier-name">Student Pass</div>
+            <div class="tier-price-row">
+              <span class="tier-price" id="studentPassPrice">₦2,000</span>
+              <span class="tier-period">/quarter</span>
+            </div>
+            <div class="tier-yearly">or ₦7,500/year <span class="tier-save">save ₦2,500</span></div>
+            <ul class="tier-perks">
+              <li>✓ Unlimited sessions — all 15 subjects</li>
+              <li>✓ WAEC, NECO, GCE, NABTEB + year filters</li>
+              <li>✓ Objective + Theory + Model Answers</li>
+              <li>✓ Point-by-point marking schemes</li>
+              <li>✓ 50 snap-and-mark credits per quarter</li>
+              <li>✓ Works offline (PWA installable)</li>
+            </ul>
+            <button class="btn-pay" id="payBtn" data-tier="student" data-amount="200000">
+              Get Student Pass →
+            </button>
+          </div>
+
+          <div class="tier-card" id="tierStudentPlus">
+            <div class="tier-name">Student Pass <span class="tier-plus-label">Plus</span></div>
+            <div class="tier-price-row">
+              <span class="tier-price">₦3,500</span>
+              <span class="tier-period">/quarter</span>
+            </div>
+            <div class="tier-yearly">or ₦10,500/year <span class="tier-save">save ₦3,500</span></div>
+            <ul class="tier-perks">
+              <li>✓ Everything in Student Pass</li>
+              <li>✓ 100 AI explanation credits/quarter</li>
+              <li>✓ "Why is this wrong?" on every question</li>
+              <li>✓ Personalised to your weak areas</li>
+              <li>✓ Top-up anytime: ₦500 = 50 explanations</li>
+            </ul>
+            <button class="btn-pay btn-pay-secondary" id="payBtnPlus" data-tier="plus" data-amount="350000">
+              Get Student Pass Plus →
+            </button>
+          </div>
+
+        </div>
+
         <div class="access-code-row">
-          <span class="code-label">Already paid?</span>
-          <input id="accessCodeInput" class="code-input" placeholder="Enter access code" autocomplete="off" spellcheck="false"/>
+          <span class="code-label">Have an access code?</span>
+          <input id="accessCodeInput" class="code-input" placeholder="Enter code" autocomplete="off" spellcheck="false"/>
           <button id="redeemBtn" class="btn-redeem">Redeem</button>
         </div>
-        <p class="paywall-note">Demo code: <strong>MEA-DEMO-2025</strong> (90 days free)</p>
+        <p class="paywall-note">Demo code: <strong>MEA-DEMO-2025</strong> · School bundles: <strong>₦150,000/year</strong> — contact us</p>
       </div>
     </div>
 
