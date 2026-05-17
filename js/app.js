@@ -66,6 +66,9 @@
     'prevBtn','nextBtn',
     'resultEmoji','resultScore','resultGrade','resultSummary','resultStatsGrid','resultBreakdown',
     'reviewBtn','homeBtn','shareBtn',
+    'upgradeBar','upgradeBarBtn','upgradeBarText',
+    'resultUpgradTeaser','rutBtn','rutTitle',
+    'teaserToast','teaserToastText','teaserToastUpgrade','teaserToastClose',
   ].forEach(id => {
     const el = document.getElementById(id);
     if (!el) console.warn('Missing element:', id);
@@ -189,6 +192,19 @@
     E.reviewBtn.addEventListener('click', enterReview);
     E.homeBtn.addEventListener('click', goHome);
     E.shareBtn.addEventListener('click', shareApp);
+
+    // Upgrade bar
+    if (E.upgradeBarBtn) E.upgradeBarBtn.addEventListener('click', () => showPaywall('upgrade'));
+
+    // Results screen upgrade teaser
+    if (E.rutBtn) E.rutBtn.addEventListener('click', () => showPaywall('upgrade'));
+
+    // Teaser toast
+    if (E.teaserToastUpgrade) E.teaserToastUpgrade.addEventListener('click', () => {
+      hideTeaserToast();
+      showPaywall('upgrade');
+    });
+    if (E.teaserToastClose) E.teaserToastClose.addEventListener('click', hideTeaserToast);
 
     document.addEventListener('keydown', onKey);
 
@@ -635,6 +651,10 @@
     S.showAnswer = S.reviewMode;
     closeSidebar();
     renderQ();
+    // Show teaser toast at question 5 for free users
+    if (!S.hasAccess && S.idx === 4 && !S.reviewMode) {
+      setTimeout(showTeaserToast, 1500);
+    }
   }
 
   /* ════════ SUBMIT ════════ */
@@ -947,7 +967,103 @@
       document.getElementById(n+'Screen').classList.toggle('active', n===name);
     });
     window.scrollTo(0,0);
-    if (name==='home') { renderHistory(); refreshStats(); renderStreak(); }
+    if (name==='home') { renderHistory(); refreshStats(); renderStreak(); refreshUpgradeBar(); }
+    if (name==='result') { renderResultTeaser(); }
+    if (name==='quiz' && !S.hasAccess) { scheduleTeaserToast(); }
+  }
+
+  /* ════════ UPGRADE BAR ════════ */
+  function refreshUpgradeBar() {
+    if (!E.upgradeBar) return;
+    if (S.hasAccess) {
+      E.upgradeBar.style.display = 'none';
+      return;
+    }
+    E.upgradeBar.style.display = '';
+    const remaining = Math.max(0, FREE_TRIAL_LIMIT - S.freeUsed);
+    const msgs = [
+      `⚡ ${remaining} free question${remaining===1?'':'s'} left — unlock unlimited access from ₦2,000`,
+      `📸 Snap your theory answers and get marked instantly — Student Pass`,
+      `🏆 Join students acing WAEC & NECO with full model answers — from ₦2,000`,
+      `🔓 Unlimited sessions · All 15 subjects · Year-by-year papers — Student Pass`,
+    ];
+    // Rotate message every 30 seconds
+    const idx = Math.floor(Date.now() / 30000) % msgs.length;
+    if (E.upgradeBarText) E.upgradeBarText.textContent = msgs[idx];
+  }
+
+  /* ════════ RESULT TEASER ════════ */
+  const RESULT_TEASERS = [
+    {
+      icon: '📸',
+      title: 'Snap your theory answers. Get marked in seconds.',
+      sub:   'Student Pass includes 50 snap-and-mark credits. No other app does this in Nigeria.'
+    },
+    {
+      icon: '📚',
+      title: 'You just scratched the surface.',
+      sub:   'Subscribers access all 15 subjects, all years — WAEC, NECO, GCE and NABTEB. Unlimited sessions.'
+    },
+    {
+      icon: '💡',
+      title: 'Want to know why you got that wrong?',
+      sub:   'Student Pass Plus includes AI explanations personalised to your weak areas.'
+    },
+    {
+      icon: '🎯',
+      title: 'Serious students subscribe.',
+      sub:   'Early access at ₦2,000/quarter — only 100 spots. Lock in your price today.'
+    },
+    {
+      icon: '📅',
+      title: 'Drill past questions year by year.',
+      sub:   'Subscribers can filter by exam year — practice 2019, 2020, 2021, 2022, 2023 separately.'
+    },
+  ];
+
+  function renderResultTeaser() {
+    if (!E.resultUpgradTeaser) return;
+    if (S.hasAccess) { E.resultUpgradTeaser.style.display = 'none'; return; }
+    E.resultUpgradTeaser.style.display = '';
+    const t = RESULT_TEASERS[Math.floor(Math.random() * RESULT_TEASERS.length)];
+    const iconEl = E.resultUpgradTeaser.querySelector('.rut-icon');
+    if (iconEl) iconEl.textContent = t.icon;
+    if (E.rutTitle) E.rutTitle.textContent = t.title;
+    const subEl = E.resultUpgradTeaser.querySelector('.rut-sub');
+    if (subEl) subEl.textContent = t.sub;
+  }
+
+  /* ════════ TEASER TOAST (mid-session) ════════ */
+  const SESSION_TEASERS = [
+    'Subscribers get step-by-step AI explanations for every question like this 💡',
+    'Student Pass — unlimited sessions across all 15 subjects. From ₦2,000 ⚡',
+    'Snap your theory answer and get it marked against the official scheme 📸',
+    'Serious about WAEC? Over 200 questions with full model answers await you 🎯',
+    'Lock in early access at ₦2,000 before the price goes up 🔐',
+  ];
+
+  let _teaserTimer = null;
+
+  function scheduleTeaserToast() {
+    if (S.hasAccess) return;
+    if (_teaserTimer) clearTimeout(_teaserTimer);
+    // Show at question 5 or after 90 seconds — whichever comes first
+    _teaserTimer = setTimeout(() => {
+      if (!S.hasAccess && S.inSession) showTeaserToast();
+    }, 90000);
+  }
+
+  function showTeaserToast() {
+    if (!E.teaserToast) return;
+    const msg = SESSION_TEASERS[Math.floor(Math.random() * SESSION_TEASERS.length)];
+    if (E.teaserToastText) E.teaserToastText.textContent = msg;
+    E.teaserToast.classList.remove('hidden');
+    // Auto-hide after 8 seconds
+    setTimeout(hideTeaserToast, 8000);
+  }
+
+  function hideTeaserToast() {
+    if (E.teaserToast) E.teaserToast.classList.add('hidden');
   }
 
   /* ════════ UTILS ════════ */
