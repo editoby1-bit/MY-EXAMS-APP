@@ -876,19 +876,29 @@
     const amount = tier === 'plus' ? 350000 : (isEarlyAdopter ? EARLY_ADOPTER_PRICE : STANDARD_PRICE);
     const label  = tier === 'plus' ? 'Student Pass Plus' : 'Student Pass';
 
-    const email = prompt(`Enter your email to pay for ${label}:`);
-    if (!email?.includes('@')) { if (email !== null) alert('Enter a valid email.'); return; }
+    const email = prompt(`Enter your email address to continue:`);
+    if (!email?.includes('@')) { if (email !== null) alert('Please enter a valid email address.'); return; }
 
-    /* Paystack integration — insert your public key below:
+    // Paystack — test key active; swap for pk_live_ key when Paystack approves account
+    const PAYSTACK_KEY = 'pk_test_1ac5e055de30ca320129b0e5b6f57d0df7ab2281';
+
     const handler = window.PaystackPop.setup({
-      key: 'pk_live_YOUR_KEY_HERE',
+      key: PAYSTACK_KEY,
       email,
       amount,
       currency: 'NGN',
       ref: 'MEA-' + tier.toUpperCase() + '-' + Date.now(),
-      onClose() {},
+      metadata: {
+        custom_fields: [
+          { display_name: 'Plan', variable_name: 'plan', value: label },
+          { display_name: 'App',  variable_name: 'app',  value: 'My Exams App' },
+        ]
+      },
+      onClose() {
+        // User closed without paying — do nothing
+      },
       callback(response) {
-        // Increment early adopter counter
+        // Payment successful
         if (tier !== 'plus' && isEarlyAdopter) {
           saveSafe('mea-ea-sold', sold + 1);
         }
@@ -896,10 +906,6 @@
       }
     });
     handler.openIframe();
-    */
-
-    // Demo mode — remove when Paystack is live
-    alert(`Paystack integration ready for ${label}.\nAmount: ₦${(amount/100).toLocaleString()}\nDemo code: MEA-DEMO-2025`);
   }
 
   function redeemCode() {
