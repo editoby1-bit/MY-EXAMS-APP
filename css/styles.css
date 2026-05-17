@@ -1077,3 +1077,170 @@ body {
   .qh-left { gap:.4rem; }
   .qyear-tag { display:none; }
 }
+
+/* ══════════════════════════════
+   UPGRADE BAR
+══════════════════════════════ */
+.upgrade-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  background: linear-gradient(135deg, #0a1628, #1a2d4a);
+  border: 1.5px solid var(--gold);
+  border-radius: var(--r-m);
+  padding: .75rem 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.upgrade-bar-left {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex: 1;
+  min-width: 0;
+}
+.upgrade-bar-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+#upgradeBarText {
+  font-family: var(--sans);
+  font-size: .82rem;
+  font-weight: 600;
+  color: rgba(255,255,255,.9);
+  line-height: 1.4;
+}
+.upgrade-bar-btn {
+  font-family: var(--sans);
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--gold);
+  border: none;
+  border-radius: var(--r-s);
+  padding: .45rem .9rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--t);
+  flex-shrink: 0;
+}
+.upgrade-bar-btn:hover { background: var(--gold-dk); }
+
+/* ══════════════════════════════
+   RESULT UPGRADE TEASER
+══════════════════════════════ */
+.result-upgrade-teaser {
+  background: linear-gradient(135deg, #0a1628, #132038);
+  border: 1.5px solid var(--gold);
+  border-radius: var(--r-m);
+  padding: 1.1rem 1.25rem;
+  margin: 1rem auto;
+  max-width: 680px;
+}
+.rut-inner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.rut-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+.rut-body {
+  flex: 1;
+  min-width: 0;
+}
+.rut-title {
+  font-family: var(--serif);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--gold);
+  margin-bottom: .25rem;
+  line-height: 1.4;
+}
+.rut-sub {
+  font-family: var(--sans);
+  font-size: .8rem;
+  color: rgba(255,255,255,.7);
+  line-height: 1.5;
+}
+.rut-btn {
+  font-family: var(--sans);
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--gold);
+  border: none;
+  border-radius: var(--r-s);
+  padding: .55rem 1.1rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--t);
+  flex-shrink: 0;
+}
+.rut-btn:hover { background: var(--gold-dk); }
+
+/* ══════════════════════════════
+   TEASER TOAST (mid-session)
+══════════════════════════════ */
+.teaser-toast {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 150;
+  width: calc(100% - 2rem);
+  max-width: 560px;
+  animation: toastSlideUp .3s ease;
+}
+.teaser-toast.hidden { display: none; }
+@keyframes toastSlideUp {
+  from { transform: translateX(-50%) translateY(20px); opacity:0; }
+  to   { transform: translateX(-50%) translateY(0);   opacity:1; }
+}
+.teaser-toast-inner {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  background: #0a1628;
+  border: 1.5px solid var(--gold);
+  border-radius: var(--r-m);
+  padding: .75rem 1rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+}
+.teaser-toast-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+#teaserToastText {
+  flex: 1;
+  font-family: var(--sans);
+  font-size: .8rem;
+  color: rgba(255,255,255,.9);
+  line-height: 1.4;
+}
+.teaser-toast-upgrade {
+  font-family: var(--sans);
+  font-size: .75rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--gold);
+  border: none;
+  border-radius: var(--r-s);
+  padding: .35rem .75rem;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.teaser-toast-close {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,.4);
+  font-size: .85rem;
+  cursor: pointer;
+  padding: .2rem;
+  flex-shrink: 0;
+}
+.teaser-toast-close:hover { color: rgba(255,255,255,.8); }
