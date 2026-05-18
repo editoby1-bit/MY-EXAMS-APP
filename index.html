@@ -174,57 +174,153 @@
         <button id="closePaywall" class="paywall-close-x">✕</button>
         <div class="paywall-badge" id="paywallBadge">FREE TRIAL COMPLETE</div>
         <h2 class="paywall-title">Unlock Full Access</h2>
-        <p class="paywall-sub">You've used your free trial. Unlock unlimited practice across all 15 subjects, all 4 exams, with full model answers, marking schemes — and snap-and-mark for theory.</p>
+        <p class="paywall-sub">Unlimited practice across 15 subjects · WAEC, NECO, GCE, NABTEB · Full model answers · Snap-and-mark theory · JAMB prep included.</p>
 
         <!-- Early adopter banner -->
         <div class="early-adopter-banner" id="earlyAdopterBanner">
-          🔥 <strong>Early Access:</strong> First 100 students pay ₦2,000/quarter — locked in forever.
+          🔥 <strong>Early Access:</strong> First 100 students locked in at ₦2,000/quarter — forever.
           <span id="earlyAdopterCounter" class="ea-counter">Loading...</span>
         </div>
 
-        <!-- Tier cards -->
-        <div class="paywall-tiers">
+        <!-- Paywall tab switcher -->
+        <div class="paywall-tabs">
+          <button class="paywall-tab active" id="tabIndividual" onclick="switchPaywallTab('individual')">Individual</button>
+          <button class="paywall-tab" id="tabJamb" onclick="switchPaywallTab('jamb')">JAMB Only</button>
+          <button class="paywall-tab" id="tabSchool" onclick="switchPaywallTab('school')">School</button>
+        </div>
 
-          <div class="tier-card tier-featured" id="tierStudentPass">
-            <div class="tier-badge-top">MOST POPULAR</div>
-            <div class="tier-name">Student Pass</div>
-            <div class="tier-price-row">
-              <span class="tier-price" id="studentPassPrice">₦2,000</span>
-              <span class="tier-period">/quarter</span>
+        <!-- INDIVIDUAL TIERS -->
+        <div id="paywallIndividual" class="paywall-panel">
+          <div class="paywall-tiers">
+
+            <div class="tier-card tier-featured">
+              <div class="tier-badge-top">MOST POPULAR</div>
+              <div class="tier-name">Student Pass</div>
+              <div class="tier-price-row">
+                <span class="tier-price" id="studentPassPrice">₦2,000</span>
+                <span class="tier-period">/quarter</span>
+              </div>
+              <div class="tier-yearly">or ₦7,500/year <span class="tier-save">save ₦2,500</span></div>
+              <ul class="tier-perks">
+                <li>✓ Unlimited sessions — all 15 subjects</li>
+                <li>✓ WAEC, NECO, GCE, NABTEB + year filters</li>
+                <li>✓ Full model answers + marking schemes</li>
+                <li>✓ 50 snap-and-mark credits per quarter</li>
+                <li>✓ JAMB prep included — no extra charge</li>
+                <li>✓ Community quiz — challenge friends</li>
+                <li>✓ Works offline · PWA installable</li>
+              </ul>
+              <button class="btn-pay" id="payBtn" data-tier="student" data-amount="200000">
+                Get Student Pass →
+              </button>
+              <button class="btn-pay-year" id="payBtnYear" data-tier="student-yearly" data-amount="750000">
+                Pay ₦7,500 — full year →
+              </button>
             </div>
-            <div class="tier-yearly">or ₦7,500/year <span class="tier-save">save ₦2,500</span></div>
-            <ul class="tier-perks">
-              <li>✓ Unlimited sessions — all 15 subjects</li>
-              <li>✓ WAEC, NECO, GCE, NABTEB + year filters</li>
-              <li>✓ Objective + Theory + Model Answers</li>
-              <li>✓ Point-by-point marking schemes</li>
-              <li>✓ 50 snap-and-mark credits per quarter</li>
-              <li>✓ Works offline (PWA installable)</li>
-            </ul>
-            <button class="btn-pay" id="payBtn" data-tier="student" data-amount="200000">
-              Get Student Pass →
-            </button>
-          </div>
 
-          <div class="tier-card" id="tierStudentPlus">
-            <div class="tier-name">Student Pass <span class="tier-plus-label">Plus</span></div>
-            <div class="tier-price-row">
-              <span class="tier-price">₦3,500</span>
-              <span class="tier-period">/quarter</span>
+            <div class="tier-card">
+              <div class="tier-name">Student Pass <span class="tier-plus-label">Plus</span></div>
+              <div class="tier-price-row">
+                <span class="tier-price">₦3,500</span>
+                <span class="tier-period">/quarter</span>
+              </div>
+              <div class="tier-yearly">or ₦10,500/year <span class="tier-save">save ₦3,500</span></div>
+              <ul class="tier-perks">
+                <li>✓ Everything in Student Pass</li>
+                <li>✓ 100 AI explanation credits/quarter</li>
+                <li>✓ "Why is this wrong?" on every question</li>
+                <li>✓ Personalised to your weak areas</li>
+                <li>✓ Snap top-up: ₦300 = 10 snaps</li>
+                <li>✓ AI top-up: ₦500 = 50 explanations</li>
+              </ul>
+              <button class="btn-pay btn-pay-secondary" id="payBtnPlus" data-tier="plus" data-amount="350000">
+                Get Student Pass Plus →
+              </button>
+              <button class="btn-pay-year btn-pay-secondary" id="payBtnPlusYear" data-tier="plus-yearly" data-amount="1050000">
+                Pay ₦10,500 — full year →
+              </button>
             </div>
-            <div class="tier-yearly">or ₦10,500/year <span class="tier-save">save ₦3,500</span></div>
-            <ul class="tier-perks">
-              <li>✓ Everything in Student Pass</li>
-              <li>✓ 100 AI explanation credits/quarter</li>
-              <li>✓ "Why is this wrong?" on every question</li>
-              <li>✓ Personalised to your weak areas</li>
-              <li>✓ Top-up anytime: ₦500 = 50 explanations</li>
-            </ul>
-            <button class="btn-pay btn-pay-secondary" id="payBtnPlus" data-tier="plus" data-amount="350000">
-              Get Student Pass Plus →
-            </button>
-          </div>
 
+          </div>
+        </div>
+
+        <!-- JAMB ONLY TIER -->
+        <div id="paywallJamb" class="paywall-panel hidden">
+          <div class="paywall-tiers paywall-tiers-single">
+            <div class="tier-card tier-featured">
+              <div class="tier-badge-top">JAMB / UTME</div>
+              <div class="tier-name">JAMB Only</div>
+              <div class="tier-price-row">
+                <span class="tier-price">₦1,500</span>
+                <span class="tier-period">/quarter</span>
+              </div>
+              <div class="tier-yearly">Already on Student Pass? JAMB is included free.</div>
+              <ul class="tier-perks">
+                <li>✓ 563 questions across 11 subjects</li>
+                <li>✓ Full JAMB combo simulation mode</li>
+                <li>✓ English + 3 subjects, timed</li>
+                <li>✓ Per-subject score breakdown</li>
+                <li>✓ Single subject drill mode</li>
+                <li>✓ Practice and Exam modes</li>
+              </ul>
+              <button class="btn-pay" id="payBtnJamb" data-tier="jamb" data-amount="150000">
+                Get JAMB Pass →
+              </button>
+            </div>
+          </div>
+          <p class="jamb-note">📌 If you already have Student Pass, JAMB access is included — no extra payment needed.</p>
+        </div>
+
+        <!-- SCHOOL TIERS -->
+        <div id="paywallSchool" class="paywall-panel hidden">
+          <div class="school-tiers">
+
+            <div class="school-tier-card">
+              <div class="school-tier-name">Standard</div>
+              <div class="school-tier-price">₦2,000 <span class="school-tier-unit">per student / year</span></div>
+              <div class="school-tier-min">Minimum 50 students · ₦100,000 minimum</div>
+              <ul class="tier-perks">
+                <li>✓ Same access as Student Pass</li>
+                <li>✓ All 15 subjects + JAMB included</li>
+                <li>✓ 50 snaps per student per year</li>
+                <li>✓ Students top up snaps individually</li>
+                <li>✓ Annual payment only</li>
+              </ul>
+            </div>
+
+            <div class="school-tier-card school-tier-featured">
+              <div class="school-tier-badge">BRANDED</div>
+              <div class="school-tier-name">Branded</div>
+              <div class="school-tier-price">₦500,000 <span class="school-tier-unit">/ year</span></div>
+              <div class="school-tier-min">Up to 100 students · or ₦150,000/quarter</div>
+              <ul class="tier-perks">
+                <li>✓ Student Pass Plus level access</li>
+                <li>✓ 50 snaps + 100 AI per student/year</li>
+                <li>✓ School logo + custom welcome</li>
+                <li>✓ School leaderboard</li>
+                <li>✓ Admin dashboard — usage analytics</li>
+              </ul>
+            </div>
+
+            <div class="school-tier-card">
+              <div class="school-tier-badge school-tier-badge-gold">PREMIUM</div>
+              <div class="school-tier-name">Premium Partner</div>
+              <div class="school-tier-price">₦1,000,000 <span class="school-tier-unit">/ year</span></div>
+              <div class="school-tier-min">Up to 200 students · or ₦300,000/quarter</div>
+              <ul class="tier-perks">
+                <li>✓ Everything in Branded</li>
+                <li>✓ Custom question sets — your mock exams</li>
+                <li>✓ PDF performance reports for teachers</li>
+                <li>✓ Priority WhatsApp support</li>
+                <li>✓ Featured as Partner School</li>
+              </ul>
+            </div>
+
+          </div>
+          <button class="btn-pay school-contact-btn" id="payBtnSchool">
+            Contact Us for School Bundle →
+          </button>
+          <p class="paywall-note">School enquiries: schools@myexamsapp.com · We'll set up your account within 24 hours</p>
         </div>
 
         <div class="access-code-row">
@@ -232,7 +328,7 @@
           <input id="accessCodeInput" class="code-input" placeholder="Enter code" autocomplete="off" spellcheck="false"/>
           <button id="redeemBtn" class="btn-redeem">Redeem</button>
         </div>
-        <p class="paywall-note">Demo code: <strong>MEA-DEMO-2025</strong> · School bundles: <strong>₦150,000/year</strong> — contact us</p>
+        <p class="paywall-note" id="paywallFooterNote">Demo code: <strong>MEA-DEMO-2025</strong> · Questions? WhatsApp us.</p>
       </div>
     </div>
 
