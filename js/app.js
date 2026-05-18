@@ -52,9 +52,12 @@
     'startBtn','startBtnText',
     'historyList','clearHistoryBtn',
     'hStatSessions','hStatAvg','hStatBest','hStatQs',
-    'paywallOverlay','paywallBadge','payBtn','payBtnPlus','accessCodeInput','redeemBtn','closePaywall',
+    'paywallOverlay','paywallBadge','payBtn','payBtnPlus','payBtnYear','payBtnPlusYear','payBtnJamb','payBtnSchool',
+    'accessCodeInput','redeemBtn','closePaywall',
     'earlyAdopterBanner','earlyAdopterCounter',
     'yearPillsContainer',
+    'tabIndividual','tabJamb','tabSchool',
+    'paywallIndividual','paywallJamb','paywallSchool',
     'sidebarToggle','sidebarBackdrop','quizSidebar','exitBtn',
     'sbStudent','sbSubject','sbMode','sbExam',
     'timerCard','timerDisplay',
@@ -174,8 +177,12 @@
     E.startBtn.addEventListener('click', startSession);
     E.clearHistoryBtn.addEventListener('click', clearHistory);
 
-    E.payBtn.addEventListener('click', () => handlePayment('student'));
-    if (E.payBtnPlus) E.payBtnPlus.addEventListener('click', () => handlePayment('plus'));
+    E.payBtn.addEventListener('click', () => handlePayment('student', 'quarterly'));
+    if (E.payBtnYear)     E.payBtnYear.addEventListener('click',     () => handlePayment('student', 'yearly'));
+    if (E.payBtnPlus)     E.payBtnPlus.addEventListener('click',     () => handlePayment('plus', 'quarterly'));
+    if (E.payBtnPlusYear) E.payBtnPlusYear.addEventListener('click', () => handlePayment('plus', 'yearly'));
+    if (E.payBtnJamb)     E.payBtnJamb.addEventListener('click',     () => handlePayment('jamb', 'quarterly'));
+    if (E.payBtnSchool)   E.payBtnSchool.addEventListener('click',   () => handleSchoolEnquiry());
     E.redeemBtn.addEventListener('click', redeemCode);
     E.closePaywall.addEventListener('click', () => E.paywallOverlay.classList.add('hidden'));
 
@@ -897,18 +904,52 @@
     alert(`✅ Access granted for ${days} days! Welcome to My Exams App.`);
   }
 
-  function handlePayment(tier) {
-    tier = tier || 'student';
-    const sold = loadSafe('mea-ea-sold') || 0;
+  function handlePayment(tier, period) {
+    tier   = tier   || 'student';
+    period = period || 'quarterly';
+
+    const sold          = loadSafe('mea-ea-sold') || 0;
     const isEarlyAdopter = sold < EARLY_ADOPTER_CAP;
-    const amount = tier === 'plus' ? 350000 : (isEarlyAdopter ? EARLY_ADOPTER_PRICE : STANDARD_PRICE);
-    const label  = tier === 'plus' ? 'Student Pass Plus' : 'Student Pass';
+
+    // Amount map in kobo
+    const amounts = {
+      'student-quarterly': isEarlyAdopter ? EARLY_ADOPTER_PRICE : STANDARD_PRICE,
+      'student-yearly':    750000,
+      'plus-quarterly':    350000,
+      'plus-yearly':       1050000,
+      'jamb-quarterly':    150000,
+    };
+
+    const labels = {
+      'student-quarterly': isEarlyAdopter ? 'Student Pass — Early Access (₦2,000/quarter)' : 'Student Pass (₦2,500/quarter)',
+      'student-yearly':    'Student Pass — Full Year (₦7,500)',
+      'plus-quarterly':    'Student Pass Plus (₦3,500/quarter)',
+      'plus-yearly':       'Student Pass Plus — Full Year (₦10,500)',
+      'jamb-quarterly':    'JAMB Only (₦1,500/quarter)',
+    };
+
+    // Days of access granted
+    const days = {
+      'student-quarterly': 90,
+      'student-yearly':    365,
+      'plus-quarterly':    90,
+      'plus-yearly':       365,
+      'jamb-quarterly':    90,
+    };
+
+    const key    = tier + '-' + period;
+    const amount = amounts[key];
+    const label  = labels[key];
+    const daysToGrant = days[key];
+
+    if (!amount) return;
 
     const email = prompt(`Enter your email address to continue:`);
     if (!email?.includes('@')) { if (email !== null) alert('Please enter a valid email address.'); return; }
 
-    // Paystack — test key active; swap for pk_live_ key when Paystack approves account
     const PAYSTACK_KEY = 'pk_test_1ac5e055de30ca320129b0e5b6f57d0df7ab2281';
+    // 🔑 When Paystack approves your account, replace the line above with:
+    // const PAYSTACK_KEY = 'pk_live_YOUR_LIVE_KEY_HERE';
 
     const handler = window.PaystackPop.setup({
       key: PAYSTACK_KEY,
@@ -918,33 +959,52 @@
       ref: 'MEA-' + tier.toUpperCase() + '-' + Date.now(),
       metadata: {
         custom_fields: [
-          { display_name: 'Plan', variable_name: 'plan', value: label },
-          { display_name: 'App',  variable_name: 'app',  value: 'My Exams App' },
+          { display_name: 'Plan',   variable_name: 'plan',   value: label },
+          { display_name: 'App',    variable_name: 'app',    value: 'My Exams App' },
+          { display_name: 'Period', variable_name: 'period', value: period },
         ]
       },
-      onClose() {
-        // User closed without paying — do nothing
-      },
+      onClose() {},
       callback(response) {
-        // Payment successful
-        if (tier !== 'plus' && isEarlyAdopter) {
+        if ((tier === 'student' || tier === 'jamb') && isEarlyAdopter && period === 'quarterly') {
           saveSafe('mea-ea-sold', sold + 1);
         }
-        grantAccess(90, tier);
+        grantAccess(daysToGrant, tier);
       }
     });
     handler.openIframe();
   }
 
+  function handleSchoolEnquiry() {
+    const email = 'schools@myexamsapp.com';
+    const subject = encodeURIComponent('School Bundle Enquiry — My Exams App');
+    const body    = encodeURIComponent(
+      'Hello,\n\nI am interested in a school bundle for My Exams App.\n\n' +
+      'School name:\nNumber of students:\nPreferred tier (Standard / Branded / Premium):\nContact number:\n\nThank you.'
+    );
+    window.open(`mailto:${email}?subject=${subject}&body=${body}`);
+  }
+
+  // Expose tab switcher globally for onclick in HTML
+  window.switchPaywallTab = function(tab) {
+    ['individual','jamb','school'].forEach(t => {
+      const panel = document.getElementById('paywall' + t.charAt(0).toUpperCase() + t.slice(1));
+      const btn   = document.getElementById('tab'    + t.charAt(0).toUpperCase() + t.slice(1));
+      if (panel) panel.classList.toggle('hidden', t !== tab);
+      if (btn)   btn.classList.toggle('active',   t === tab);
+    });
+  };
+
   function redeemCode() {
     const code = (E.accessCodeInput.value||'').trim().toUpperCase();
     if (!code) { E.accessCodeInput.focus(); return; }
     const codes = {
-      'MEA-DEMO-2025': { days:90, tier:'student' },
-      'WAEC-PROMO':    { days:30, tier:'student' },
-      'NECO-PROMO':    { days:30, tier:'student' },
-      'MEA-PLUS-DEMO': { days:90, tier:'plus' },
-      'TEST7':         { days:7,  tier:'student' },
+      'MEA-DEMO-2025':  { days: 90,  tier: 'student' },
+      'MEA-PLUS-DEMO':  { days: 90,  tier: 'plus'    },
+      'WAEC-PROMO':     { days: 30,  tier: 'student' },
+      'NECO-PROMO':     { days: 30,  tier: 'student' },
+      'JAMB-PROMO':     { days: 90,  tier: 'jamb'    },
+      'TEST7':          { days: 7,   tier: 'student' },
     };
     if (codes[code]) {
       grantAccess(codes[code].days, codes[code].tier);
