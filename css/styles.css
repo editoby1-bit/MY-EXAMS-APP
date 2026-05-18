@@ -1244,3 +1244,130 @@ body {
   flex-shrink: 0;
 }
 .teaser-toast-close:hover { color: rgba(255,255,255,.8); }
+
+/* ══════════════════════════════
+   PAYWALL TABS
+══════════════════════════════ */
+.paywall-tabs {
+  display: flex;
+  gap: .35rem;
+  background: var(--cream);
+  border-radius: var(--r-s);
+  padding: .3rem;
+  margin-bottom: 1rem;
+}
+.paywall-tab {
+  flex: 1;
+  font-family: var(--sans);
+  font-size: .78rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  border-radius: calc(var(--r-s) - 2px);
+  padding: .45rem .5rem;
+  cursor: pointer;
+  transition: all var(--t);
+}
+.paywall-tab.active {
+  background: var(--white);
+  color: var(--ink);
+  box-shadow: 0 1px 4px rgba(0,0,0,.1);
+}
+.paywall-panel { }
+.paywall-panel.hidden { display: none; }
+.paywall-tiers-single { grid-template-columns: 1fr; max-width: 280px; margin: 0 auto; }
+.jamb-note {
+  font-size: .78rem;
+  color: var(--text-dim);
+  text-align: center;
+  margin-top: .75rem;
+  line-height: 1.5;
+}
+.btn-pay-year {
+  width: 100%;
+  font-family: var(--sans);
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--cream-d, #f0ece0);
+  border: 1px solid var(--border);
+  border-radius: var(--r-s);
+  padding: .55rem;
+  cursor: pointer;
+  margin-top: .4rem;
+  transition: all var(--t);
+}
+.btn-pay-year:hover { background: var(--border); }
+.btn-pay-year.btn-pay-secondary { background: var(--cream); }
+
+/* ══════════════════════════════
+   SCHOOL TIER CARDS
+══════════════════════════════ */
+.school-tiers {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: .65rem;
+  margin-bottom: .85rem;
+  text-align: left;
+}
+@media (max-width: 520px) {
+  .school-tiers { grid-template-columns: 1fr; }
+}
+.school-tier-card {
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-m);
+  padding: .85rem .9rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+.school-tier-card.school-tier-featured {
+  border-color: var(--gold);
+  background: linear-gradient(160deg, #fffdf5, #fff);
+}
+.school-tier-badge {
+  display: inline-block;
+  background: var(--ink);
+  color: var(--gold);
+  font-size: .58rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  padding: .18rem .55rem;
+  border-radius: 99px;
+  margin-bottom: .2rem;
+  width: fit-content;
+}
+.school-tier-badge-gold {
+  background: var(--gold);
+  color: var(--ink);
+}
+.school-tier-name {
+  font-family: var(--serif);
+  font-size: .95rem;
+  font-weight: 700;
+}
+.school-tier-price {
+  font-family: var(--serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.school-tier-unit {
+  font-family: var(--sans);
+  font-size: .68rem;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.school-tier-min {
+  font-size: .68rem;
+  color: var(--text-dim);
+  margin-bottom: .3rem;
+  line-height: 1.4;
+}
+.school-contact-btn {
+  width: 100%;
+  margin-top: .25rem;
+}
