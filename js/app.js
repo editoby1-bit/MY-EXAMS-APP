@@ -492,7 +492,15 @@
       b.className = 'qpill' + (q._type==='theory' ? ' theory-pill' : '');
       b.textContent = i+1;
       b.title = `Q${i+1} · ${q._type==='theory'?'Theory':'Obj'}${q.year?' · '+q.year:''}`;
-      b.addEventListener('click', () => { S.idx=i; closeSidebar(); renderQ(); });
+      b.addEventListener('click', () => {
+        S.idx = i;
+        closeSidebar();
+        renderQ();
+        // Trigger teaser if free user has reached question 5
+        if (!S.hasAccess && i >= 4 && !S.reviewMode) {
+          setTimeout(showTeaserToast, 1500);
+        }
+      });
       E.qPills.appendChild(b);
     });
     syncPills();
