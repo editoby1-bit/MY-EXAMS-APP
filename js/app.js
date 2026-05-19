@@ -87,6 +87,7 @@
     renderHistory();
     renderStreak();
     countQuestions();
+    initCommunityQuiz();
   }
 
   function countQuestions() {
@@ -717,6 +718,11 @@
     refreshStats();
     renderHistory();
     showScreen('result');
+
+    // Save challenge score if this was a challenge session
+    if (S._challengeCode && total > 0) {
+      window._saveChallengeScore(correct, total);
+    }
   }
 
   /* ════════ RESULTS ════════ */
@@ -985,7 +991,245 @@
     window.open(`mailto:${email}?subject=${subject}&body=${body}`);
   }
 
-  // Expose tab switcher globally for onclick in HTML
+  /* ════════════════════════════════
+     COMMUNITY QUIZ
+  ════════════════════════════════ */
+  const SUBJECTS = Object.keys(EXAM_BANK);
+  const QC_STORE = 'mea-challenges-v1';
+
+  function initCommunityQuiz() {
+    const btn = document.getElementById('quizChallengeBtn');
+    const modal = document.getElementById('quizChallengeModal');
+    if (!btn || !modal) return;
+
+    // Show trigger button only for paid users
+    if (S.hasAccess) btn.classList.remove('hidden');
+
+    btn.addEventListener('click', openQuizChallenge);
+    document.getElementById('qcClose').addEventListener('click', closeQuizChallenge);
+    modal.addEventListener('click', e => { if (e.target === modal) closeQuizChallenge(); });
+
+    document.getElementById('qcCreateBtn').addEventListener('click', () => showQcPanel('qcCreate'));
+    document.getElementById('qcBackBtn').addEventListener('click',   () => showQcPanel('qcHome'));
+    document.getElementById('qcJoinBtn').addEventListener('click',   () => {
+      document.getElementById('qcJoinRow').classList.toggle('hidden');
+    });
+    document.getElementById('qcJoinConfirm').addEventListener('click', joinChallenge);
+    document.getElementById('qcGenerateBtn').addEventListener('click', generateChallenge);
+    document.getElementById('qcShareLinkBtn').addEventListener('click', shareChallengeLink);
+    document.getElementById('qcStartOwnBtn').addEventListener('click', startOwnAttempt);
+    document.getElementById('qcNewChallengeBtn').addEventListener('click', () => showQcPanel('qcCreate'));
+    document.getElementById('qcDoneBtn').addEventListener('click', closeQuizChallenge);
+
+    // Populate subject dropdown
+    const sel = document.getElementById('qcSubject');
+    SUBJECTS.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      sel.appendChild(opt);
+    });
+
+    // Check if arriving via challenge link
+    const params = new URLSearchParams(window.location.search);
+    const challengeCode = params.get('challenge');
+    if (challengeCode) {
+      history.replaceState(null, '', window.location.pathname);
+      openQuizChallenge();
+      document.getElementById('qcJoinCode').value = challengeCode;
+      joinChallenge();
+    }
+  }
+
+  function openQuizChallenge() {
+    if (!S.hasAccess) { showPaywall('upgrade'); return; }
+    if (!S.currentUser) { alert('Please log in first to use Community Quiz.'); return; }
+    showQcPanel('qcHome');
+    document.getElementById('quizChallengeModal').classList.remove('hidden');
+  }
+
+  function closeQuizChallenge() {
+    document.getElementById('quizChallengeModal').classList.add('hidden');
+  }
+
+  function showQcPanel(id) {
+    ['qcHome','qcCreate','qcShare','qcLeaderboard'].forEach(p => {
+      const el = document.getElementById(p);
+      if (el) el.classList.toggle('hidden', p !== id);
+    });
+  }
+
+  function generateChallengeCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = 'MEA-';
+    for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+  }
+
+  function generateChallenge() {
+    const subject = document.getElementById('qcSubject').value;
+    const count   = parseInt(document.getElementById('qcCount').value);
+    const time    = parseInt(document.getElementById('qcTime').value);
+
+    const bank    = EXAM_BANK[subject];
+    if (!bank) return;
+    const pool    = shuffle([...(bank.objective||[])]).slice(0, count);
+    if (!pool.length) { alert('Not enough questions for this subject.'); return; }
+
+    const code    = generateChallengeCode();
+    const expires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+
+    // Store challenge locally
+    const challenges = loadSafe(QC_STORE, {});
+    challenges[code] = {
+      code, subject, count, time,
+      questions: pool.map(q => q.id || pool.indexOf(q)),
+      questionData: pool,
+      expires,
+      creator: S.currentUser,
+      scores: {},
+    };
+    saveSafe(QC_STORE, challenges);
+
+    document.getElementById('qcCodeDisplay').textContent = code;
+    showQcPanel('qcShare');
+
+    // Store current challenge code for later
+    window._currentChallengeCode = code;
+  }
+
+  function shareChallengeLink() {
+    const code = window._currentChallengeCode;
+    if (!code) return;
+    const url  = window.location.origin + window.location.pathname + '?challenge=' + code;
+    const text = `🏆 I challenge you! Take this ${document.getElementById('qcSubject')?.value || ''} quiz on My Exams App.\n\nCode: ${code}\nLink: ${url}`;
+    if (navigator.share) {
+      navigator.share({ title: 'My Exams App Challenge', text, url }).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(text).then(() => alert('Challenge link copied!')).catch(() => alert('Link: ' + url));
+    }
+  }
+
+  function joinChallenge() {
+    const code = (document.getElementById('qcJoinCode').value || '').trim().toUpperCase();
+    if (!code) return;
+
+    const challenges = loadSafe(QC_STORE, {});
+    const challenge  = challenges[code];
+
+    if (!challenge) {
+      alert('Challenge not found. Check the code and try again.');
+      return;
+    }
+    if (Date.now() > challenge.expires) {
+      alert('This challenge has expired (challenges last 24 hours).');
+      return;
+    }
+
+    window._currentChallengeCode = code;
+    startChallengeAttempt(challenge);
+  }
+
+  function startOwnAttempt() {
+    const code = window._currentChallengeCode;
+    if (!code) return;
+    const challenges = loadSafe(QC_STORE, {});
+    const challenge  = challenges[code];
+    if (!challenge) return;
+    startChallengeAttempt(challenge);
+  }
+
+  function startChallengeAttempt(challenge) {
+    closeQuizChallenge();
+
+    // Set up session using challenge questions
+    const bank = EXAM_BANK[challenge.subject];
+    if (!bank) return;
+
+    S.subject    = challenge.subject;
+    S.exam       = 'WAEC';
+    S.mode       = 'exam';
+    S.type       = 'objective';
+    S.count      = challenge.questionData.length;
+    S.questions  = challenge.questionData.map(q => ({...q, _type:'objective'}));
+    S.answers    = new Array(S.questions.length).fill(null);
+    S.flagged    = new Array(S.questions.length).fill(false);
+    S.idx        = 0;
+    S.reviewMode = false;
+    S.showAnswer = false;
+    S.inSession  = true;
+
+    // Store challenge context so results can save score
+    S._challengeCode = challenge.code;
+
+    if (challenge.time > 0) {
+      S.timerSecs = challenge.time * 60;
+      startTimer();
+    } else {
+      S.timerSecs = 0;
+      if (E.timerCard) E.timerCard.classList.add('hidden');
+    }
+
+    buildPills();
+    renderQ();
+    showScreen('quiz');
+  }
+
+  // Hook into existing finishSession to save challenge score
+  const _origFinishSession = window._finishSession;
+
+  function saveChallengeScore(score, total) {
+    const code = S._challengeCode;
+    if (!code) return;
+    const challenges = loadSafe(QC_STORE, {});
+    if (!challenges[code]) return;
+    challenges[code].scores[S.currentUser] = {
+      score, total,
+      pct: Math.round((score / total) * 100),
+      time: new Date().toLocaleTimeString(),
+    };
+    saveSafe(QC_STORE, challenges);
+    S._challengeCode = null;
+
+    // Offer to view leaderboard
+    setTimeout(() => {
+      if (confirm('Challenge complete! View the leaderboard?')) {
+        showChallengeLeaderboard(code);
+      }
+    }, 500);
+  }
+
+  function showChallengeLeaderboard(code) {
+    const challenges = loadSafe(QC_STORE, {});
+    const challenge  = challenges[code];
+    if (!challenge) return;
+
+    const list = document.getElementById('qcLeaderboardList');
+    if (!list) return;
+
+    const scores = Object.entries(challenge.scores)
+      .sort((a, b) => b[1].pct - a[1].pct);
+
+    if (!scores.length) {
+      list.innerHTML = '<p class="qc-empty">No scores yet — be the first!</p>';
+    } else {
+      list.innerHTML = scores.map(([name, data], i) => `
+        <div class="qc-score-row ${name === S.currentUser ? 'qc-score-me' : ''}">
+          <span class="qc-rank">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#' + (i+1)}</span>
+          <span class="qc-score-name">${name}${name === S.currentUser ? ' (you)' : ''}</span>
+          <span class="qc-score-val">${data.score}/${data.total} · ${data.pct}%</span>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('quizChallengeModal').classList.remove('hidden');
+    showQcPanel('qcLeaderboard');
+  }
+
+  window._saveChallengeScore = saveChallengeScore;
+  window._showChallengeLeaderboard = showChallengeLeaderboard;
+
+  // Expose for result screen
   window.switchPaywallTab = function(tab) {
     ['individual','jamb','school'].forEach(t => {
       const panel = document.getElementById('paywall' + t.charAt(0).toUpperCase() + t.slice(1));
@@ -1042,11 +1286,14 @@
 
   /* ════════ UPGRADE BAR ════════ */
   function refreshUpgradeBar() {
+    const qcBtn = document.getElementById('quizChallengeBtn');
     if (!E.upgradeBar) return;
     if (S.hasAccess) {
       E.upgradeBar.style.display = 'none';
+      if (qcBtn) qcBtn.classList.remove('hidden');
       return;
     }
+    if (qcBtn) qcBtn.classList.add('hidden');
     E.upgradeBar.style.display = '';
     const remaining = Math.max(0, FREE_TRIAL_LIMIT - S.freeUsed);
     const msgs = [
