@@ -655,3 +655,362 @@ const SUBJECTS = {
   marketing:        { name:"Marketing",              icon:"📢", color:"#be123c" },
   animal_husbandry: { name:"Animal Husbandry",       icon:"🐄", color:"#365314" },
 };
+
+/* ═══════════════════════════════════════════════════════════════
+   QUESTION BANK EXPANSION — GCE, NABTEB, WAEC, NECO
+   Added: Mathematics, English, Biology, Chemistry, Physics,
+          Economics, Government, Geography, Literature, CRS,
+          Civic Education, Commerce, Accounting, Marketing,
+          Animal Husbandry
+═══════════════════════════════════════════════════════════════ */
+
+(function() {
+  const add = (subj, type, questions) => {
+    if (!EXAM_BANK[subj]) return;
+    if (!EXAM_BANK[subj][type]) EXAM_BANK[subj][type] = [];
+    EXAM_BANK[subj][type].push(...questions);
+  };
+
+  // ─── MATHEMATICS ───────────────────────────────────────────
+  add('mathematics','objective',[
+    // GCE
+    {exam:'GCE',year:2019,question:'Simplify: (2³ × 2⁴) ÷ 2⁵',options:['2²','2⁶','2¹²','2⁰'],answer:'A',explanation:'2³ × 2⁴ = 2⁷. 2⁷ ÷ 2⁵ = 2² = 4.'},
+    {exam:'GCE',year:2019,question:'Find the value of x if 3x − 7 = 14',options:['5','7','9','21'],answer:'B',explanation:'3x = 14 + 7 = 21. x = 21 ÷ 3 = 7.'},
+    {exam:'GCE',year:2020,question:'A triangle has angles in the ratio 2:3:5. Find the largest angle.',options:['36°','54°','90°','108°'],answer:'C',explanation:'Sum = 180°. Parts = 2+3+5=10. Largest = (5/10)×180° = 90°.'},
+    {exam:'GCE',year:2020,question:'Convert 0.000325 to standard form.',options:['3.25 × 10⁻⁴','3.25 × 10⁻³','32.5 × 10⁻⁵','0.325 × 10⁻³'],answer:'A',explanation:'Move decimal 4 places right: 3.25 × 10⁻⁴.'},
+    {exam:'GCE',year:2021,question:'If y varies directly as x and y = 12 when x = 4, find y when x = 7.',options:['14','21','28','3'],answer:'B',explanation:'y = kx. k = 12/4 = 3. y = 3 × 7 = 21.'},
+    {exam:'GCE',year:2021,question:'Evaluate: log₁₀(1000)',options:['1','2','3','4'],answer:'C',explanation:'log₁₀(10³) = 3.'},
+    {exam:'GCE',year:2022,question:'The sum of the interior angles of a polygon is 1080°. How many sides does it have?',options:['6','7','8','9'],answer:'C',explanation:'(n−2)×180 = 1080. n−2 = 6. n = 8.'},
+    {exam:'GCE',year:2022,question:'Factorise completely: 6x² − x − 2',options:['(2x+1)(3x−2)','(2x−1)(3x+2)','(6x+1)(x−2)','(3x+1)(2x−2)'],answer:'A',explanation:'(2x+1)(3x−2) = 6x²−4x+3x−2 = 6x²−x−2. ✓'},
+    {exam:'GCE',year:2023,question:'Find the gradient of the line 4y − 8x = 12.',options:['2','−2','3','8'],answer:'A',explanation:'4y = 8x + 12 → y = 2x + 3. Gradient = 2.'},
+    {exam:'GCE',year:2023,question:'A container holds 3.6 litres. How many 450ml cups can be filled from it?',options:['6','7','8','9'],answer:'C',explanation:'3600 ÷ 450 = 8.'},
+    {exam:'GCE',year:2023,question:'Find the 10th term of the AP: 3, 7, 11, ...',options:['39','40','41','43'],answer:'A',explanation:'a = 3, d = 4. T₁₀ = 3 + 9×4 = 3 + 36 = 39.'},
+    {exam:'GCE',year:2022,question:'What is the probability of picking a red card from a standard deck?',options:['1/4','1/2','1/13','3/4'],answer:'B',explanation:'26 red cards out of 52. P = 26/52 = 1/2.'},
+    {exam:'GCE',year:2021,question:'Calculate the area of a circle with diameter 14cm. (π = 22/7)',options:['44cm²','88cm²','154cm²','176cm²'],answer:'C',explanation:'r = 7. A = πr² = (22/7)×49 = 154cm².'},
+    {exam:'GCE',year:2020,question:'Solve: 2(x − 3) = x + 5',options:['8','11','−1','2'],answer:'B',explanation:'2x − 6 = x + 5. x = 11.'},
+    {exam:'GCE',year:2019,question:'If a : b = 3 : 4 and b : c = 2 : 5, find a : c.',options:['3:10','6:10','3:5','6:20'],answer:'A',explanation:'a:b:c = 3:4 → b=4, so scale b:c=2:5 by 2 → b=4,c=10. a:c = 3:10.'},
+    // NABTEB
+    {exam:'NABTEB',year:2019,question:'Evaluate: 5! ÷ 3!',options:['10','20','60','120'],answer:'B',explanation:'5! = 120, 3! = 6. 120 ÷ 6 = 20.'},
+    {exam:'NABTEB',year:2020,question:'A worker earns ₦18,000 per month. How much does he earn in a year?',options:['₦180,000','₦196,000','₦216,000','₦220,000'],answer:'C',explanation:'18,000 × 12 = ₦216,000.'},
+    {exam:'NABTEB',year:2021,question:'Express 45% as a fraction in its lowest terms.',options:['9/20','45/100','4/9','9/10'],answer:'A',explanation:'45/100 = 9/20.'},
+    {exam:'NABTEB',year:2022,question:'Find the simple interest on ₦50,000 at 8% per annum for 3 years.',options:['₦4,000','₦12,000','₦14,000','₦24,000'],answer:'B',explanation:'SI = (P×R×T)/100 = (50000×8×3)/100 = ₦12,000.'},
+    {exam:'NABTEB',year:2023,question:'What is the mean of 4, 7, 9, 11, 14?',options:['7','9','11','14'],answer:'B',explanation:'Sum = 45. Mean = 45 ÷ 5 = 9.'},
+    {exam:'NABTEB',year:2022,question:'Convert 110101₂ to base 10.',options:['51','52','53','54'],answer:'C',explanation:'32+16+0+4+0+1 = 53.'},
+    {exam:'NABTEB',year:2021,question:'If the perimeter of a square is 36cm, find its area.',options:['81cm²','36cm²','72cm²','9cm²'],answer:'A',explanation:'Side = 36÷4 = 9cm. Area = 9² = 81cm².'},
+    {exam:'NABTEB',year:2020,question:'Find x if 2x + 3 = 4x − 7',options:['2','5','−5','10'],answer:'B',explanation:'3+7 = 4x−2x. 10 = 2x. x = 5.'},
+    {exam:'NABTEB',year:2019,question:'A bicycle wheel has diameter 70cm. Find its circumference. (π = 22/7)',options:['110cm','220cm','440cm','880cm'],answer:'B',explanation:'C = πd = (22/7)×70 = 220cm.'},
+    {exam:'NABTEB',year:2023,question:'Simplify: √(144) + √(25)',options:['13','17','19','25'],answer:'B',explanation:'12 + 5 = 17.'},
+    // WAEC extras
+    {exam:'WAEC',year:2023,question:'If P = {2,3,5,7} and Q = {1,3,5,9}, find P ∩ Q.',options:['{3,5}','{1,2,3,5,7,9}','{1,9}','{2,7}'],answer:'A',explanation:'Common elements in both sets: 3 and 5.'},
+    {exam:'WAEC',year:2023,question:'The bearing of B from A is 060°. What is the bearing of A from B?',options:['120°','240°','300°','360°'],answer:'B',explanation:'Back bearing = 060° + 180° = 240°.'},
+    {exam:'WAEC',year:2022,question:'A man bought a car for ₦800,000 and sold it for ₦960,000. Find the percentage profit.',options:['15%','20%','25%','30%'],answer:'B',explanation:'Profit = 160,000. % = (160,000/800,000)×100 = 20%.'},
+    {exam:'WAEC',year:2022,question:'Solve the inequality: 3x − 5 > 7',options:['x > 4','x > 2','x < 4','x < 2'],answer:'A',explanation:'3x > 12. x > 4.'},
+    {exam:'WAEC',year:2021,question:'Find the median of: 3, 5, 7, 9, 11, 13',options:['7','8','9','10'],answer:'B',explanation:'Middle two values: 7 and 9. Median = (7+9)/2 = 8.'},
+    // NECO extras
+    {exam:'NECO',year:2023,question:'Express 2/5 as a percentage.',options:['25%','40%','45%','50%'],answer:'B',explanation:'(2/5)×100 = 40%.'},
+    {exam:'NECO',year:2022,question:'Find the LCM of 12, 18 and 24.',options:['36','48','72','96'],answer:'C',explanation:'LCM(12,18,24) = 72.'},
+    {exam:'NECO',year:2021,question:'If sin θ = 3/5, find cos θ.',options:['4/5','3/4','5/3','5/4'],answer:'A',explanation:'In a 3-4-5 triangle, if sin θ = 3/5 then cos θ = 4/5.'},
+  ]);
+
+  add('mathematics','theory',[
+    {exam:'WAEC',year:2022,question:'(a) Solve the simultaneous equations: 3x + 2y = 12 and x − y = 1.\n(b) A rectangle has length (2x+3)cm and width (x−1)cm. If the perimeter is 34cm, find the value of x and hence the area of the rectangle.',
+    markingScheme:[
+      {point:'From x − y = 1: x = y + 1',marks:1},
+      {point:'Substitute into 3x + 2y = 12: 3(y+1) + 2y = 12 → 5y = 9 → y = 9/5',marks:2},
+      {point:'x = 9/5 + 1 = 14/5 (or x=2.8, y=1.8)',marks:1},
+      {point:'Perimeter: 2[(2x+3)+(x−1)] = 34 → 2[3x+2] = 34 → 3x+2 = 17 → x = 5',marks:2},
+      {point:'Length = 13cm, Width = 4cm',marks:1},
+      {point:'Area = 13 × 4 = 52cm²',marks:1},
+    ],
+    modelAnswer:'(a) x = 2.8, y = 1.8. (b) x = 5, Area = 52cm².',
+    examinerTip:'For simultaneous equations, always verify your answer by substituting back into both original equations.'},
+    {exam:'NECO',year:2022,question:'The table shows marks scored by 40 students in a test:\nMarks: 1-10, 11-20, 21-30, 31-40, 41-50\nFrequency: 4, 8, 14, 10, 4\n(a) Draw a histogram for this data.\n(b) Calculate the mean mark.\n(c) What is the modal class?',
+    markingScheme:[
+      {point:'Correct histogram with frequency on y-axis and class intervals on x-axis',marks:3},
+      {point:'Midpoints: 5.5, 15.5, 25.5, 35.5, 45.5',marks:1},
+      {point:'Σfx = 4(5.5)+8(15.5)+14(25.5)+10(35.5)+4(45.5) = 22+124+357+355+182 = 1040',marks:2},
+      {point:'Mean = 1040/40 = 26',marks:1},
+      {point:'Modal class = 21-30 (highest frequency of 14)',marks:1},
+    ],
+    modelAnswer:'Mean = 26. Modal class = 21-30.',
+    examinerTip:'Always calculate midpoints accurately — a wrong midpoint affects the entire mean calculation.'},
+  ]);
+
+  // ─── ENGLISH LANGUAGE ──────────────────────────────────────
+  add('english','objective',[
+    // GCE
+    {exam:'GCE',year:2019,question:'Choose the word that is most nearly opposite in meaning to BENEVOLENT.',options:['Cruel','Stingy','Malevolent','Indifferent'],answer:'C',explanation:'Benevolent means kind/well-meaning. Malevolent means having evil intentions — direct opposite.'},
+    {exam:'GCE',year:2019,question:'Select the option that best explains the expression: "He kicked the bucket".',options:['He kicked a bucket away','He died','He became angry','He fell down'],answer:'B',explanation:'This idiom means to die.'},
+    {exam:'GCE',year:2020,question:'Choose the correct form: "Neither the boys nor their teacher ___ present."',options:['were','was','are','have been'],answer:'B',explanation:'When using neither/nor, the verb agrees with the subject closer to it (teacher = singular = was).'},
+    {exam:'GCE',year:2020,question:'Identify the figure of speech in: "The wind whispered through the trees."',options:['Simile','Metaphor','Personification','Hyperbole'],answer:'C',explanation:'Whispered is a human action given to wind — personification.'},
+    {exam:'GCE',year:2021,question:'Which sentence is grammatically correct?',options:['He don\'t know the answer','She has went to school','They were asked to sit down','Me and him went there'],answer:'C',explanation:'"They were asked to sit down" is correct passive construction.'},
+    {exam:'GCE',year:2021,question:'The prefix in "irresponsible" means:',options:['Very','Against','Not','Before'],answer:'C',explanation:'ir- is a negative prefix meaning not.'},
+    {exam:'GCE',year:2022,question:'Choose the word with the correct spelling:',options:['Accomodation','Accommodation','Acommodation','Acomodation'],answer:'B',explanation:'Accommodation has double c and double m.'},
+    {exam:'GCE',year:2022,question:'"The more you practise, the better you become." This is an example of:',options:['A simple sentence','A compound sentence','A complex sentence','A compound-complex sentence'],answer:'C',explanation:'Contains a dependent clause (the more...) and an independent clause — complex sentence.'},
+    {exam:'GCE',year:2023,question:'Select the option that correctly fills the gap: "I would have come if you ___ me."',options:['had invited','have invited','invited','would invite'],answer:'A',explanation:'Third conditional requires past perfect in the if-clause.'},
+    {exam:'GCE',year:2023,question:'Which of the following is a collective noun?',options:['Bravery','Flock','Running','Beautiful'],answer:'B',explanation:'Flock refers to a group (of birds/sheep) — collective noun.'},
+    {exam:'GCE',year:2023,question:'Identify the passive voice: ',options:['The boy ate the mango','The mango was eaten by the boy','The boy has eaten the mango','Eating the mango made him sick'],answer:'B',explanation:'The subject (mango) receives the action — passive voice.'},
+    {exam:'GCE',year:2022,question:'The word "UBIQUITOUS" means:',options:['Rare','Present everywhere','Dangerous','Ancient'],answer:'B',explanation:'Ubiquitous means seeming to be everywhere at the same time.'},
+    {exam:'GCE',year:2021,question:'Choose the antonym of VERBOSE:',options:['Talkative','Concise','Wordy','Lengthy'],answer:'B',explanation:'Verbose means using too many words. Concise means brief and clear — opposite.'},
+    {exam:'GCE',year:2020,question:'"She sings like an angel." This is a:',options:['Metaphor','Simile','Alliteration','Irony'],answer:'B',explanation:'Comparison using like — simile.'},
+    {exam:'GCE',year:2019,question:'Which sentence contains a dangling modifier?',options:['Running fast, he caught the bus','Running fast, the bus was caught','She sang beautifully at the concert','The child cried loudly'],answer:'B',explanation:'The modifier "running fast" incorrectly modifies "the bus" — dangling modifier.'},
+    // NABTEB
+    {exam:'NABTEB',year:2019,question:'Choose the option nearest in meaning to PROCRASTINATE:',options:['Delay','Hurry','Celebrate','Argue'],answer:'A',explanation:'Procrastinate means to delay or postpone action.'},
+    {exam:'NABTEB',year:2020,question:'The plural of "phenomenon" is:',options:['Phenomenons','Phenomenas','Phenomena','Phenomenes'],answer:'C',explanation:'Phenomenon is Greek in origin; its plural is phenomena.'},
+    {exam:'NABTEB',year:2021,question:'Select the correctly punctuated sentence:',options:["It\'s a dog's world","Its a dogs world","It\'s a dogs\' world","Its a dog\'s world"],answer:'A',explanation:'"It\'s" = it is (contraction needs apostrophe); "dog\'s world" = belonging to the dog.'},
+    {exam:'NABTEB',year:2022,question:'Which word best completes: "The surgeon performed the operation with great ___."',options:['Precision','Precision','Precisely','Precise'],answer:'A',explanation:'A noun is needed after "great" — precision.'},
+    {exam:'NABTEB',year:2023,question:'"All that glitters is not gold." This proverb means:',options:['Gold never glitters','Things are not always what they appear','Gold is the most valuable thing','Glittering objects are dangerous'],answer:'B',explanation:'Appearances can be deceptive — things may look valuable but are not.'},
+    {exam:'NABTEB',year:2022,question:'Identify the subject in: "The large brown dog barked loudly."',options:['Large','Dog','Barked','Loudly'],answer:'B',explanation:'"Dog" is the noun performing the action — the subject.'},
+    {exam:'NABTEB',year:2021,question:'Choose the correct option: "Each of the students ___ expected to submit an assignment."',options:['are','were','is','have'],answer:'C',explanation:'"Each" is singular — takes singular verb "is".'},
+    {exam:'NABTEB',year:2020,question:'The word "CARNIVORE" refers to an animal that:',options:['Eats plants','Eats both plants and meat','Eats only meat','Lives in water'],answer:'C',explanation:'Carni = flesh; vore = to eat. Carnivore eats only meat.'},
+    {exam:'NABTEB',year:2019,question:'Which option is an abstract noun?',options:['Table','Teacher','Happiness','River'],answer:'C',explanation:'Happiness cannot be seen or touched — abstract noun.'},
+    {exam:'NABTEB',year:2023,question:'Choose the word that does NOT belong: Chair, Sofa, Bench, Ceiling',options:['Chair','Sofa','Bench','Ceiling'],answer:'D',explanation:'Chair, sofa and bench are things to sit on. Ceiling is part of a room\'s structure.'},
+    // WAEC extras
+    {exam:'WAEC',year:2023,question:'Select the option that has the same vowel sound as the word: BREAK',options:['Great','Breath','Bread','Breast'],answer:'A',explanation:'Break /breɪk/ and Great /greɪt/ share the same /eɪ/ vowel sound.'},
+    {exam:'WAEC',year:2022,question:'"The assignment was a piece of cake." This expression means the assignment was:',options:['Sweet','Easy','Tasty','Expensive'],answer:'B',explanation:'"A piece of cake" is an idiom meaning something very easy.'},
+    // NECO extras
+    {exam:'NECO',year:2023,question:'Choose the appropriate stress pattern: "He will reCORD his voice." The word "record" here is used as:',options:['A noun','An adjective','A verb','An adverb'],answer:'C',explanation:'When stressed on second syllable (reCORD), it functions as a verb.'},
+    {exam:'NECO',year:2022,question:'Identify the rhetorical device in: "O Death, where is thy sting?"',options:['Metaphor','Apostrophe','Alliteration','Oxymoron'],answer:'B',explanation:'Addressing an abstract concept (Death) directly — apostrophe.'},
+  ]);
+
+  // ─── BIOLOGY ────────────────────────────────────────────────
+  add('biology','objective',[
+    // GCE
+    {exam:'GCE',year:2019,question:'Which organelle is responsible for the synthesis of proteins?',options:['Mitochondria','Ribosome','Nucleus','Golgi apparatus'],answer:'B',explanation:'Ribosomes are the site of protein synthesis in all living cells.'},
+    {exam:'GCE',year:2019,question:'The process by which plants lose water through their leaves is called:',options:['Osmosis','Transpiration','Respiration','Photosynthesis'],answer:'B',explanation:'Transpiration is the evaporation of water from plant surfaces, mainly through stomata.'},
+    {exam:'GCE',year:2020,question:'Which blood group is known as the universal donor?',options:['AB','A','B','O'],answer:'D',explanation:'Blood group O has no A or B antigens so can be donated to any blood group.'},
+    {exam:'GCE',year:2020,question:'The part of the brain that controls balance and coordination is the:',options:['Cerebrum','Medulla oblongata','Cerebellum','Hypothalamus'],answer:'C',explanation:'The cerebellum coordinates voluntary movements and maintains balance.'},
+    {exam:'GCE',year:2021,question:'Which of the following is NOT a characteristic of living organisms?',options:['Reproduction','Excretion','Rusting','Growth'],answer:'C',explanation:'Rusting is a chemical reaction in non-living matter, not a life process.'},
+    {exam:'GCE',year:2021,question:'The powerhouse of the cell is the:',options:['Nucleus','Chloroplast','Mitochondrion','Vacuole'],answer:'C',explanation:'Mitochondria produce ATP through cellular respiration — the cell\'s energy currency.'},
+    {exam:'GCE',year:2022,question:'Malaria is caused by:',options:['Bacteria','Virus','Protozoan','Fungus'],answer:'C',explanation:'Malaria is caused by Plasmodium, a protozoan parasite transmitted by Anopheles mosquitoes.'},
+    {exam:'GCE',year:2022,question:'Which of the following is a function of the liver?',options:['Production of insulin','Detoxification of harmful substances','Production of red blood cells in adults','Absorption of food'],answer:'B',explanation:'The liver detoxifies harmful substances including drugs and alcohol.'},
+    {exam:'GCE',year:2023,question:'During meiosis, the chromosome number:',options:['Doubles','Remains the same','Is halved','Triples'],answer:'C',explanation:'Meiosis produces gametes with half the chromosomal number (haploid) of the parent cell.'},
+    {exam:'GCE',year:2023,question:'Which vitamin is essential for blood clotting?',options:['Vitamin A','Vitamin C','Vitamin D','Vitamin K'],answer:'D',explanation:'Vitamin K is required for the synthesis of clotting factors in the blood.'},
+    {exam:'GCE',year:2023,question:'The basic unit of classification is the:',options:['Genus','Family','Species','Order'],answer:'C',explanation:'Species is the most basic unit of biological classification.'},
+    {exam:'GCE',year:2022,question:'Which gas is released during photosynthesis?',options:['Carbon dioxide','Nitrogen','Oxygen','Hydrogen'],answer:'C',explanation:'Photosynthesis uses CO₂ and water to produce glucose and oxygen.'},
+    {exam:'GCE',year:2021,question:'The site of gaseous exchange in the lungs is the:',options:['Bronchi','Trachea','Alveoli','Bronchioles'],answer:'C',explanation:'Alveoli have thin walls and large surface area for efficient gas exchange.'},
+    {exam:'GCE',year:2020,question:'Haemoglobin is found in:',options:['White blood cells','Platelets','Red blood cells','Plasma'],answer:'C',explanation:'Haemoglobin is the iron-containing protein in red blood cells that carries oxygen.'},
+    {exam:'GCE',year:2019,question:'Which of these is an example of asexual reproduction?',options:['Fertilisation','Budding','Pollination','Conjugation'],answer:'B',explanation:'Budding involves one parent only — asexual reproduction seen in yeast and hydra.'},
+    // NABTEB
+    {exam:'NABTEB',year:2019,question:'The study of heredity and variation is called:',options:['Ecology','Genetics','Taxonomy','Physiology'],answer:'B',explanation:'Genetics is the branch of biology concerned with heredity and variation.'},
+    {exam:'NABTEB',year:2020,question:'Which of the following diseases is caused by a virus?',options:['Tuberculosis','Cholera','AIDS','Malaria'],answer:'C',explanation:'AIDS is caused by the Human Immunodeficiency Virus (HIV).'},
+    {exam:'NABTEB',year:2021,question:'The movement of water across a semi-permeable membrane from a region of high concentration to low concentration is:',options:['Diffusion','Active transport','Osmosis','Plasmolysis'],answer:'C',explanation:'Osmosis is the specific movement of water molecules across a semi-permeable membrane.'},
+    {exam:'NABTEB',year:2022,question:'Which hormone controls blood sugar levels?',options:['Adrenaline','Insulin','Thyroxine','Oestrogen'],answer:'B',explanation:'Insulin (produced by the pancreas) lowers blood glucose levels.'},
+    {exam:'NABTEB',year:2023,question:'The green pigment in plants is called:',options:['Haemoglobin','Melanin','Chlorophyll','Carotene'],answer:'C',explanation:'Chlorophyll absorbs light energy for photosynthesis.'},
+    {exam:'NABTEB',year:2022,question:'Earthworms are important to farmers because they:',options:['Destroy crops','Aerate and improve soil structure','Produce nitrogen','Eat harmful insects'],answer:'B',explanation:'Earthworms burrow through soil improving aeration and drainage.'},
+    {exam:'NABTEB',year:2021,question:'Which part of the flower produces pollen?',options:['Pistil','Stigma','Anther','Ovary'],answer:'C',explanation:'Pollen grains are produced in the anther of the stamen.'},
+    {exam:'NABTEB',year:2020,question:'The process by which organisms break down glucose to release energy without oxygen is:',options:['Aerobic respiration','Photosynthesis','Anaerobic respiration','Transpiration'],answer:'C',explanation:'Anaerobic respiration occurs in the absence of oxygen producing lactic acid or ethanol.'},
+    {exam:'NABTEB',year:2019,question:'Which of these is a characteristic of mammals?',options:['Cold-blooded','Lay eggs','Suckle young with milk','Have scales'],answer:'C',explanation:'Mammals are warm-blooded vertebrates that nurse their young with milk from mammary glands.'},
+    {exam:'NABTEB',year:2023,question:'The instrument used to measure temperature in the laboratory is a:',options:['Barometer','Thermometer','Hygrometer','Anemometer'],answer:'B',explanation:'A thermometer measures temperature.'},
+    // WAEC extras
+    {exam:'WAEC',year:2023,question:'Which of the following is the correct sequence of the food chain?',options:['Sun → Consumer → Producer → Decomposer','Producer → Consumer → Decomposer → Sun','Sun → Producer → Consumer → Decomposer','Consumer → Producer → Sun → Decomposer'],answer:'C',explanation:'Energy flows from Sun to producers (plants) to consumers to decomposers.'},
+    {exam:'WAEC',year:2022,question:'The human kidney is responsible for:',options:['Producing bile','Filtering blood and producing urine','Producing insulin','Gaseous exchange'],answer:'B',explanation:'The kidneys filter waste products from blood and regulate water balance through urine production.'},
+    {exam:'WAEC',year:2021,question:'Which of the following best describes a saprophyte?',options:['An organism that makes its own food','An organism that feeds on dead organic matter','An organism that feeds on living hosts','An organism that eats both plants and animals'],answer:'B',explanation:'Saprophytes feed on and decompose dead organic matter — e.g. mushrooms.'},
+    // NECO extras
+    {exam:'NECO',year:2023,question:'The bone that protects the brain is the:',options:['Vertebral column','Ribcage','Cranium','Sternum'],answer:'C',explanation:'The cranium (skull) encloses and protects the brain.'},
+    {exam:'NECO',year:2022,question:'Which of the following is an example of a root modification for storage?',options:['Prop root','Aerial root','Tap root of carrot','Buttress root'],answer:'C',explanation:'Carrot tap root is modified for food storage — swollen with starch/sugar.'},
+  ]);
+
+  // ─── CHEMISTRY ─────────────────────────────────────────────
+  add('chemistry','objective',[
+    {exam:'GCE',year:2019,question:'What is the atomic number of carbon?',options:['6','12','14','8'],answer:'A',explanation:'Carbon has 6 protons — atomic number = 6.'},
+    {exam:'GCE',year:2020,question:'Which of the following is a noble gas?',options:['Nitrogen','Chlorine','Argon','Hydrogen'],answer:'C',explanation:'Argon (Group 18) is a noble gas with a full outer electron shell.'},
+    {exam:'GCE',year:2021,question:'The pH of a neutral solution is:',options:['0','7','14','1'],answer:'B',explanation:'pH 7 is neutral — equal concentrations of H⁺ and OH⁻ ions.'},
+    {exam:'GCE',year:2022,question:'Which type of bond involves the sharing of electrons?',options:['Ionic bond','Metallic bond','Covalent bond','Hydrogen bond'],answer:'C',explanation:'Covalent bonds form when atoms share electron pairs.'},
+    {exam:'GCE',year:2023,question:'The process of converting liquid to gas by heating is called:',options:['Condensation','Sublimation','Evaporation','Melting'],answer:'C',explanation:'Evaporation is the conversion of liquid to vapour/gas.'},
+    {exam:'GCE',year:2023,question:'What is the chemical formula of water?',options:['H₂O₂','HO','H₂O','H₃O'],answer:'C',explanation:'Water consists of 2 hydrogen atoms and 1 oxygen atom — H₂O.'},
+    {exam:'GCE',year:2022,question:'Which of the following is an alkali?',options:['HCl','H₂SO₄','NaOH','HNO₃'],answer:'C',explanation:'NaOH (sodium hydroxide) is a strong alkali — releases OH⁻ ions in solution.'},
+    {exam:'GCE',year:2021,question:'Rusting of iron requires:',options:['Only water','Only oxygen','Both water and oxygen','Neither water nor oxygen'],answer:'C',explanation:'Iron rusting is an oxidation reaction requiring both water and oxygen.'},
+    {exam:'GCE',year:2020,question:'Which of these elements is a halogen?',options:['Sodium','Calcium','Bromine','Copper'],answer:'C',explanation:'Bromine (Br) is in Group 17 — the halogens.'},
+    {exam:'GCE',year:2019,question:'Electrolysis involves the decomposition of a substance using:',options:['Heat','Light','Electricity','Sound'],answer:'C',explanation:'Electrolysis uses electrical energy to drive a non-spontaneous chemical reaction.'},
+    {exam:'NABTEB',year:2019,question:'What is the valency of oxygen?',options:['1','2','3','4'],answer:'B',explanation:'Oxygen has 6 outer electrons, needs 2 more to complete its shell — valency of 2.'},
+    {exam:'NABTEB',year:2020,question:'The chemical symbol for gold is:',options:['Go','Gd','Au','Ag'],answer:'C',explanation:'Gold\'s symbol Au comes from the Latin "Aurum".'},
+    {exam:'NABTEB',year:2021,question:'Which of the following is a mixture?',options:['Water','Salt','Air','Carbon dioxide'],answer:'C',explanation:'Air is a mixture of gases including nitrogen, oxygen, carbon dioxide and others.'},
+    {exam:'NABTEB',year:2022,question:'Which gas is produced when an acid reacts with a carbonate?',options:['Hydrogen','Oxygen','Carbon dioxide','Nitrogen'],answer:'C',explanation:'Acid + carbonate → salt + water + CO₂.'},
+    {exam:'NABTEB',year:2023,question:'The process of obtaining a pure solid from its solution by cooling is:',options:['Filtration','Distillation','Crystallisation','Evaporation'],answer:'C',explanation:'Crystallisation involves cooling a saturated solution to obtain pure crystals.'},
+    {exam:'WAEC',year:2023,question:'What type of reaction occurs when magnesium burns in air?',options:['Decomposition','Displacement','Combination/Synthesis','Neutralisation'],answer:'C',explanation:'2Mg + O₂ → 2MgO is a combination/synthesis reaction.'},
+    {exam:'WAEC',year:2022,question:'Which of the following solutions would turn red litmus paper blue?',options:['HCl','H₂SO₄','NaCl','NaOH'],answer:'D',explanation:'Alkaline solutions (NaOH) turn red litmus blue.'},
+    {exam:'NECO',year:2023,question:'The relative molecular mass of H₂SO₄ is: (H=1, S=32, O=16)',options:['49','96','98','80'],answer:'C',explanation:'H₂SO₄: 2(1) + 32 + 4(16) = 2+32+64 = 98.'},
+    {exam:'NECO',year:2022,question:'Which state of matter has definite volume but no definite shape?',options:['Solid','Liquid','Gas','Plasma'],answer:'B',explanation:'Liquids have definite volume but take the shape of their container.'},
+  ]);
+
+  // ─── PHYSICS ────────────────────────────────────────────────
+  add('physics','objective',[
+    {exam:'GCE',year:2019,question:'The SI unit of force is the:',options:['Watt','Joule','Newton','Pascal'],answer:'C',explanation:'Force is measured in Newtons (N). F = ma.'},
+    {exam:'GCE',year:2020,question:'Which of the following is a vector quantity?',options:['Speed','Mass','Temperature','Velocity'],answer:'D',explanation:'Velocity has both magnitude and direction — a vector quantity. Speed is scalar.'},
+    {exam:'GCE',year:2021,question:'The speed of light in a vacuum is approximately:',options:['3 × 10⁶ m/s','3 × 10⁸ m/s','3 × 10¹⁰ m/s','3 × 10⁴ m/s'],answer:'B',explanation:'c = 3 × 10⁸ m/s — the universal speed limit.'},
+    {exam:'GCE',year:2022,question:'What is the unit of electrical resistance?',options:['Ampere','Volt','Ohm','Watt'],answer:'C',explanation:'Electrical resistance is measured in Ohms (Ω). V = IR.'},
+    {exam:'GCE',year:2023,question:'An object is in equilibrium when the net force acting on it is:',options:['Maximum','Minimum','Zero','Constant'],answer:'C',explanation:'For equilibrium, the resultant of all forces must be zero.'},
+    {exam:'GCE',year:2023,question:'The phenomenon by which light bends when passing from one medium to another is called:',options:['Reflection','Refraction','Diffraction','Interference'],answer:'B',explanation:'Refraction occurs because light changes speed when entering a different medium.'},
+    {exam:'GCE',year:2022,question:'Which of the following is a renewable source of energy?',options:['Coal','Natural gas','Petroleum','Solar energy'],answer:'D',explanation:'Solar energy is continuously replenished and is a renewable resource.'},
+    {exam:'GCE',year:2021,question:'The process by which a radioactive element spontaneously emits radiation is called:',options:['Fission','Fusion','Radioactive decay','Ionisation'],answer:'C',explanation:'Radioactive decay is the spontaneous emission of radiation from an unstable nucleus.'},
+    {exam:'GCE',year:2020,question:'Work done is defined as:',options:['Force × time','Force × velocity','Force × distance in direction of force','Mass × acceleration'],answer:'C',explanation:'W = F × d (where d is displacement in the direction of force).'},
+    {exam:'GCE',year:2019,question:'The image formed by a plane mirror is:',options:['Real and inverted','Virtual and erect','Real and erect','Virtual and inverted'],answer:'B',explanation:'Plane mirrors form virtual, erect images the same size as the object.'},
+    {exam:'NABTEB',year:2019,question:'Which of the following best defines power?',options:['Force per unit area','Work done per unit time','Energy stored in a body','Force times distance'],answer:'B',explanation:'Power = Work done ÷ time. Unit is Watt (W).'},
+    {exam:'NABTEB',year:2020,question:'A wave with frequency 50Hz has a period of:',options:['50s','0.02s','0.5s','5s'],answer:'B',explanation:'T = 1/f = 1/50 = 0.02s.'},
+    {exam:'NABTEB',year:2021,question:'When a body is fully submerged in a fluid, the upthrust equals:',options:['Weight of the body','Weight of fluid displaced','Mass of the body','Volume of the body'],answer:'B',explanation:'Archimedes\' principle: upthrust = weight of fluid displaced.'},
+    {exam:'NABTEB',year:2022,question:'The unit of frequency is the:',options:['Metre','Hertz','Joule','Newton'],answer:'B',explanation:'Frequency is measured in Hertz (Hz) = cycles per second.'},
+    {exam:'NABTEB',year:2023,question:'Which colour of light has the highest frequency?',options:['Red','Orange','Violet','Green'],answer:'C',explanation:'Violet light has the shortest wavelength and highest frequency in the visible spectrum.'},
+    {exam:'WAEC',year:2023,question:'A car accelerates from rest to 20m/s in 5 seconds. Calculate its acceleration.',options:['4 m/s²','5 m/s²','10 m/s²','100 m/s²'],answer:'A',explanation:'a = (v-u)/t = (20-0)/5 = 4 m/s².'},
+    {exam:'WAEC',year:2022,question:'Which type of current flows in one direction only?',options:['Alternating Current','Direct Current','Induced Current','Eddy Current'],answer:'B',explanation:'Direct Current (DC) flows consistently in one direction, unlike AC which alternates.'},
+    {exam:'NECO',year:2023,question:'What is the mechanical advantage of a machine that uses 500N input to lift a 2000N load?',options:['0.25','2.5','4','2000'],answer:'C',explanation:'MA = Load/Effort = 2000/500 = 4.'},
+    {exam:'NECO',year:2022,question:'The transfer of heat through a vacuum is called:',options:['Conduction','Convection','Radiation','Insulation'],answer:'C',explanation:'Radiation does not require a medium and can travel through vacuum as electromagnetic waves.'},
+  ]);
+
+  // ─── ECONOMICS ─────────────────────────────────────────────
+  add('economics','objective',[
+    {exam:'GCE',year:2019,question:'Which of the following is NOT a factor of production?',options:['Land','Capital','Money','Labour'],answer:'C',explanation:'Money is a medium of exchange, not a factor of production. The four factors are land, labour, capital and entrepreneurship.'},
+    {exam:'GCE',year:2020,question:'When demand increases and supply remains constant, the equilibrium price will:',options:['Fall','Rise','Remain constant','Be indeterminate'],answer:'B',explanation:'Increased demand with constant supply creates a shortage, pushing price upward.'},
+    {exam:'GCE',year:2021,question:'The elasticity of demand for a necessity is likely to be:',options:['Perfectly elastic','Elastic','Inelastic','Zero'],answer:'C',explanation:'Necessities (food, medicine) have inelastic demand — consumers buy them regardless of price changes.'},
+    {exam:'GCE',year:2022,question:'Which of the following best describes inflation?',options:['A rise in the price of one good','A general and sustained rise in price levels','A decrease in money supply','A fall in employment'],answer:'B',explanation:'Inflation is a general, sustained increase in the price level of goods and services.'},
+    {exam:'GCE',year:2023,question:'The term "opportunity cost" refers to:',options:['The monetary cost of a good','The next best alternative forgone','The total cost of production','The sunk cost of an investment'],answer:'B',explanation:'Opportunity cost is the value of the next best alternative sacrificed when making a choice.'},
+    {exam:'GCE',year:2023,question:'GDP measures the total value of:',options:['Imports only','Exports only','Goods and services produced in a country in a period','Goods consumed by households'],answer:'C',explanation:'GDP (Gross Domestic Product) is the total monetary value of all goods and services produced within a country in a specific period.'},
+    {exam:'GCE',year:2022,question:'A monopoly market is characterized by:',options:['Many sellers and many buyers','One seller and many buyers','Many sellers and one buyer','Two sellers and many buyers'],answer:'B',explanation:'A monopoly has a single seller dominating the market with no close substitutes.'},
+    {exam:'GCE',year:2021,question:'Which of the following is an indirect tax?',options:['Income tax','Company tax','VAT','Capital gains tax'],answer:'C',explanation:'VAT (Value Added Tax) is charged on goods/services — indirect tax collected by seller on behalf of government.'},
+    {exam:'GCE',year:2020,question:'What is a budget deficit?',options:['When revenue exceeds expenditure','When expenditure exceeds revenue','When revenue equals expenditure','When taxes are reduced'],answer:'B',explanation:'A budget deficit occurs when government spending exceeds its revenue.'},
+    {exam:'GCE',year:2019,question:'The Central Bank of Nigeria\'s primary function is to:',options:['Accept deposits from the public','Control monetary policy and regulate banks','Give loans to individuals','Buy and sell goods'],answer:'B',explanation:'The CBN formulates monetary policy, issues currency and regulates the banking sector.'},
+    {exam:'NABTEB',year:2019,question:'Which of the following is an example of a public good?',options:['Bread','Clothing','Street lighting','Personal car'],answer:'C',explanation:'Public goods (street lighting, national defence) are non-excludable and non-rival — available to all.'},
+    {exam:'NABTEB',year:2020,question:'The law of diminishing returns states that:',options:['Output always increases with more inputs','Beyond a point, additional inputs yield less additional output','Fixed costs always fall with more production','Profits always increase with scale'],answer:'B',explanation:'As more units of a variable factor are added to fixed factors, marginal output eventually decreases.'},
+    {exam:'NABTEB',year:2021,question:'Foreign exchange is needed to:',options:['Pay domestic workers','Pay for imports and international transactions','Reduce inflation','Build local industries'],answer:'B',explanation:'Foreign exchange is used to settle international trade transactions and financial obligations.'},
+    {exam:'NABTEB',year:2022,question:'Which of the following best describes entrepreneurship?',options:['Owning land','Providing capital','Organising other factors of production and bearing risks','Providing labour'],answer:'C',explanation:'An entrepreneur organises land, labour and capital, bearing the risk of business enterprise.'},
+    {exam:'NABTEB',year:2023,question:'Price mechanism refers to the way:',options:['Government sets prices','Prices are determined by demand and supply forces','Monopolies fix prices','Cartels control markets'],answer:'B',explanation:'The price mechanism uses supply and demand forces to allocate resources in a free market.'},
+    {exam:'WAEC',year:2023,question:'What is the difference between microeconomics and macroeconomics?',options:['Micro studies large economies; macro studies small firms','Micro studies individual units; macro studies the economy as a whole','Micro is about government; macro is about firms','There is no difference'],answer:'B',explanation:'Microeconomics analyses individual consumers and firms; macroeconomics studies national/global economic aggregates.'},
+    {exam:'NECO',year:2023,question:'The concept of "division of labour" was associated with:',options:['Karl Marx','Adam Smith','John Keynes','Alfred Marshall'],answer:'B',explanation:'Adam Smith popularised division of labour in "The Wealth of Nations" (1776).'},
+  ]);
+
+  // ─── GOVERNMENT ─────────────────────────────────────────────
+  add('government','objective',[
+    {exam:'GCE',year:2019,question:'The doctrine of separation of powers was propounded by:',options:['John Locke','Jean-Jacques Rousseau','Montesquieu','Thomas Hobbes'],answer:'C',explanation:'Baron de Montesquieu developed the doctrine in "The Spirit of the Laws" (1748).'},
+    {exam:'GCE',year:2020,question:'Which arm of government is responsible for making laws?',options:['Executive','Judiciary','Legislature','Cabinet'],answer:'C',explanation:'The legislature (Parliament/National Assembly) has the primary responsibility of making laws.'},
+    {exam:'GCE',year:2021,question:'Federalism is a system of government where:',options:['Power is concentrated in the central government','Power is shared between central and component units','Power belongs entirely to states','The military governs the country'],answer:'B',explanation:'Federalism divides governmental powers between a central (federal) authority and constituent units (states).'},
+    {exam:'GCE',year:2022,question:'The power of judicial review means courts can:',options:['Make new laws','Declare laws unconstitutional','Enforce laws','Amend the constitution'],answer:'B',explanation:'Judicial review is the power of courts to invalidate laws that violate the constitution.'},
+    {exam:'GCE',year:2023,question:'The Universal Declaration of Human Rights was adopted in:',options:['1945','1948','1950','1963'],answer:'B',explanation:'The UDHR was adopted by the UN General Assembly on December 10, 1948.'},
+    {exam:'GCE',year:2023,question:'In a unitary system of government, power is:',options:['Equally shared','Concentrated at the centre','Divided between states','Held by local governments'],answer:'B',explanation:'In a unitary system, the central government holds supreme power; sub-units derive authority from the centre.'},
+    {exam:'GCE',year:2022,question:'Pressure groups differ from political parties because pressure groups:',options:['Seek to win elections','Seek to influence government policy without seeking power','Form governments','Are illegal organisations'],answer:'B',explanation:'Pressure groups influence policy from outside government; political parties seek to form government.'},
+    {exam:'GCE',year:2021,question:'The Nigerian constitution was last significantly amended/replaced in:',options:['1979','1989','1999','2010'],answer:'C',explanation:'Nigeria\'s current constitution came into force on May 29, 1999 with the return to civilian rule.'},
+    {exam:'GCE',year:2020,question:'Which of the following is NOT a function of the executive?',options:['Implementation of laws','Foreign policy execution','Adjudication of disputes','Appointment of ministers'],answer:'C',explanation:'Adjudication (settling legal disputes) is the function of the judiciary, not the executive.'},
+    {exam:'GCE',year:2019,question:'Citizenship can be acquired by:',options:['Birth only','Naturalisation only','Birth and naturalisation','Election'],answer:'C',explanation:'Citizenship is typically acquired by birth (jus soli or jus sanguinis) or naturalisation.'},
+    {exam:'NABTEB',year:2019,question:'A constitution is described as rigid when:',options:['It can be easily amended','It cannot be amended at all','It requires special procedures to amend','It is unwritten'],answer:'C',explanation:'A rigid constitution requires a special, more difficult procedure to amend than ordinary legislation.'},
+    {exam:'NABTEB',year:2020,question:'The body responsible for conducting elections in Nigeria is:',options:['INEC','NEC','EFCC','NJC'],answer:'A',explanation:'INEC (Independent National Electoral Commission) conducts, supervises and manages elections in Nigeria.'},
+    {exam:'NABTEB',year:2021,question:'Totalitarianism is a system where:',options:['The state has limited power','Citizens have maximum freedom','The state controls all aspects of life','Power is shared equally'],answer:'C',explanation:'Totalitarianism involves absolute state control over all aspects of public and private life.'},
+    {exam:'NABTEB',year:2022,question:'The principle of checks and balances ensures that:',options:['One arm of government cannot dominate others','The judiciary makes laws','The executive controls the legislature','All power belongs to the president'],answer:'A',explanation:'Checks and balances prevent any single arm of government from becoming too powerful.'},
+    {exam:'NABTEB',year:2023,question:'ECOWAS was established in:',options:['1945','1963','1975','1980'],answer:'C',explanation:'The Economic Community of West African States (ECOWAS) was established on May 28, 1975 in Lagos.'},
+    {exam:'WAEC',year:2023,question:'The primary purpose of a political party is to:',options:['Provide employment','Seek to control government through elections','Manage the economy','Conduct foreign policy'],answer:'B',explanation:'Political parties are organisations that seek to gain and exercise political power, primarily through elections.'},
+    {exam:'NECO',year:2023,question:'Sovereignty means:',options:['The power of citizens','The supreme authority of a state','Military strength','Economic power'],answer:'B',explanation:'Sovereignty is the supreme and independent authority of a state to govern itself without external control.'},
+  ]);
+
+  // ─── GEOGRAPHY ─────────────────────────────────────────────
+  add('geography','objective',[
+    {exam:'GCE',year:2019,question:'The Equator is at latitude:',options:['23.5°N','23.5°S','0°','90°N'],answer:'C',explanation:'The Equator is at 0° latitude, dividing Earth into Northern and Southern hemispheres.'},
+    {exam:'GCE',year:2020,question:'Which of the following is an example of an igneous rock?',options:['Limestone','Marble','Granite','Shale'],answer:'C',explanation:'Granite is a coarse-grained intrusive igneous rock formed from cooled magma.'},
+    {exam:'GCE',year:2021,question:'The largest ocean in the world is:',options:['Atlantic','Indian','Arctic','Pacific'],answer:'D',explanation:'The Pacific Ocean is the largest, covering about 165 million km².'},
+    {exam:'GCE',year:2022,question:'What type of rainfall is associated with mountains?',options:['Convectional','Frontal','Orographic/Relief','Cyclonic'],answer:'C',explanation:'Orographic (relief) rainfall occurs when moist air is forced to rise over mountains, cooling and precipitating.'},
+    {exam:'GCE',year:2023,question:'The population distribution of a country refers to:',options:['The total number of people','How people are spread across the country','The rate of population growth','The number of births per year'],answer:'B',explanation:'Population distribution describes how people are spatially arranged across a geographic area.'},
+    {exam:'NABTEB',year:2019,question:'Nigeria lies within which climatic zone?',options:['Temperate','Mediterranean','Tropical','Polar'],answer:'C',explanation:'Nigeria lies between the equator and the Tropic of Cancer — tropical climate with wet and dry seasons.'},
+    {exam:'NABTEB',year:2020,question:'The River Niger flows into the:',options:['Atlantic Ocean','Indian Ocean','Gulf of Guinea','Mediterranean Sea'],answer:'C',explanation:'The River Niger flows southward through Nigeria into the Gulf of Guinea in the Atlantic Ocean.'},
+    {exam:'NABTEB',year:2021,question:'What is the term for the wearing away of rock by wind, water and ice?',options:['Deposition','Weathering','Erosion','Leaching'],answer:'C',explanation:'Erosion is the process by which rock and soil are worn away and transported by natural agents.'},
+    {exam:'NABTEB',year:2022,question:'Which of these is a renewable natural resource?',options:['Coal','Petroleum','Timber','Iron ore'],answer:'C',explanation:'Timber (wood) is renewable as trees can be replanted and regrown. The others are non-renewable.'},
+    {exam:'NABTEB',year:2023,question:'The Sahara Desert is located in:',options:['Southern Africa','East Africa','North Africa','West Africa only'],answer:'C',explanation:'The Sahara Desert spans across North Africa from the Atlantic coast to the Red Sea.'},
+  ]);
+
+  // ─── LITERATURE ─────────────────────────────────────────────
+  add('literature','objective',[
+    {exam:'GCE',year:2019,question:'A soliloquy is a dramatic device in which a character:',options:['Speaks to another character','Speaks alone on stage revealing inner thoughts','Sings a song','Argues with the audience'],answer:'B',explanation:'A soliloquy is a speech where a character speaks their thoughts aloud while alone on stage.'},
+    {exam:'GCE',year:2020,question:'The climax of a story is:',options:['The introduction','The point of highest tension','The resolution','The falling action'],answer:'B',explanation:'The climax is the turning point of highest dramatic tension or conflict in a narrative.'},
+    {exam:'GCE',year:2021,question:'Onomatopoeia refers to words that:',options:['Contradict themselves','Sound like what they describe','Exaggerate meaning','Compare two unlike things'],answer:'B',explanation:'Onomatopoeia: words that phonetically imitate sounds (e.g. buzz, hiss, bang).'},
+    {exam:'GCE',year:2022,question:'An epic is a:',options:['Short lyric poem','Long narrative poem about heroic deeds','Brief dramatic monologue','Comic prose work'],answer:'B',explanation:'An epic is a long narrative poem celebrating heroic figures and great events (e.g. Homer\'s Iliad).'},
+    {exam:'GCE',year:2023,question:'The tragic flaw in Shakespearean tragedy is called:',options:['Catharsis','Hubris','Hamartia','Nemesis'],answer:'C',explanation:'Hamartia (from Greek) is the fatal character flaw that leads to a tragic hero\'s downfall.'},
+    {exam:'NABTEB',year:2019,question:'A protagonist is the:',options:['Main villain','Main character/hero','Author\'s narrator','Supporting character'],answer:'B',explanation:'The protagonist is the main character around whom the story revolves.'},
+    {exam:'NABTEB',year:2020,question:'Irony occurs when:',options:['Events happen as expected','The opposite of what is expected occurs','Characters are described in detail','The setting is described vividly'],answer:'B',explanation:'Irony involves a contrast between expectation and reality, or what is said and what is meant.'},
+    {exam:'NABTEB',year:2021,question:'A sonnet has:',options:['10 lines','12 lines','14 lines','16 lines'],answer:'C',explanation:'A sonnet is a 14-line poem, traditionally in iambic pentameter (Shakespearean or Petrarchan form).'},
+    {exam:'NABTEB',year:2022,question:'Alliteration is the repetition of:',options:['Vowel sounds','End rhymes','Initial consonant sounds','Middle syllables'],answer:'C',explanation:'Alliteration repeats the same consonant sound at the beginning of nearby words.'},
+    {exam:'NABTEB',year:2023,question:'Which of the following is NOT a genre of literature?',options:['Drama','Poetry','Prose','Grammar'],answer:'D',explanation:'The three main literary genres are prose, poetry and drama. Grammar is a linguistic concept.'},
+  ]);
+
+  // ─── CRS ────────────────────────────────────────────────────
+  add('crs','objective',[
+    {exam:'GCE',year:2019,question:'According to the Bible, how many days did God take to create the world?',options:['5','6','7','8'],answer:'B',explanation:'God created the world in 6 days and rested on the 7th (Genesis 1-2).'},
+    {exam:'GCE',year:2020,question:'Who was the first king of Israel?',options:['David','Solomon','Saul','Samuel'],answer:'C',explanation:'Saul was anointed by Samuel as the first king of Israel (1 Samuel 9-10).'},
+    {exam:'GCE',year:2021,question:'The greatest commandment according to Jesus is to:',options:['Keep the Sabbath','Love God and love your neighbour','Give to the poor','Pray always'],answer:'B',explanation:'Jesus summarised the law as loving God with all your heart and loving your neighbour as yourself (Matthew 22:37-40).'},
+    {exam:'GCE',year:2022,question:'Pentecost refers to:',options:['The birth of Jesus','The descent of the Holy Spirit on the disciples','The resurrection of Jesus','The transfiguration of Jesus'],answer:'B',explanation:'Pentecost is when the Holy Spirit descended on the disciples in Jerusalem (Acts 2).'},
+    {exam:'GCE',year:2023,question:'Which book of the Bible contains the Ten Commandments?',options:['Genesis','Leviticus','Exodus','Numbers'],answer:'C',explanation:'The Ten Commandments are found in Exodus 20 and Deuteronomy 5.'},
+    {exam:'NABTEB',year:2019,question:'The prophet who announced the birth of Jesus to Mary was:',options:['Michael','Gabriel','Raphael','Uriel'],answer:'B',explanation:'The Angel Gabriel appeared to Mary to announce she would bear the Son of God (Luke 1:26-38).'},
+    {exam:'NABTEB',year:2020,question:'The parable of the Prodigal Son teaches about:',options:['Hard work','God\'s forgiveness and restoration','Wealth management','Prayer'],answer:'B',explanation:'The Prodigal Son (Luke 15:11-32) illustrates God\'s unconditional forgiveness and joyful restoration of sinners.'},
+    {exam:'NABTEB',year:2021,question:'In the Lord\'s Prayer, the phrase "Thy kingdom come" means:',options:['God\'s physical kingdom on earth','That God\'s rule and reign should be established','Death should come','Heaven should come down'],answer:'B',explanation:'The petition asks for God\'s sovereign rule to be fully realised on earth as it is in heaven.'},
+    {exam:'NABTEB',year:2022,question:'The book of Psalms was primarily written by:',options:['Moses','Solomon','David','Isaiah'],answer:'C',explanation:'King David wrote many of the Psalms, though other authors include Asaph, Solomon and Moses.'},
+    {exam:'NABTEB',year:2023,question:'Which miracle did Jesus perform at the wedding in Cana?',options:['Healing a blind man','Raising Lazarus','Turning water into wine','Feeding 5000'],answer:'C',explanation:'Jesus turned water into wine at Cana — his first recorded miracle (John 2:1-11).'},
+  ]);
+
+  // ─── CIVIC EDUCATION ────────────────────────────────────────
+  add('civic_education','objective',[
+    {exam:'GCE',year:2019,question:'The rule of law means that:',options:['Only rulers obey the law','Everyone including rulers is subject to the law','The military makes the law','Laws apply only to the poor'],answer:'B',explanation:'Rule of law means no one is above the law — every person and institution is accountable to law.'},
+    {exam:'GCE',year:2020,question:'Which of the following is a civic responsibility?',options:['Watching television','Paying taxes','Going to the market','Sleeping'],answer:'B',explanation:'Paying taxes is a civic duty — it funds public services and government functions.'},
+    {exam:'GCE',year:2021,question:'Human rights are described as inalienable because they:',options:['Can be sold','Cannot be taken away or given up','Apply only to adults','Must be earned'],answer:'B',explanation:'Inalienable rights cannot be transferred, surrendered or taken away — they are inherent to every human.'},
+    {exam:'GCE',year:2022,question:'NAFDAC stands for:',options:['National Food and Drug Administration and Control','National Finance Development Agency','National Farmers and Dealers Agency and Control','None of the above'],answer:'A',explanation:'NAFDAC — National Agency for Food and Drug Administration and Control — regulates food and drug safety in Nigeria.'},
+    {exam:'GCE',year:2023,question:'Which of the following best describes corruption?',options:['Working hard for the public good','Misuse of entrusted power for private gain','Obeying the law faithfully','Paying taxes willingly'],answer:'B',explanation:'Corruption involves the abuse of entrusted authority for personal or private benefit.'},
+    {exam:'NABTEB',year:2019,question:'The right to vote is called:',options:['Franchise','Freedom','Immunity','Mandate'],answer:'A',explanation:'Franchise (suffrage) is the right to vote in public elections.'},
+    {exam:'NABTEB',year:2020,question:'Traffic laws are obeyed to:',options:['Punish drivers','Prevent accidents and ensure orderly movement','Generate revenue for government','Restrict movement'],answer:'B',explanation:'Traffic laws promote road safety and orderly movement of vehicles and pedestrians.'},
+    {exam:'NABTEB',year:2021,question:'Democracy can be defined as government of the people, by the people, for the people. This definition was given by:',options:['Winston Churchill','Abraham Lincoln','Nelson Mandela','Mahatma Gandhi'],answer:'B',explanation:'Abraham Lincoln used this definition in his Gettysburg Address (1863).'},
+    {exam:'NABTEB',year:2022,question:'Which of the following is a fundamental right in Nigeria?',options:['Right to free housing','Right to employment','Right to freedom of expression','Right to unlimited wealth'],answer:'C',explanation:'Freedom of expression is enshrined in Chapter IV of Nigeria\'s 1999 Constitution.'},
+    {exam:'NABTEB',year:2023,question:'EFCC was established to:',options:['Fight corruption and economic crimes','Regulate food and drugs','Manage federal roads','Conduct elections'],answer:'A',explanation:'EFCC (Economic and Financial Crimes Commission) investigates and prosecutes financial crimes and corruption.'},
+  ]);
+
+  // ─── ACCOUNTING ─────────────────────────────────────────────
+  add('accounting','objective',[
+    {exam:'GCE',year:2019,question:'The accounting equation is:',options:['Assets = Liabilities + Capital','Assets = Capital − Liabilities','Capital = Assets + Liabilities','Liabilities = Assets + Capital'],answer:'A',explanation:'The fundamental accounting equation: Assets = Liabilities + Owners\' Equity (Capital).'},
+    {exam:'GCE',year:2020,question:'Depreciation is defined as:',options:['Increase in asset value','Decrease in asset value over time','Bad debt written off','Cash paid for assets'],answer:'B',explanation:'Depreciation is the systematic allocation of the cost of a tangible asset over its useful life.'},
+    {exam:'GCE',year:2021,question:'A trial balance is prepared to:',options:['Show profit or loss','Ensure debits equal credits','Prepare the balance sheet','Record daily transactions'],answer:'B',explanation:'A trial balance verifies that total debit balances equal total credit balances in the ledger.'},
+    {exam:'GCE',year:2022,question:'Which of the following is a current asset?',options:['Land','Machinery','Debtors','Motor vehicles'],answer:'C',explanation:'Debtors (accounts receivable) are current assets — expected to be converted to cash within one year.'},
+    {exam:'GCE',year:2023,question:'The document sent by a seller to a buyer showing goods supplied is called:',options:['Receipt','Invoice','Credit note','Debit note'],answer:'B',explanation:'An invoice is a document issued by the seller listing goods/services supplied and the amount owed.'},
+    {exam:'NABTEB',year:2019,question:'Double entry bookkeeping requires that every transaction:',options:['Is recorded once','Affects two accounts equally','Only affects cash accounts','Is approved by management'],answer:'B',explanation:'Double entry: every debit must have a corresponding equal credit in another account.'},
+    {exam:'NABTEB',year:2020,question:'Gross profit is calculated as:',options:['Net sales − Total expenses','Net sales − Cost of goods sold','Net sales − Operating expenses','Revenue − Tax'],answer:'B',explanation:'Gross Profit = Net Sales − Cost of Goods Sold (before deducting operating expenses).'},
+    {exam:'NABTEB',year:2021,question:'A cash book is used to record:',options:['Credit transactions only','All cash and bank transactions','Only bank transactions','Only petty cash'],answer:'B',explanation:'The cash book records all receipts and payments of cash and cheques.'},
+    {exam:'NABTEB',year:2022,question:'Bad debts are:',options:['Debts owed to the business','Debts unlikely to be recovered','Long-term loans','Government taxes'],answer:'B',explanation:'Bad debts are amounts owed to a business that are considered irrecoverable and written off.'},
+    {exam:'NABTEB',year:2023,question:'Capital expenditure refers to money spent on:',options:['Day-to-day running costs','Long-term assets that benefit the business over many years','Paying wages','Buying raw materials'],answer:'B',explanation:'Capital expenditure purchases fixed assets (equipment, buildings) that provide long-term benefit.'},
+  ]);
+
+  // ─── COMMERCE ────────────────────────────────────────────────
+  add('commerce','objective',[
+    {exam:'GCE',year:2019,question:'Insurance operates on the principle of:',options:['Profit maximisation','Risk pooling and indemnity','Guarantee of payment','Government subsidy'],answer:'B',explanation:'Insurance pools risks from many policyholders and compensates those who suffer losses (indemnity).'},
+    {exam:'GCE',year:2020,question:'Which of the following is a function of a central bank?',options:['Accepting deposits from the public','Acting as lender of last resort','Selling consumer goods','Granting mortgages to individuals'],answer:'B',explanation:'Central banks act as lender of last resort — providing emergency liquidity to commercial banks.'},
+    {exam:'GCE',year:2021,question:'E-commerce refers to:',options:['Electronic manufacturing','Buying and selling using the internet','Government commerce','Export and import trade'],answer:'B',explanation:'E-commerce is the buying and selling of goods and services through electronic/internet platforms.'},
+    {exam:'GCE',year:2022,question:'A warehouse provides the service of:',options:['Transportation','Storage','Banking','Insurance'],answer:'B',explanation:'Warehouses provide storage facilities for goods, bridging the gap between production and consumption.'},
+    {exam:'GCE',year:2023,question:'Entrepôt trade refers to:',options:['Local trade only','Import, re-processing and re-export of goods','Trade between two countries','Trade in services only'],answer:'B',explanation:'Entrepôt trade involves importing goods and re-exporting them, often after processing — common in trading hubs.'},
+    {exam:'NABTEB',year:2019,question:'The document used to insure goods in transit is called:',options:['Bill of lading','Insurance policy','Consular invoice','Certificate of origin'],answer:'B',explanation:'An insurance policy covers goods against loss or damage during transportation.'},
+    {exam:'NABTEB',year:2020,question:'Wholesalers are intermediaries who:',options:['Sell directly to consumers','Buy in bulk from manufacturers and sell to retailers','Manufacture goods','Provide transport'],answer:'B',explanation:'Wholesalers buy large quantities from producers and distribute smaller quantities to retailers.'},
+    {exam:'NABTEB',year:2021,question:'A cheque that has been guaranteed by the bank is called:',options:['Open cheque','Crossed cheque','Certified cheque','Bearer cheque'],answer:'C',explanation:'A certified cheque has been verified and guaranteed by the bank — payment is assured.'},
+    {exam:'NABTEB',year:2022,question:'The main purpose of advertising is to:',options:['Increase production costs','Create awareness and stimulate demand','Reduce competition','Train employees'],answer:'B',explanation:'Advertising creates product awareness, informs consumers and stimulates demand.'},
+    {exam:'NABTEB',year:2023,question:'Balance of trade refers to:',options:['Balance in a bank account','Difference between visible exports and imports','Total government revenue','Internal trade balance'],answer:'B',explanation:'Balance of trade is the difference between the value of a country\'s visible (goods) exports and imports.'},
+  ]);
+
+  // ─── MARKETING ───────────────────────────────────────────────
+  add('marketing','objective',[
+    {exam:'GCE',year:2019,question:'The 4Ps of marketing are:',options:['Product, Price, Place, Promotion','People, Process, Price, Place','Product, Profit, Place, Promotion','Plan, Price, People, Promotion'],answer:'A',explanation:'The marketing mix consists of Product, Price, Place (distribution) and Promotion.'},
+    {exam:'GCE',year:2020,question:'Market segmentation involves:',options:['Selling to everyone','Dividing the market into distinct consumer groups','Reducing prices','Advertising everywhere'],answer:'B',explanation:'Market segmentation divides a broad market into subsets of consumers with common needs or characteristics.'},
+    {exam:'GCE',year:2021,question:'A brand is best defined as:',options:['A product\'s price','A name, symbol or design that identifies a product','The quality of a product','The weight of a product'],answer:'B',explanation:'A brand is an identifying name, term, sign, symbol or design that distinguishes a product from competitors.'},
+    {exam:'GCE',year:2022,question:'Public relations is primarily aimed at:',options:['Increasing sales directly','Building a favourable image for the organisation','Training sales staff','Reducing costs'],answer:'B',explanation:'PR manages an organisation\'s communications to build and maintain a positive public image.'},
+    {exam:'GCE',year:2023,question:'The product life cycle stages are:',options:['Start, Middle, End','Introduction, Growth, Maturity, Decline','Idea, Launch, Sales, Close','Planning, Production, Sales, Exit'],answer:'B',explanation:'Products pass through Introduction, Growth, Maturity and Decline stages in their life cycle.'},
+    {exam:'NABTEB',year:2019,question:'A USP (Unique Selling Proposition) is:',options:['The lowest price in the market','The feature that makes a product different from competitors','A government pricing policy','A type of discount'],answer:'B',explanation:'A USP is the distinctive benefit or feature that differentiates a product from all competitors.'},
+    {exam:'NABTEB',year:2020,question:'Which of the following is a primary research method?',options:['Reading a newspaper','Using census data','Conducting a survey','Analysing published reports'],answer:'C',explanation:'Primary research collects original data directly from sources — surveys, interviews, observations.'},
+    {exam:'NABTEB',year:2021,question:'Penetration pricing involves:',options:['Setting very high initial prices','Setting low initial prices to gain market share','Matching competitor prices','Pricing above production cost only'],answer:'B',explanation:'Penetration pricing sets low initial prices to attract customers and quickly gain market share.'},
+    {exam:'NABTEB',year:2022,question:'Distribution channels refer to:',options:['Advertising media used','Routes through which products reach consumers','Pricing strategies','Methods of production'],answer:'B',explanation:'Distribution channels (direct or indirect) are the pathways goods take from producer to final consumer.'},
+    {exam:'NABTEB',year:2023,question:'After-sales service is important because it:',options:['Reduces production costs','Builds customer loyalty and satisfaction','Increases advertising costs','Reduces staff numbers'],answer:'B',explanation:'After-sales service maintains customer relationships and encourages repeat purchases and referrals.'},
+  ]);
+
+  // ─── ANIMAL HUSBANDRY ────────────────────────────────────────
+  add('animal_husbandry','objective',[
+    {exam:'GCE',year:2019,question:'The rearing of fish in controlled conditions is called:',options:['Apiculture','Pisciculture','Sericulture','Aviculture'],answer:'B',explanation:'Pisciculture is the controlled rearing and harvesting of fish.'},
+    {exam:'GCE',year:2020,question:'Ruminant animals are those that:',options:['Only eat grass','Have a single stomach','Chew the cud and have multiple stomach compartments','Cannot digest cellulose'],answer:'C',explanation:'Ruminants (cattle, sheep, goats) regurgitate and re-chew food and have multi-chambered stomachs.'},
+    {exam:'GCE',year:2021,question:'The gestation period of a cow is approximately:',options:['3 months','6 months','9 months','12 months'],answer:'C',explanation:'The gestation period of a cow (cattle) is approximately 9 months (280-285 days).'},
+    {exam:'GCE',year:2022,question:'Foot and mouth disease in cattle is caused by:',options:['Bacteria','Virus','Protozoan','Fungus'],answer:'B',explanation:'Foot and mouth disease (FMD) is a highly contagious viral disease affecting cloven-hoofed animals.'},
+    {exam:'GCE',year:2023,question:'Which of the following is a major source of protein in livestock feed?',options:['Cassava','Soybean','Maize','Rice bran'],answer:'B',explanation:'Soybean is a major protein supplement in livestock diets due to its high protein content (35-40%).'},
+    {exam:'NABTEB',year:2019,question:'Colostrum is:',options:['A type of feed supplement','The first milk produced after birth, rich in antibodies','A veterinary drug','A growth hormone'],answer:'B',explanation:'Colostrum is the first milk produced immediately after birth, providing the newborn with crucial maternal antibodies.'},
+    {exam:'NABTEB',year:2020,question:'The process of removing the testicles of a male animal is called:',options:['Drenching','Dipping','Castration','Dehorning'],answer:'C',explanation:'Castration removes the testes, making the animal more docile and improving meat quality.'},
+    {exam:'NABTEB',year:2021,question:'Vaccination of animals helps to:',options:['Increase their weight','Prevent infectious diseases','Improve their reproduction','Treat existing infections'],answer:'B',explanation:'Vaccination stimulates the animal\'s immune system to develop protection against specific diseases.'},
+    {exam:'NABTEB',year:2022,question:'Which of the following is a sign of good health in cattle?',options:['Rough, dry coat','Dull eyes','Alertness and shiny coat','Isolation from the herd'],answer:'C',explanation:'Healthy cattle show alertness, bright eyes, a smooth shiny coat and normal feeding behaviour.'},
+    {exam:'NABTEB',year:2023,question:'The practice of keeping records of livestock is important for:',options:['Entertainment purposes','Monitoring performance, productivity and disease control','Reducing feed costs only','Government registration only'],answer:'B',explanation:'Livestock records help track productivity, identify disease patterns, monitor breeding cycles and assess farm profitability.'},
+    {exam:'WAEC',year:2023,question:'Brooding refers to:',options:['Feeding young animals','Providing warmth and care to young chicks','Mating of animals','Slaughtering of animals'],answer:'B',explanation:'Brooding is the process of providing artificial heat and care to newly hatched chicks in the absence of a mother hen.'},
+    {exam:'NECO',year:2023,question:'The normal body temperature of cattle is approximately:',options:['35°C','37°C','38.5°C','40°C'],answer:'C',explanation:'Normal body temperature in cattle ranges from 38.0°C to 39.5°C, with 38.5°C as the standard average.'},
+  ]);
+
+})();
