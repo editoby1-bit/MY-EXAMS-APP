@@ -212,7 +212,7 @@
                 <li>✓ WAEC, NECO, GCE, NABTEB + year filters</li>
                 <li>✓ Full model answers + marking schemes</li>
                 <li>✓ 50 snap-and-mark credits per quarter</li>
-                <li>✓ JAMB prep included — no extra charge</li>
+                <li>✓ JAMB prep included + 100 AI explanations</li>
                 <li>✓ Community quiz — challenge friends</li>
                 <li>✓ Works offline · PWA installable</li>
               </ul>
@@ -233,7 +233,8 @@
               <div class="tier-yearly">or ₦10,500/year <span class="tier-save">save ₦3,500</span></div>
               <ul class="tier-perks">
                 <li>✓ Everything in Student Pass</li>
-                <li>✓ 100 AI explanation credits/quarter</li>
+                <li>✓ 100 AI explanations on Exams App/quarter</li>
+                <li>✓ 100 AI explanations on JAMB App/quarter</li>
                 <li>✓ "Why is this wrong?" on every question</li>
                 <li>✓ Personalised to your weak areas</li>
                 <li>✓ Snap top-up: ₦300 = 10 snaps</li>
@@ -265,10 +266,12 @@
                 <li>✓ 563 questions across 11 subjects</li>
                 <li>✓ Full JAMB combo simulation mode</li>
                 <li>✓ English + 3 subjects, timed</li>
-                <li>✓ Per-subject score breakdown</li>
-                <li>✓ Single subject drill mode</li>
-                <li>✓ Practice and Exam modes</li>
+                <li>✓ 100 AI explanations per quarter</li>
+                <li>✓ Challenge friends — community quiz</li>
+                <li>✓ Share your session with friends</li>
+                <li>✓ AI top-up: ₦500 = 50 explanations</li>
               </ul>
+              <p class="jamb-positioning">The only JAMB app with AI explanations. ₦1,500.</p>
               <button class="btn-pay" id="payBtnJamb" data-tier="jamb" data-amount="150000">
                 Get JAMB Pass →
               </button>
@@ -496,6 +499,80 @@
       <button id="teaserToastClose" class="teaser-toast-close">✕</button>
     </div>
   </div>
+
+  <!-- COMMUNITY QUIZ MODAL -->
+  <div id="quizChallengeModal" class="qc-overlay hidden">
+    <div class="qc-card">
+      <button class="qc-close" id="qcClose">✕</button>
+      <div id="qcHome">
+        <div class="qc-icon">🏆</div>
+        <h2 class="qc-title">Community Quiz</h2>
+        <p class="qc-sub">Challenge friends. See who scores higher on the same questions.</p>
+        <div class="qc-actions">
+          <button class="qc-btn qc-btn-primary" id="qcCreateBtn">Create a Challenge →</button>
+          <button class="qc-btn qc-btn-secondary" id="qcJoinBtn">Join with a Code</button>
+        </div>
+        <div class="qc-join-row hidden" id="qcJoinRow">
+          <input id="qcJoinCode" class="qc-code-input" placeholder="Enter challenge code" maxlength="10"/>
+          <button class="qc-btn qc-btn-primary" id="qcJoinConfirm">Join →</button>
+        </div>
+      </div>
+
+      <div id="qcCreate" class="hidden">
+        <h3 class="qc-section-title">Set Up Your Challenge</h3>
+        <div class="qc-form">
+          <div class="qc-field">
+            <label class="qc-label">Subject</label>
+            <select id="qcSubject" class="qc-select"></select>
+          </div>
+          <div class="qc-field">
+            <label class="qc-label">Questions</label>
+            <select id="qcCount" class="qc-select">
+              <option value="5">5 Questions</option>
+              <option value="10" selected>10 Questions</option>
+              <option value="20">20 Questions</option>
+            </select>
+          </div>
+          <div class="qc-field">
+            <label class="qc-label">Time limit</label>
+            <select id="qcTime" class="qc-select">
+              <option value="0">No limit</option>
+              <option value="5">5 minutes</option>
+              <option value="10" selected>10 minutes</option>
+              <option value="15">15 minutes</option>
+              <option value="20">20 minutes</option>
+            </select>
+          </div>
+        </div>
+        <button class="qc-btn qc-btn-primary" id="qcGenerateBtn" style="width:100%">Generate Challenge Code →</button>
+        <button class="qc-btn qc-btn-ghost" id="qcBackBtn">← Back</button>
+      </div>
+
+      <div id="qcShare" class="hidden">
+        <div class="qc-icon">🎯</div>
+        <h3 class="qc-section-title">Challenge Created!</h3>
+        <p class="qc-sub">Share this code with friends. It expires in 24 hours.</p>
+        <div class="qc-code-display" id="qcCodeDisplay">MEA-000</div>
+        <button class="qc-btn qc-btn-primary" id="qcShareLinkBtn" style="width:100%;margin-bottom:.5rem">📤 Share Challenge Link</button>
+        <button class="qc-btn qc-btn-primary" id="qcStartOwnBtn" style="width:100%">Start My Attempt →</button>
+        <p class="qc-note">You and your friends take the same questions. Scores are compared on the leaderboard.</p>
+      </div>
+
+      <div id="qcLeaderboard" class="hidden">
+        <div class="qc-icon">📊</div>
+        <h3 class="qc-section-title">Challenge Results</h3>
+        <div id="qcLeaderboardList" class="qc-leaderboard-list"></div>
+        <button class="qc-btn qc-btn-primary" id="qcNewChallengeBtn" style="width:100%;margin-top:.75rem">New Challenge →</button>
+        <button class="qc-btn qc-btn-ghost" id="qcDoneBtn">Done</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Community quiz trigger button — shown on home screen for paid users -->
+  <button id="quizChallengeBtn" class="qc-trigger-btn hidden">
+    🏆 Challenge a Friend
+  </button>
 
 </div><!-- #app -->
 <script src="https://js.paystack.co/v1/inline.js"></script>
