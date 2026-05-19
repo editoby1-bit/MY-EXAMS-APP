@@ -994,7 +994,7 @@
   /* ════════════════════════════════
      COMMUNITY QUIZ
   ════════════════════════════════ */
-  const SUBJECTS = Object.keys(EXAM_BANK);
+  const SUBJECT_KEYS = Object.keys(EXAM_BANK);
   const QC_STORE = 'mea-challenges-v1';
 
   function initCommunityQuiz() {
@@ -1023,7 +1023,7 @@
 
     // Populate subject dropdown
     const sel = document.getElementById('qcSubject');
-    SUBJECTS.forEach(s => {
+    SUBJECT_KEYS.forEach(s => {
       const opt = document.createElement('option');
       opt.value = s;
       opt.textContent = s;
