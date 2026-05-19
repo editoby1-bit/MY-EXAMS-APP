@@ -166,9 +166,18 @@ body {
   margin: 0 auto;
   padding: 1.5rem 1.5rem 4rem;
   display: grid;
-  grid-template-columns: 560px 1fr;
+  grid-template-columns: 1fr 340px;
   gap: 1.25rem;
   align-items: start;
+}
+.home-left {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.home-right {
+  position: sticky;
+  top: 1rem;
 }
 
 .card {
@@ -194,7 +203,7 @@ body {
 }
 
 /* Student */
-#studentPanel { grid-column: 1 / -1; }
+#studentPanel { }
 .student-input-row { display:flex; gap:.6rem; }
 .text-field {
   flex: 1;
@@ -227,7 +236,7 @@ body {
 }
 
 /* Config */
-#configPanel { grid-column: 1; }
+#configPanel { }
 .config-step {
   display: flex;
   align-items: center;
@@ -447,7 +456,7 @@ body {
 .ghost-link:hover { color: var(--red); }
 
 /* History panel */
-.history-panel { grid-column:2; grid-row:2 / 4; }
+.history-panel { max-height: calc(100vh - 3rem); overflow-y: auto; }
 .history-list { display:flex; flex-direction:column; gap:.5rem; max-height:490px; overflow-y:auto; }
 .history-list::-webkit-scrollbar { width:3px; }
 .history-list::-webkit-scrollbar-thumb { background:var(--border); }
@@ -1046,8 +1055,9 @@ body {
 ══════════════════════════════ */
 @media (max-width:960px) {
   .home-body { grid-template-columns:1fr; }
-  #configPanel { grid-column:1; }
-  .history-panel { grid-column:1; grid-row:auto; max-height:300px; }
+  .home-right { position:static; }
+  #configPanel { }
+  .history-panel { max-height:400px; overflow-y:auto; }
   .sidebar-toggle { display:flex; }
   .quiz-layout { grid-template-columns:1fr; }
   .quiz-sidebar {
@@ -1087,11 +1097,11 @@ body {
   justify-content: space-between;
   gap: .75rem;
   background: linear-gradient(135deg, #0a1628, #1a2d4a);
-  border: 1.5px solid var(--gold);
-  border-radius: var(--r-m);
-  padding: .75rem 1rem;
-  margin-bottom: 1rem;
+  border-radius: calc(var(--r-l) - 1px) calc(var(--r-l) - 1px) 0 0;
+  padding: .65rem 1rem;
+  margin: -1.5rem -1.5rem .75rem -1.5rem;
   flex-wrap: wrap;
+  border-bottom: 1.5px solid var(--gold);
 }
 .upgrade-bar-left {
   display: flex;
