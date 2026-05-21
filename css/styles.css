@@ -1576,3 +1576,73 @@ body {
   margin-top: .5rem;
   text-align: center;
 }
+
+/* ══════════════════════════════
+   HOSTED CONTEST CARD
+══════════════════════════════ */
+.contest-card {
+  padding: 1.25rem;
+  margin-top: 1rem;
+  background: linear-gradient(160deg, #0a1628, #132038);
+  border: 1.5px solid var(--gold);
+  color: var(--white);
+  text-align: center;
+}
+.contest-badge {
+  display: inline-block;
+  background: var(--gold);
+  color: var(--ink);
+  font-size: .58rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  padding: .2rem .6rem;
+  border-radius: 99px;
+  margin-bottom: .6rem;
+}
+.contest-icon { font-size: 2rem; margin-bottom: .4rem; }
+.contest-title {
+  font-family: var(--serif);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gold);
+  margin-bottom: .4rem;
+}
+.contest-desc {
+  font-size: .78rem;
+  color: rgba(255,255,255,.75);
+  line-height: 1.6;
+  margin-bottom: .85rem;
+}
+.contest-features {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  margin-bottom: .85rem;
+  text-align: left;
+}
+.contest-feat {
+  font-size: .76rem;
+  color: rgba(255,255,255,.85);
+  line-height: 1.4;
+}
+.contest-notify-btn {
+  width: 100%;
+  font-family: var(--sans);
+  font-size: .85rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--gold);
+  border: none;
+  border-radius: var(--r-s);
+  padding: .65rem;
+  cursor: pointer;
+  transition: all var(--t);
+  margin-bottom: .5rem;
+}
+.contest-notify-btn:hover:not(:disabled) { background: var(--gold-dk); }
+.contest-note {
+  font-size: .7rem;
+  color: rgba(255,255,255,.5);
+  line-height: 1.4;
+}
