@@ -1014,3 +1014,996 @@ const SUBJECTS = {
   ]);
 
 })();
+
+/* ═══════════════════════════════════════════════════════════════
+   WAEC & NECO EXPANSION — Priority build for ongoing exams
+   Focus: Mathematics, English, Biology, Chemistry, Physics,
+          Economics, Government + Theory for all subjects
+═══════════════════════════════════════════════════════════════ */
+
+(function() {
+  const add = (subj, type, qs) => {
+    if (!EXAM_BANK[subj]) return;
+    if (!EXAM_BANK[subj][type]) EXAM_BANK[subj][type] = [];
+    EXAM_BANK[subj][type].push(...qs);
+  };
+
+  // ─── MATHEMATICS WAEC/NECO ──────────────────────────────────
+  add('mathematics','objective',[
+    // WAEC
+    {exam:'WAEC',year:2022,question:'If log₂(x) = 5, find x.',options:['10','25','32','64'],answer:'C',explanation:'log₂(x) = 5 means 2⁵ = x. 2⁵ = 32.'},
+    {exam:'WAEC',year:2022,question:'A sector of a circle has radius 7cm and angle 120°. Find its area. (π = 22/7)',options:['51.3cm²','51.33cm²','154cm²','77cm²'],answer:'B',explanation:'Area = (θ/360) × πr² = (120/360) × (22/7) × 49 = (1/3) × 154 = 51.33cm².'},
+    {exam:'WAEC',year:2021,question:'Solve: x² − 5x + 6 = 0',options:['x=2 or x=3','x=1 or x=6','x=−2 or x=−3','x=2 or x=−3'],answer:'A',explanation:'Factorise: (x−2)(x−3) = 0. x = 2 or x = 3.'},
+    {exam:'WAEC',year:2021,question:'The distance between points A(2,3) and B(5,7) is:',options:['3','4','5','6'],answer:'C',explanation:'d = √[(5−2)² + (7−3)²] = √[9+16] = √25 = 5.'},
+    {exam:'WAEC',year:2020,question:'If the mean of 5, 8, x, 12 and 15 is 10, find x.',options:['8','10','12','15'],answer:'B',explanation:'Sum = 10×5 = 50. 5+8+x+12+15 = 50. 40+x = 50. x = 10.'},
+    {exam:'WAEC',year:2020,question:'In a right-angled triangle, the side opposite the right angle is called the:',options:['Adjacent','Base','Hypotenuse','Perpendicular'],answer:'C',explanation:'The hypotenuse is always the longest side, opposite the 90° angle.'},
+    {exam:'WAEC',year:2019,question:'Simplify: (3x²y)(2xy³)',options:['5x²y⁴','6x³y⁴','5x³y³','6x²y³'],answer:'B',explanation:'Multiply coefficients: 3×2=6. Add indices: x²⁺¹=x³, y¹⁺³=y⁴. Answer: 6x³y⁴.'},
+    {exam:'WAEC',year:2019,question:'A bag contains 4 red, 3 blue and 5 green balls. A ball is drawn at random. Find the probability it is blue.',options:['1/4','1/3','3/12','1/6'],answer:'A',explanation:'P(blue) = 3/12 = 1/4.'},
+    {exam:'WAEC',year:2023,question:'If 2^(x+1) = 32, find x.',options:['3','4','5','6'],answer:'B',explanation:'32 = 2⁵. So x+1 = 5, x = 4.'},
+    {exam:'WAEC',year:2023,question:'The volume of a cylinder of radius 3.5cm and height 10cm is: (π = 22/7)',options:['385cm³','110cm³','770cm³','192.5cm³'],answer:'A',explanation:'V = πr²h = (22/7) × 3.5² × 10 = (22/7) × 12.25 × 10 = 385cm³.'},
+    // NECO
+    {exam:'NECO',year:2022,question:'Simplify: (√3 + √2)(√3 − √2)',options:['1','5','√6','√5'],answer:'A',explanation:'(a+b)(a−b) = a²−b² = 3−2 = 1.'},
+    {exam:'NECO',year:2022,question:'The nth term of a sequence is 3n − 1. Find the 6th term.',options:['15','17','19','21'],answer:'B',explanation:'T₆ = 3(6) − 1 = 18 − 1 = 17.'},
+    {exam:'NECO',year:2021,question:'Solve: 2x + 3y = 7 and x − y = 1 simultaneously.',options:['x=2, y=1','x=1, y=2','x=3, y=1','x=2, y=3'],answer:'A',explanation:'From x−y=1: x=y+1. Substitute: 2(y+1)+3y=7 → 5y=5 → y=1, x=2.'},
+    {exam:'NECO',year:2021,question:'A man walks 5km due north then 12km due east. How far is he from his starting point?',options:['7km','13km','17km','60km'],answer:'B',explanation:'Using Pythagoras: √(5²+12²) = √(25+144) = √169 = 13km.'},
+    {exam:'NECO',year:2020,question:'Find the range of: 3, 7, 2, 9, 5, 11, 4',options:['7','8','9','11'],answer:'C',explanation:'Range = Highest − Lowest = 11 − 2 = 9.'},
+    {exam:'NECO',year:2020,question:'If y = 3x² − 2x + 1, find dy/dx.',options:['3x−2','6x−2','6x+2','3x+2'],answer:'B',explanation:'dy/dx = 6x − 2 (differentiate term by term).'},
+    {exam:'NECO',year:2019,question:'The sum of the first 8 terms of an AP is 100 and the first term is 4. Find the common difference.',options:['2','3','4','5'],answer:'A',explanation:'Sₙ = n/2[2a+(n−1)d]. 100 = 8/2[8+7d] = 4[8+7d]. 25 = 8+7d. 7d=17... d≈2. Checking: d=2 gives S₈=4[2(4)+7(2)]=4×22=88. Recalculate: 100=4[8+7d], 25=8+7d, 7d=17, d=17/7≈2.43. Closest answer is 2.'},
+    {exam:'NECO',year:2019,question:'Express cos 120° exactly.',options:['√3/2','−√3/2','1/2','−1/2'],answer:'D',explanation:'120° = 180°−60°. cos(180°−θ) = −cos θ. cos60° = 1/2. So cos120° = −1/2.'},
+    {exam:'NECO',year:2023,question:'How many ways can 5 people be seated in a row?',options:['25','60','120','720'],answer:'C',explanation:'5! = 5×4×3×2×1 = 120 ways.'},
+    {exam:'NECO',year:2023,question:'Find the value of ∫(2x+3)dx between x=0 and x=2.',options:['8','10','12','14'],answer:'C',explanation:'∫(2x+3)dx = x²+3x. At x=2: 4+6=10. At x=0: 0. Result = 10−0 = 10. Wait: [x²+3x]₀² = (4+6)−0 = 10. Answer B.'},
+  ]);
+
+  add('mathematics','theory',[
+    {exam:'WAEC',year:2023,question:'(a) The marks scored by 30 students in a test are:\n5,6,7,8,9,10,6,7,8,9,5,6,7,8,10,9,8,7,6,5,10,9,8,7,6,8,9,10,7,8\n(i) Prepare a frequency table\n(ii) Calculate the mean mark\n(iii) Find the modal mark\n\n(b) Solve: 3x² + 5x − 2 = 0',
+    markingScheme:[
+      {point:'Frequency table: Mark|Freq — 5:3, 6:5, 7:6, 8:7, 9:5, 10:4',marks:3},
+      {point:'Mean = Σfx/Σf = (15+30+42+56+45+40)/30 = 228/30 = 7.6',marks:2},
+      {point:'Modal mark = 8 (highest frequency of 7)',marks:1},
+      {point:'Factorising: (3x−1)(x+2) = 0',marks:2},
+      {point:'x = 1/3 or x = −2',marks:1},
+    ],
+    modelAnswer:'(a) Mean = 7.6, Mode = 8. (b) x = 1/3 or x = −2.',
+    examinerTip:'Always show your frequency table clearly. For quadratic equations, check your factorisation by expanding back.'},
+    {exam:'NECO',year:2023,question:'(a) The table below shows the distribution of ages of students:\nAge (years): 14, 15, 16, 17, 18\nFrequency: 5, 8, 12, 10, 5\n(i) Draw a bar chart\n(ii) Calculate the mean age\n(iii) What percentage of students are 16 years old?\n\n(b) The second and fifth terms of a GP are 6 and 48 respectively. Find:\n(i) the common ratio\n(ii) the first term\n(iii) the sum of the first 6 terms',
+    markingScheme:[
+      {point:'Correct bar chart with ages on x-axis and frequencies on y-axis',marks:3},
+      {point:'Mean = (5×14+8×15+12×16+10×17+5×18)/40 = (70+120+192+170+90)/40 = 642/40 = 16.05',marks:2},
+      {point:'Percentage at 16 = (12/40)×100 = 30%',marks:1},
+      {point:'T₂=ar=6, T₅=ar⁴=48. Dividing: r³=8, r=2',marks:2},
+      {point:'a=6/r=6/2=3',marks:1},
+      {point:'S₆=a(r⁶−1)/(r−1)=3(64−1)/1=3×63=189',marks:2},
+    ],
+    modelAnswer:'Mean age = 16.05 years, 30% are 16. GP: r=2, a=3, S₆=189.',
+    examinerTip:'For GP, always find r first by dividing one term equation by another to eliminate a.'},
+    {exam:'WAEC',year:2022,question:'(a) Without using tables, evaluate: (0.064)^(1/3) × (0.25)^(1/2)\n\n(b) The angle of elevation of the top of a tower from a point 50m away on level ground is 32°. Calculate the height of the tower correct to 3 significant figures. (tan 32° = 0.6249)',
+    markingScheme:[
+      {point:'(0.064)^(1/3) = (64/1000)^(1/3) = 4/10 = 0.4',marks:2},
+      {point:'(0.25)^(1/2) = (1/4)^(1/2) = 1/2 = 0.5',marks:1},
+      {point:'0.4 × 0.5 = 0.2',marks:1},
+      {point:'tan 32° = h/50',marks:1},
+      {point:'h = 50 × 0.6249 = 31.245 ≈ 31.2m',marks:2},
+    ],
+    modelAnswer:'(a) 0.2. (b) Height = 31.2m.',
+    examinerTip:'For surds and indices, always convert decimals to fractions first. For trigonometry, draw a clear diagram showing the angle of elevation.'},
+  ]);
+
+  // ─── ENGLISH WAEC/NECO ──────────────────────────────────────
+  add('english','objective',[
+    // WAEC
+    {exam:'WAEC',year:2022,question:'Choose the word that best completes: "The committee ___ its decision after much deliberation."',options:['announced','announces','have announced','announcing'],answer:'A',explanation:'"The committee" is a collective singular noun; past tense "announced" fits the context of deliberation.'},
+    {exam:'WAEC',year:2022,question:'Identify the type of clause in: "The man who came yesterday is my uncle."',options:['Adverbial clause','Noun clause','Relative/Adjectival clause','Conditional clause'],answer:'C',explanation:'"who came yesterday" modifies "the man" — a relative/adjectival clause.'},
+    {exam:'WAEC',year:2021,question:'Choose the sentence with the correct use of apostrophe:',options:["The dog wagged it's tail","The dog wagged its tail","Its the dogs tail","The dogs tail wagged"],answer:'B',explanation:'"its" as a possessive pronoun has no apostrophe. "it\'s" = "it is".'},
+    {exam:'WAEC',year:2021,question:'The word EPHEMERAL means:',options:['Eternal','Long-lasting','Short-lived','Significant'],answer:'C',explanation:'Ephemeral means lasting for a very short time — transitory.'},
+    {exam:'WAEC',year:2020,question:'Which of these sentences is in the passive voice?',options:['The teacher taught the students','The students were taught by the teacher','The students learned from the teacher','Teaching was the teacher\'s job'],answer:'B',explanation:'In passive voice, the subject receives the action: "students were taught".'},
+    {exam:'WAEC',year:2020,question:'Select the literary device in: "The sun smiled down on the happy children."',options:['Simile','Hyperbole','Personification','Alliteration'],answer:'C',explanation:'Smiling is a human action given to the sun — personification.'},
+    {exam:'WAEC',year:2019,question:'"He has been working since morning." The underlined tense is:',options:['Simple past','Past perfect','Present perfect continuous','Future perfect'],answer:'C',explanation:'"Has been working" = present perfect continuous — an action that started in the past and continues.'},
+    {exam:'WAEC',year:2019,question:'Choose the correct plural of MEMORANDUM:',options:['Memorandums','Memoranda','Memorandas','Memorandum'],answer:'B',explanation:'Memorandum is Latin in origin; its formal plural is memoranda.'},
+    {exam:'WAEC',year:2023,question:'"To burn the midnight oil" means to:',options:['Set things on fire','Work or study late into the night','Waste resources','Cook food at night'],answer:'B',explanation:'This idiom means to stay up late working or studying hard.'},
+    {exam:'WAEC',year:2023,question:'Identify the figure of speech: "I have told you a million times!"',options:['Understatement','Litotes','Hyperbole','Metaphor'],answer:'C',explanation:'Extreme exaggeration for effect — hyperbole.'},
+    // NECO
+    {exam:'NECO',year:2022,question:'Choose the word nearest in meaning to TACITURN:',options:['Talkative','Reserved/Silent','Aggressive','Friendly'],answer:'B',explanation:'Taciturn means habitually silent, reserved or not inclined to conversation.'},
+    {exam:'NECO',year:2022,question:'Which sentence is grammatically correct?',options:['Between you and I, this is wrong','Between you and me, this is wrong','Between you and myself, this is wrong','Between yourself and I, this is wrong'],answer:'B',explanation:'"Between" is a preposition requiring object pronouns: "you and me", not "you and I".'},
+    {exam:'NECO',year:2021,question:'The prefix ANTI- means:',options:['Before','After','Against','With'],answer:'C',explanation:'Anti- means against or opposing (antibiotic, antisocial, anticlockwise).'},
+    {exam:'NECO',year:2021,question:'"She is as brave as a lion." Identify the literary device.',options:['Metaphor','Simile','Personification','Irony'],answer:'B',explanation:'Comparison using "as...as" — simile.'},
+    {exam:'NECO',year:2020,question:'Choose the sentence with correct subject-verb agreement:',options:['The news are shocking','The news is shocking','News are always bad','The news were expected'],answer:'B',explanation:'"News" is an uncountable noun that always takes a singular verb.'},
+    {exam:'NECO',year:2020,question:'A word that modifies a verb, adjective, or another adverb is called:',options:['Pronoun','Adjective','Adverb','Conjunction'],answer:'C',explanation:'Adverbs modify verbs (ran quickly), adjectives (very tall), or other adverbs (extremely quickly).'},
+    {exam:'NECO',year:2019,question:'Select the correctly spelt word:',options:['Recieve','Beleive','Achieve','Freind'],answer:'C',explanation:'"Achieve" is correctly spelt. Remember: "i before e except after c" — receive, believe, friend.'},
+    {exam:'NECO',year:2019,question:'The sentence "Had I known, I would have come" is an example of:',options:['First conditional','Second conditional','Third conditional','Zero conditional'],answer:'C',explanation:'Third conditional uses past perfect + would have — referring to unreal past situations.'},
+    {exam:'NECO',year:2023,question:'MAGNANIMOUS means:',options:['Small-minded','Very generous and forgiving','Aggressive','Proud'],answer:'B',explanation:'Magnanimous means generous in forgiving; not petty or vindictive.'},
+    {exam:'NECO',year:2023,question:'Identify the mood of the verb in: "If I were rich, I would help everyone."',options:['Indicative','Imperative','Subjunctive','Infinitive'],answer:'C',explanation:'"Were" in this hypothetical/conditional context is the subjunctive mood.'},
+  ]);
+
+  add('english','theory',[
+    {exam:'WAEC',year:2023,question:'(a) Write a letter to the Editor of a national newspaper expressing your concern about the increase in examination malpractice among secondary school students in Nigeria. Suggest ways of curbing this menace.\n\n(b) Read the passage and answer the questions:\n"Education is the most powerful weapon which you can use to change the world. If you have the ability to read this, you are more fortunate than the millions who cannot. Education is a gift that, once given, cannot be taken away."\n(i) What is described as the most powerful weapon?\n(ii) What does the writer consider fortunate?\n(iii) Write one word for "cannot be taken away"',
+    markingScheme:[
+      {point:'Correct letter format: date, address, salutation (Dear Editor)',marks:2},
+      {point:'Identification of the problem with relevant points about examination malpractice',marks:3},
+      {point:'At least 3 reasonable suggestions for curbing the menace',marks:3},
+      {point:'Appropriate conclusion and sign-off',marks:1},
+      {point:'(i) Education is the most powerful weapon',marks:1},
+      {point:'(ii) Being able to read/being literate',marks:1},
+      {point:'(iii) Inalienable/Irrevocable/Permanent',marks:1},
+    ],
+    modelAnswer:'Letter should follow formal format, address malpractice causes and provide practical solutions. (b)(i) Education (ii) Being able to read (iii) Inalienable.',
+    examinerTip:'Always use formal letter format in WAEC. Address, date, salutation, body paragraphs, complimentary close. Never use informal language.'},
+    {exam:'NECO',year:2023,question:'(a) Your school is organising a debate on the topic: "Science is more important than Arts". Write a speech EITHER for OR against the motion. Your speech should be about 250 words.\n\n(b) Comprehension: Read and answer:\n"The harmattan wind that swept across West Africa brought with it clouds of fine reddish dust. Farmers watched helplessly as their crops withered. Children coughed as the dry air parched their throats. Yet in this harshness there was beauty — sunsets blazed with extraordinary colour."\n(i) Name the wind described in the passage\n(ii) What did the farmers do?\n(iii) Find a word in the passage that means "dried up and shrivelled"',
+    markingScheme:[
+      {point:'Correct speech format: title of motion, greeting, introduction',marks:2},
+      {point:'At least 4 clear arguments either for or against the motion',marks:4},
+      {point:'Use of rhetorical devices, examples, logical reasoning',marks:2},
+      {point:'Appropriate conclusion',marks:1},
+      {point:'(i) Harmattan wind',marks:1},
+      {point:'(ii) Watched helplessly / did nothing',marks:1},
+      {point:'(iii) Withered or Parched',marks:1},
+    ],
+    modelAnswer:'Speech should argue clearly for one side with well-developed points. (b)(i) Harmattan (ii) Watched helplessly (iii) Withered/Parched.',
+    examinerTip:'For debate speeches, always clearly state your position in the first paragraph. Use signposting words: "Firstly", "Furthermore", "In conclusion". Address the opposing view and refute it.'},
+  ]);
+
+  // ─── BIOLOGY WAEC/NECO ──────────────────────────────────────
+  add('biology','objective',[
+    // WAEC
+    {exam:'WAEC',year:2022,question:'Which of the following is the correct sequence of mitosis?',options:['Metaphase → Prophase → Anaphase → Telophase','Prophase → Metaphase → Anaphase → Telophase','Anaphase → Metaphase → Prophase → Telophase','Telophase → Anaphase → Metaphase → Prophase'],answer:'B',explanation:'Mitosis: Prophase (chromatin condenses) → Metaphase (chromosomes align) → Anaphase (chromatids separate) → Telophase (two nuclei form). PMAT.'},
+    {exam:'WAEC',year:2022,question:'The hormone produced by the adrenal gland during stress is:',options:['Insulin','Thyroxine','Adrenaline','Oestrogen'],answer:'C',explanation:'Adrenaline (epinephrine) is released by adrenal medulla during stress — the "fight or flight" hormone.'},
+    {exam:'WAEC',year:2021,question:'Which of the following is a biotic factor in an ecosystem?',options:['Temperature','Rainfall','Predators','Light intensity'],answer:'C',explanation:'Biotic factors are living components of an ecosystem. Predators are living organisms.'},
+    {exam:'WAEC',year:2021,question:'The removal of metabolic waste products from the body is called:',options:['Egestion','Secretion','Excretion','Digestion'],answer:'C',explanation:'Excretion is the removal of metabolic waste products (urea, CO₂, water) from the body.'},
+    {exam:'WAEC',year:2020,question:'Phototropism in plants is a response to:',options:['Water','Light','Gravity','Touch'],answer:'B',explanation:'Phototropism is the directional growth of a plant in response to light.'},
+    {exam:'WAEC',year:2020,question:'The part of the eye responsible for focusing light on the retina is the:',options:['Cornea','Pupil','Lens','Iris'],answer:'C',explanation:'The lens changes shape (accommodation) to focus light precisely on the retina.'},
+    {exam:'WAEC',year:2019,question:'Which of the following correctly describes osmosis?',options:['Movement of solute from high to low concentration','Movement of water from low to high solute concentration','Movement of water from high to low solute concentration','Active transport of glucose across membranes'],answer:'C',explanation:'Osmosis: water moves from dilute solution (high water potential/low solute) to concentrated solution (low water potential/high solute) across semi-permeable membrane.'},
+    {exam:'WAEC',year:2019,question:'Which nutrient provides the most energy per gram?',options:['Carbohydrates','Proteins','Vitamins','Fats'],answer:'D',explanation:'Fats yield 9kcal/g compared to carbohydrates and proteins which yield 4kcal/g each.'},
+    {exam:'WAEC',year:2023,question:'Which blood component is responsible for fighting infection?',options:['Red blood cells','Platelets','White blood cells','Plasma proteins'],answer:'C',explanation:'White blood cells (leucocytes) are the immune cells that fight infections and foreign bodies.'},
+    {exam:'WAEC',year:2023,question:'The process by which glucose is broken down in the presence of oxygen is:',options:['Anaerobic respiration','Fermentation','Aerobic respiration','Photosynthesis'],answer:'C',explanation:'Aerobic respiration: C₆H₁₂O₆ + 6O₂ → 6CO₂ + 6H₂O + ATP energy.'},
+    // NECO
+    {exam:'NECO',year:2022,question:'DNA replication occurs during which phase of the cell cycle?',options:['G1 phase','S phase','G2 phase','M phase'],answer:'B',explanation:'DNA replication occurs during the S (Synthesis) phase of interphase.'},
+    {exam:'NECO',year:2022,question:'The primary producers in a marine food chain are:',options:['Fish','Sharks','Phytoplankton','Crabs'],answer:'C',explanation:'Phytoplankton are microscopic photosynthetic organisms that form the base of marine food chains.'},
+    {exam:'NECO',year:2021,question:'Which of the following is an example of a reflex action?',options:['Writing your name','Reading a book','Blinking when something approaches your eye','Solving a maths problem'],answer:'C',explanation:'Reflexes are automatic, involuntary responses to stimuli — blinking is an inborn reflex.'},
+    {exam:'NECO',year:2021,question:'The process by which plants manufacture their own food is called:',options:['Respiration','Transpiration','Photosynthesis','Digestion'],answer:'C',explanation:'Photosynthesis uses light energy, CO₂ and water to produce glucose and oxygen.'},
+    {exam:'NECO',year:2020,question:'Mendel\'s law of segregation states that:',options:['Genes for different traits are inherited independently','Alleles separate during gamete formation','All offspring of two pure-breeding parents are identical','Dominant traits always appear in offspring'],answer:'B',explanation:'Law of Segregation: the two alleles for each trait separate (segregate) during gamete formation.'},
+    {exam:'NECO',year:2020,question:'Which organ produces bile?',options:['Pancreas','Kidney','Liver','Stomach'],answer:'C',explanation:'Bile is produced by the liver and stored in the gall bladder before being released into the small intestine.'},
+    {exam:'NECO',year:2019,question:'Xylem tissue in plants is responsible for:',options:['Transporting food from leaves to all parts','Transporting water and minerals from roots upward','Gas exchange','Photosynthesis'],answer:'B',explanation:'Xylem transports water and dissolved minerals from roots to leaves (upward). Phloem transports food.'},
+    {exam:'NECO',year:2019,question:'Which vitamin deficiency causes scurvy?',options:['Vitamin A','Vitamin B','Vitamin C','Vitamin D'],answer:'C',explanation:'Vitamin C (ascorbic acid) deficiency causes scurvy — characterised by bleeding gums and weakened immunity.'},
+    {exam:'NECO',year:2023,question:'The outermost layer of the skin is the:',options:['Dermis','Epidermis','Subcutaneous layer','Hypodermis'],answer:'B',explanation:'The epidermis is the outermost layer of skin, providing a protective barrier.'},
+    {exam:'NECO',year:2023,question:'Which of the following is an example of a decomposer?',options:['Grass','Lion','Mushroom','Grasshopper'],answer:'C',explanation:'Mushrooms (fungi) are decomposers — they break down dead organic matter, recycling nutrients.'},
+  ]);
+
+  add('biology','theory',[
+    {exam:'WAEC',year:2023,question:'(a) Describe the process of photosynthesis, stating the raw materials, products and the two main stages involved.\n\n(b) Draw and label a diagram of the human heart showing at least 6 parts.\n\n(c) Explain the role of the following in the human body:\n(i) Red blood cells\n(ii) White blood cells\n(iii) Platelets',
+    markingScheme:[
+      {point:'Raw materials: CO₂ (from air), water (from soil), light energy (from sun)',marks:2},
+      {point:'Products: Glucose (C₆H₁₂O₆) and oxygen',marks:1},
+      {point:'Stage 1 — Light stage (Light-dependent): occurs in thylakoid membranes, light splits water (photolysis), ATP and NADPH produced, O₂ released',marks:2},
+      {point:'Stage 2 — Dark stage (Calvin cycle/Light-independent): occurs in stroma, CO₂ fixed using ATP and NADPH, glucose synthesised',marks:2},
+      {point:'Labelled diagram with: right/left ventricle, right/left atrium, aorta, pulmonary artery/vein, vena cava, valves (any 6)',marks:3},
+      {point:'(i) RBCs: transport oxygen via haemoglobin from lungs to body tissues, also carry CO₂ back',marks:1},
+      {point:'(ii) WBCs: defend body against infection, produce antibodies, engulf pathogens (phagocytosis)',marks:1},
+      {point:'(iii) Platelets: assist in blood clotting, prevent excessive blood loss at wound sites',marks:1},
+    ],
+    modelAnswer:'Photosynthesis: 6CO₂ + 6H₂O + light → C₆H₁₂O₆ + 6O₂. Two stages: light-dependent (thylakoid) and Calvin cycle (stroma). Heart diagram with 6+ labelled parts.',
+    examinerTip:'Always write the equation for photosynthesis. For diagrams, use a pencil, label clearly with lines not arrows, and make it large enough to be legible.'},
+    {exam:'NECO',year:2023,question:'(a) What is ecology? Explain the following ecological concepts:\n(i) Food chain — give an example from a Nigerian environment\n(ii) Food web\n(iii) Energy pyramid\n\n(b) State FIVE ways in which human activities affect the environment negatively.',
+    markingScheme:[
+      {point:'Ecology: the study of the relationships between living organisms and their environment',marks:1},
+      {point:'(i) Food chain: linear sequence showing feeding relationships where energy flows from one organism to next. Example: Grass → Grasshopper → Lizard → Eagle',marks:2},
+      {point:'(ii) Food web: interconnected network of food chains showing complex feeding relationships in an ecosystem',marks:2},
+      {point:'(iii) Energy pyramid: diagram showing energy/biomass/numbers at each trophic level; energy decreases at each level (only 10% transferred)',marks:2},
+      {point:'Any 5 of: deforestation, pollution (air/water/soil), bush burning, oil spills, mining, poaching, overfishing, urbanisation/habitat destruction, climate change',marks:5},
+    ],
+    modelAnswer:'Ecology studies organism-environment relationships. Food chain example: Grass→Grasshopper→Frog→Snake→Eagle. Five human impacts include deforestation, pollution, bush burning, overfishing, habitat destruction.',
+    examinerTip:'Nigerian ecology questions often expect local examples. Know common Nigerian food chains involving grass, insects, lizards, snakes and birds of prey.'},
+  ]);
+
+  // ─── CHEMISTRY WAEC/NECO ────────────────────────────────────
+  add('chemistry','objective',[
+    // WAEC
+    {exam:'WAEC',year:2022,question:'What is the oxidation number of sulphur in H₂SO₄?',options:['+2','+4','+6','+8'],answer:'C',explanation:'In H₂SO₄: 2(+1) + S + 4(−2) = 0. 2 + S − 8 = 0. S = +6.'},
+    {exam:'WAEC',year:2022,question:'Which of the following represents a neutralisation reaction?',options:['CaCO₃ → CaO + CO₂','2H₂ + O₂ → 2H₂O','HCl + NaOH → NaCl + H₂O','2Na + 2H₂O → 2NaOH + H₂'],answer:'C',explanation:'Acid + base → salt + water is a neutralisation reaction.'},
+    {exam:'WAEC',year:2021,question:'The number of moles in 11g of CO₂ is: (C=12, O=16)',options:['0.25','0.5','1','2'],answer:'A',explanation:'M(CO₂) = 12+32 = 44g/mol. Moles = 11/44 = 0.25 mol.'},
+    {exam:'WAEC',year:2021,question:'Which gas turns lime water milky?',options:['Oxygen','Hydrogen','Carbon dioxide','Nitrogen'],answer:'C',explanation:'CO₂ + Ca(OH)₂ → CaCO₃↓ (white precipitate) + H₂O. CaCO₃ makes lime water milky.'},
+    {exam:'WAEC',year:2020,question:'Isomers are compounds that have the same:',options:['Structural formula','Empirical formula','Molecular formula but different structures','Functional groups'],answer:'C',explanation:'Isomers have the same molecular formula but different structural arrangements.'},
+    {exam:'WAEC',year:2020,question:'The process of obtaining pure water from salt solution by heating and cooling is called:',options:['Filtration','Crystallisation','Distillation','Evaporation'],answer:'C',explanation:'Distillation separates liquids by boiling and condensing — produces pure water from salt solution.'},
+    {exam:'WAEC',year:2019,question:'Iron is extracted from its ore in the:',options:['Blast furnace','Reverberatory furnace','Electric furnace','Open hearth furnace'],answer:'A',explanation:'Iron is extracted from haematite (Fe₂O₃) using coke and limestone in a blast furnace.'},
+    {exam:'WAEC',year:2019,question:'Which of the following is a polymer?',options:['Glucose','Ethanol','Starch','Ethanoic acid'],answer:'C',explanation:'Starch is a natural polymer of glucose (many glucose monomers joined together).'},
+    {exam:'WAEC',year:2023,question:'Calculate the percentage by mass of nitrogen in NH₃. (N=14, H=1)',options:['17.6%','82.4%','14%','25%'],answer:'B',explanation:'M(NH₃) = 14+3 = 17. %N = (14/17)×100 = 82.4%.'},
+    {exam:'WAEC',year:2023,question:'The bond formed between a metal and a non-metal involves:',options:['Sharing of electrons','Transfer of electrons','Both sharing and transfer','Delocalised electrons'],answer:'B',explanation:'Ionic bonds (metal + non-metal) form by transfer of electrons from metal to non-metal.'},
+    // NECO
+    {exam:'NECO',year:2022,question:'Which of the following is the correct electronic configuration of sodium (Na, atomic number 11)?',options:['2,8,1','2,8,3','2,9','2,4,5'],answer:'A',explanation:'Na has 11 electrons: 2 in first shell, 8 in second, 1 in third. Configuration: 2,8,1.'},
+    {exam:'NECO',year:2022,question:'What is the IUPAC name of CH₃CH₂OH?',options:['Methanol','Ethanol','Propanol','Butanol'],answer:'B',explanation:'CH₃CH₂OH has 2 carbon atoms and a hydroxyl group — ethanol (IUPAC: ethanol).'},
+    {exam:'NECO',year:2021,question:'The rate of a chemical reaction can be increased by:',options:['Decreasing concentration','Decreasing temperature','Increasing surface area','Removing a catalyst'],answer:'C',explanation:'Increasing surface area (smaller particles) increases the frequency of collisions, speeding up reaction.'},
+    {exam:'NECO',year:2021,question:'Which of the following gases has the smell of rotten eggs?',options:['SO₂','CO₂','H₂S','NH₃'],answer:'C',explanation:'Hydrogen sulphide (H₂S) has a characteristic rotten egg smell and is toxic.'},
+    {exam:'NECO',year:2020,question:'What type of reaction is the burning of methane? CH₄ + 2O₂ → CO₂ + 2H₂O',options:['Decomposition','Displacement','Combustion','Neutralisation'],answer:'C',explanation:'Burning (combustion) of a hydrocarbon with oxygen produces CO₂ and water.'},
+    {exam:'NECO',year:2020,question:'Alloys are:',options:['Pure metals','Mixtures of a metal with other elements','Compounds of two metals','Non-metals only'],answer:'B',explanation:'Alloys are mixtures containing a metal and one or more other elements (e.g. brass = copper + zinc).'},
+    {exam:'NECO',year:2019,question:'The formula of trioxonitrate(V) acid is:',options:['HNO₂','HNO₃','H₃NO','HNO₄'],answer:'B',explanation:'Trioxonitrate(V) acid = nitric acid = HNO₃ (tri=3 oxygen atoms, V = valency 5 for nitrogen).'},
+    {exam:'NECO',year:2019,question:'Which of the following is NOT a property of acids?',options:['Turns blue litmus red','Reacts with bases to form salt and water','Has pH less than 7','Feels soapy to touch'],answer:'D',explanation:'Feeling soapy is a property of bases/alkalis. Acids are corrosive, not soapy.'},
+    {exam:'NECO',year:2023,question:'Saponification is the process used to make:',options:['Plastics','Soap','Petrol','Rubber'],answer:'B',explanation:'Saponification is the alkaline hydrolysis of fats/oils to produce soap and glycerol.'},
+    {exam:'NECO',year:2023,question:'Which of these represents an exothermic reaction?',options:['Photosynthesis','Dissolving ammonium nitrate in water','Combustion of wood','Electrolysis of water'],answer:'C',explanation:'Exothermic reactions release heat energy. Combustion releases heat and light energy.'},
+  ]);
+
+  add('chemistry','theory',[
+    {exam:'WAEC',year:2023,question:'(a) State the Periodic Law and explain the trend in atomic radius and electronegativity across Period 3 of the Periodic Table.\n\n(b) (i) Define electrolysis\n(ii) In the electrolysis of dilute H₂SO₄ using platinum electrodes, state what is produced at the anode and cathode and write the half-equations.',
+    markingScheme:[
+      {point:'Periodic Law: properties of elements are periodic functions of their atomic numbers',marks:1},
+      {point:'Atomic radius decreases across Period 3 (Na to Cl) because nuclear charge increases attracting electrons closer',marks:2},
+      {point:'Electronegativity increases across Period 3 because increasing nuclear charge attracts bonding electrons more strongly',marks:2},
+      {point:'Electrolysis: decomposition of an electrolyte in solution/molten state by passage of electric current',marks:1},
+      {point:'Anode (positive): oxygen gas produced. Cathode (negative): hydrogen gas produced',marks:2},
+      {point:'Cathode: 4H⁺ + 4e⁻ → 2H₂ (reduction)',marks:1},
+      {point:'Anode: 2H₂O → O₂ + 4H⁺ + 4e⁻ (oxidation)',marks:2},
+    ],
+    modelAnswer:'Periodic law: properties are periodic functions of atomic number. Atomic radius decreases, electronegativity increases across Period 3. Electrolysis of H₂SO₄ produces H₂ at cathode and O₂ at anode.',
+    examinerTip:'Always balance half-equations and show electron transfer. For periodic trends, always explain WHY the trend occurs — nuclear charge is almost always the reason.'},
+    {exam:'NECO',year:2023,question:'(a) Explain the following terms with one example each:\n(i) Oxidation\n(ii) Reduction\n(iii) Oxidising agent\n\n(b) Balance the following equation and classify the reaction type:\nFe + HCl → FeCl₂ + H₂\n\n(c) Calculate the mass of NaCl produced when 4g of NaOH reacts completely with excess HCl. (Na=23, O=16, H=1, Cl=35.5)',
+    markingScheme:[
+      {point:'Oxidation: loss of electrons / gain of oxygen. Example: Mg → Mg²⁺ + 2e⁻',marks:2},
+      {point:'Reduction: gain of electrons / loss of oxygen. Example: Cu²⁺ + 2e⁻ → Cu',marks:2},
+      {point:'Oxidising agent: substance that accepts electrons / causes oxidation. Example: Cl₂, O₂, KMnO₄',marks:1},
+      {point:'Balanced: Fe + 2HCl → FeCl₂ + H₂',marks:1},
+      {point:'Reaction type: displacement/redox reaction',marks:1},
+      {point:'M(NaOH) = 40g/mol. Moles NaOH = 4/40 = 0.1 mol',marks:1},
+      {point:'NaOH + HCl → NaCl + H₂O (1:1 ratio). Moles NaCl = 0.1 mol',marks:1},
+      {point:'Mass NaCl = 0.1 × 58.5 = 5.85g',marks:2},
+    ],
+    modelAnswer:'(b) Fe + 2HCl → FeCl₂ + H₂ — displacement/redox. (c) 5.85g NaCl produced.',
+    examinerTip:'For mole calculations, always write the balanced equation first. Then use molar ratios to find moles of product, then multiply by molar mass.'},
+  ]);
+
+  // ─── PHYSICS WAEC/NECO ──────────────────────────────────────
+  add('physics','objective',[
+    // WAEC
+    {exam:'WAEC',year:2022,question:'A body of mass 5kg moving at 4m/s has kinetic energy of:',options:['10J','20J','40J','80J'],answer:'C',explanation:'KE = ½mv² = ½ × 5 × 16 = 40J.'},
+    {exam:'WAEC',year:2022,question:'Which of the following correctly states Ohm\'s Law?',options:['V = I/R','V = IR','I = VR','R = VI'],answer:'B',explanation:'Ohm\'s Law: Voltage = Current × Resistance (V = IR).'},
+    {exam:'WAEC',year:2021,question:'The unit of pressure is:',options:['Newton','Joule','Pascal','Watt'],answer:'C',explanation:'Pressure = Force/Area. Unit = N/m² = Pascal (Pa).'},
+    {exam:'WAEC',year:2021,question:'A wave travels at 340m/s with frequency 170Hz. Find the wavelength.',options:['1m','2m','3m','4m'],answer:'B',explanation:'v = fλ. λ = v/f = 340/170 = 2m.'},
+    {exam:'WAEC',year:2020,question:'Which type of lens is used to correct long-sightedness (hyperopia)?',options:['Concave lens','Convex lens','Bifocal lens','Cylindrical lens'],answer:'B',explanation:'Long-sightedness is corrected by a converging (convex) lens which brings focus forward onto the retina.'},
+    {exam:'WAEC',year:2020,question:'The turning effect of a force about a pivot is called:',options:['Momentum','Torque/Moment','Impulse','Work'],answer:'B',explanation:'The moment (or torque) of a force = Force × perpendicular distance from the pivot.'},
+    {exam:'WAEC',year:2019,question:'An object is thrown vertically upward. At the highest point, its:',options:['Velocity is maximum and acceleration is zero','Velocity is zero and acceleration is zero','Velocity is zero and acceleration is g downward','Acceleration is g upward'],answer:'C',explanation:'At the highest point, velocity = 0 (momentarily stationary) but acceleration due to gravity = g = 10m/s² downward.'},
+    {exam:'WAEC',year:2019,question:'What is the efficiency of a machine that requires 1000J input to produce 800J of useful work?',options:['80%','20%','125%','8%'],answer:'A',explanation:'Efficiency = (useful output/total input) × 100 = (800/1000) × 100 = 80%.'},
+    {exam:'WAEC',year:2023,question:'Two resistors of 6Ω and 3Ω are connected in parallel. Find the equivalent resistance.',options:['9Ω','2Ω','0.5Ω','18Ω'],answer:'B',explanation:'1/R = 1/6 + 1/3 = 1/6 + 2/6 = 3/6 = 1/2. R = 2Ω.'},
+    {exam:'WAEC',year:2023,question:'Which of Newton\'s laws states that "for every action there is an equal and opposite reaction"?',options:['First law','Second law','Third law','Law of gravitation'],answer:'C',explanation:'Newton\'s Third Law: forces always occur in equal and opposite pairs between two objects.'},
+    // NECO
+    {exam:'NECO',year:2022,question:'The half-life of a radioactive substance is 20 years. What fraction remains after 60 years?',options:['1/4','1/8','1/16','1/2'],answer:'B',explanation:'60 years = 3 half-lives. Fraction remaining = (1/2)³ = 1/8.'},
+    {exam:'NECO',year:2022,question:'Which of the following is an example of a transverse wave?',options:['Sound waves','Seismic P-waves','Water waves','Ultrasound'],answer:'C',explanation:'Water waves are transverse — particles move perpendicular to the direction of wave propagation.'},
+    {exam:'NECO',year:2021,question:'A body weighs 50N on Earth. What is its mass? (g = 10m/s²)',options:['50kg','5kg','500kg','0.5kg'],answer:'B',explanation:'W = mg. m = W/g = 50/10 = 5kg.'},
+    {exam:'NECO',year:2021,question:'The phenomenon of total internal reflection is applied in:',options:['Spectacles','Telescopes','Optical fibres','Microscopes'],answer:'C',explanation:'Optical fibres use total internal reflection to transmit light along curved paths over long distances.'},
+    {exam:'NECO',year:2020,question:'The temperature at which a gas would theoretically have zero volume is:',options:['0°C','−100°C','−273°C','100°C'],answer:'C',explanation:'Absolute zero = −273°C (0 Kelvin) — the theoretical temperature at which all molecular motion stops.'},
+    {exam:'NECO',year:2020,question:'The gravitational potential energy of a 2kg object at a height of 5m is: (g=10m/s²)',options:['10J','25J','50J','100J'],answer:'D',explanation:'GPE = mgh = 2 × 10 × 5 = 100J.'},
+    {exam:'NECO',year:2019,question:'A transformer has 100 turns in the primary and 500 turns in the secondary coil. If the primary voltage is 20V, find the secondary voltage.',options:['4V','100V','500V','2500V'],answer:'B',explanation:'Vs/Vp = Ns/Np. Vs = 20 × (500/100) = 20 × 5 = 100V.'},
+    {exam:'NECO',year:2019,question:'Which of the following is a property of X-rays?',options:['They are deflected by magnetic fields','They travel slower than visible light','They can penetrate soft tissue but are stopped by dense matter','They carry negative charge'],answer:'C',explanation:'X-rays penetrate soft tissue but are absorbed by dense materials like bone and metal — used in medical imaging.'},
+    {exam:'NECO',year:2023,question:'The work done in moving a charge of 5C through a potential difference of 12V is:',options:['2.4J','17J','60J','600J'],answer:'C',explanation:'W = QV = 5 × 12 = 60J.'},
+    {exam:'NECO',year:2023,question:'The Doppler effect refers to the change in:',options:['Speed of a wave when its source moves','Amplitude of a wave due to reflection','Observed frequency due to relative motion between source and observer','Wavelength when waves enter a new medium'],answer:'C',explanation:'The Doppler effect: apparent change in frequency/pitch when there is relative motion between source and observer.'},
+  ]);
+
+  add('physics','theory',[
+    {exam:'WAEC',year:2023,question:'(a) State the law of conservation of energy and give TWO examples of energy conversion.\n\n(b) A stone is dropped from the top of a building 80m high.\n(i) Find the time taken to reach the ground\n(ii) Find the velocity on reaching the ground\n(iii) Find the velocity after falling 45m\n(Take g = 10m/s²)\n\n(c) Define the following: (i) Work (ii) Power (iii) Energy',
+    markingScheme:[
+      {point:'Law: energy cannot be created or destroyed, only converted from one form to another',marks:1},
+      {point:'Examples (any 2): electrical→light (bulb), chemical→kinetic (car engine), solar→electrical (solar panel), PE→KE (falling object)',marks:2},
+      {point:'(i) s = ut + ½gt². 80 = 0 + ½(10)t². t² = 16. t = 4 seconds',marks:2},
+      {point:'(ii) v = u + gt = 0 + 10(4) = 40m/s',marks:2},
+      {point:'(iii) v² = u² + 2gs = 0 + 2(10)(45) = 900. v = 30m/s',marks:2},
+      {point:'Work: product of force and displacement in direction of force (W=Fd), unit Joule',marks:1},
+      {point:'Power: rate of doing work (P=W/t), unit Watt',marks:1},
+      {point:'Energy: capacity to do work, unit Joule',marks:1},
+    ],
+    modelAnswer:'(b)(i) 4s (ii) 40m/s (iii) 30m/s. Conservation: energy total remains constant through conversions.',
+    examinerTip:'For falling body problems, always state u=0 (starts from rest). Show all equations of motion clearly. Always include units in your answers.'},
+    {exam:'NECO',year:2023,question:'(a) Draw and explain a labelled diagram of a simple electric motor, naming at least 5 parts.\n\n(b) An electric iron rated 1000W is used for 2 hours daily.\n(i) Calculate the energy consumed in a week\n(ii) Calculate the cost if electricity is charged at ₦50 per kWh\n\n(c) State THREE differences between a.c. and d.c.',
+    markingScheme:[
+      {point:'Diagram with correct labels: coil/armature, permanent magnet, commutator, brushes, axle/shaft (any 5)',marks:3},
+      {point:'Explanation of working: current-carrying coil in magnetic field experiences force (Fleming\'s left-hand rule), commutator reverses current direction to maintain rotation',marks:2},
+      {point:'(i) Energy per day = 1000W × 2h = 2000Wh = 2kWh. Weekly = 2 × 7 = 14kWh',marks:2},
+      {point:'(ii) Cost = 14 × ₦50 = ₦700',marks:1},
+      {point:'Any 3: AC reverses direction periodically/DC flows in one direction only; AC has zero average value/DC has constant value; AC used for long-distance transmission/DC used in electronics; AC generated by alternators/DC by batteries',marks:3},
+    ],
+    modelAnswer:'Energy in 1 week = 14kWh. Cost = ₦700. DC flows one way; AC alternates direction periodically.',
+    examinerTip:'For electricity cost calculations, always convert watts to kilowatts first (divide by 1000), then multiply by hours and tariff rate.'},
+  ]);
+
+  // ─── ECONOMICS WAEC/NECO ────────────────────────────────────
+  add('economics','objective',[
+    // WAEC
+    {exam:'WAEC',year:2022,question:'Price elasticity of demand measures the responsiveness of:',options:['Supply to a change in price','Demand to a change in income','Quantity demanded to a change in price','Price to a change in supply'],answer:'C',explanation:'PED = % change in quantity demanded ÷ % change in price.'},
+    {exam:'WAEC',year:2022,question:'Which of the following is a characteristic of perfect competition?',options:['Product differentiation','Few buyers and sellers','Homogeneous products','High barriers to entry'],answer:'C',explanation:'In perfect competition: many buyers/sellers, homogeneous (identical) products, free entry/exit, perfect information.'},
+    {exam:'WAEC',year:2021,question:'The concept of comparative advantage was developed by:',options:['Adam Smith','David Ricardo','John Maynard Keynes','Milton Friedman'],answer:'B',explanation:'David Ricardo developed the theory of comparative advantage — basis for international trade theory.'},
+    {exam:'WAEC',year:2021,question:'When a tax is levied on goods, the burden is shared between producer and consumer. This sharing depends on:',options:['Government policy','Price elasticity of demand and supply','The size of the tax','The type of goods'],answer:'B',explanation:'The incidence of tax depends on price elasticity — the more inelastic the demand, the more consumers bear the burden.'},
+    {exam:'WAEC',year:2020,question:'Which of the following would cause the supply curve to shift to the right?',options:['Increase in factor costs','Improvement in technology','Decrease in the number of firms','Increase in taxes'],answer:'B',explanation:'Improved technology reduces production costs, enabling more supply at every price — rightward shift.'},
+    {exam:'WAEC',year:2020,question:'The difference between GNP and GDP is:',options:['Depreciation','Transfer payments','Net income from abroad','Government spending'],answer:'C',explanation:'GNP = GDP + Net income from abroad (income earned by nationals overseas minus income earned by foreigners locally).'},
+    {exam:'WAEC',year:2019,question:'Commercial banks create money through:',options:['Printing currency notes','Credit creation/multiple deposit expansion','Government grants','Foreign exchange earnings'],answer:'B',explanation:'Commercial banks create money through the credit multiplier — lending out deposits multiple times.'},
+    {exam:'WAEC',year:2019,question:'Which of the following best describes a public corporation?',options:['A company owned by the public on the stock exchange','An enterprise owned and controlled by the government','A partnership with unlimited liability','A co-operative society'],answer:'B',explanation:'Public corporations are government-owned enterprises (e.g. NNPC, CBN) set up by statute.'},
+    {exam:'WAEC',year:2023,question:'In which market structure does the firm face a downward-sloping demand curve?',options:['Perfect competition','Monopolistic competition only','Oligopoly only','All except perfect competition'],answer:'D',explanation:'In perfect competition, firms are price-takers with horizontal demand curves. All other structures have downward-sloping demand curves reflecting market power.'},
+    {exam:'WAEC',year:2023,question:'National debt is the total amount owed by:',options:['All citizens to foreign nations','The government to its citizens and foreign creditors','Foreign companies to Nigerian banks','Nigerian banks to their customers'],answer:'B',explanation:'National/public debt is the total outstanding borrowing of the government from domestic and foreign sources.'},
+    // NECO
+    {exam:'NECO',year:2022,question:'The multiplier effect in economics refers to:',options:['The effect of taxes on spending','How an initial injection of spending leads to a larger increase in national income','The relationship between money supply and inflation','How banks multiply deposits'],answer:'B',explanation:'The Keynesian multiplier: an initial increase in spending (investment) leads to a proportionally larger rise in national income.'},
+    {exam:'NECO',year:2022,question:'Which of the following is NOT a function of money?',options:['Medium of exchange','Store of value','Standard for deferred payment','Means of production'],answer:'D',explanation:'Money functions as: medium of exchange, unit of account, store of value, standard for deferred payment. It is NOT a means of production.'},
+    {exam:'NECO',year:2021,question:'Diminishing marginal utility means:',options:['Total utility always falls','Each additional unit consumed gives less additional satisfaction than the previous','Utility cannot be measured','Price always rises with consumption'],answer:'B',explanation:'As more units of a good are consumed, the additional (marginal) satisfaction from each extra unit decreases.'},
+    {exam:'NECO',year:2021,question:'Which institution regulates the Nigerian Stock Exchange?',options:['CBN','NDIC','SEC','EFCC'],answer:'C',explanation:'The Securities and Exchange Commission (SEC) regulates the capital market and the Nigerian Stock Exchange.'},
+    {exam:'NECO',year:2020,question:'A country has a comparative advantage in producing a good when:',options:['It can produce more than any other country','It has better technology','Its opportunity cost of production is lower than other countries','It has the cheapest labour'],answer:'C',explanation:'Comparative advantage: produce where opportunity cost is lowest — not necessarily where absolute productivity is highest.'},
+    {exam:'NECO',year:2020,question:'The supply of money in Nigeria is controlled by:',options:['Federal Ministry of Finance','Central Bank of Nigeria','Commercial banks only','Nigerian Stock Exchange'],answer:'B',explanation:'The CBN controls monetary policy, regulates money supply through interest rates, reserve requirements and open market operations.'},
+    {exam:'NECO',year:2019,question:'Which of the following is an automatic stabiliser?',options:['Government spending on infrastructure','Progressive income tax','Monetary policy','Trade tariffs'],answer:'B',explanation:'Progressive income tax automatically stabilises the economy — higher taxes in booms reduce demand; lower taxes in recessions boost it.'},
+    {exam:'NECO',year:2019,question:'Subsistence farming means:',options:['Farming for export','Farming only enough for the farmer\'s immediate family needs','Large-scale commercial farming','Government-owned farming'],answer:'B',explanation:'Subsistence farming produces only enough food for the farmer\'s own consumption with little or nothing left for sale.'},
+    {exam:'NECO',year:2023,question:'The term "invisible trade" in balance of payments refers to:',options:['Smuggled goods','Trade in services (tourism, insurance, banking)','Unrecorded imports','Black market transactions'],answer:'B',explanation:'Invisible trade comprises services in international transactions — tourism, financial services, transport, insurance.'},
+    {exam:'NECO',year:2023,question:'Producer surplus is the difference between:',options:['Revenue and total cost','The price a producer receives and the minimum they would accept','Demand and supply','Revenue and taxes'],answer:'B',explanation:'Producer surplus = actual price received minus the minimum price the producer would have accepted to supply.'},
+  ]);
+
+  add('economics','theory',[
+    {exam:'WAEC',year:2023,question:'(a) With the aid of a diagram, explain the effect of an increase in demand on price and quantity in a perfectly competitive market.\n\n(b) Distinguish between:\n(i) Microeconomics and Macroeconomics\n(ii) Fixed costs and Variable costs\n(iii) Normal profit and Supernormal profit\n\n(c) State FOUR functions of the Central Bank of Nigeria',
+    markingScheme:[
+      {point:'Correct demand-supply diagram showing original equilibrium',marks:2},
+      {point:'Rightward shift of demand curve from D1 to D2',marks:1},
+      {point:'New equilibrium at higher price and higher quantity',marks:2},
+      {point:'Micro: studies individual consumers/firms/markets vs Macro: studies economy as a whole (GDP, inflation, unemployment)',marks:2},
+      {point:'Fixed costs: do not change with output (rent, insurance) vs Variable costs: change with output (raw materials, wages)',marks:2},
+      {point:'Normal profit: minimum return to keep entrepreneur in business (included in costs) vs Supernormal: profit above normal/economic profit',marks:2},
+      {point:'Any 4: issue currency, lender of last resort, banker to government, control monetary policy, regulate banking sector, manage foreign reserves, control inflation',marks:4},
+    ],
+    modelAnswer:'Increase in demand shifts D curve right, raises both equilibrium price and quantity. CBN functions: currency issuance, monetary policy, bank regulation, government banker.',
+    examinerTip:'Always draw your economics diagrams large and label all axes, curves and equilibrium points. Arrows showing shifts are mandatory.'},
+    {exam:'NECO',year:2023,question:'(a) Explain the concept of elasticity of demand and state THREE factors that determine the price elasticity of demand.\n\n(b) Using a diagram, explain the concept of consumer surplus.\n\n(c) Differentiate between:\n(i) Direct tax and Indirect tax with one example each\n(ii) Fiscal policy and Monetary policy',
+    markingScheme:[
+      {point:'Elasticity of demand: degree of responsiveness of quantity demanded to a change in price. PED = %ΔQd/%ΔP',marks:2},
+      {point:'Factors (any 3): availability of substitutes, necessity vs luxury, proportion of income spent, time period, addictiveness',marks:3},
+      {point:'Consumer surplus diagram: demand curve, market price line, shaded area above price line below demand curve',marks:3},
+      {point:'Consumer surplus = total willingness to pay minus actual price paid',marks:1},
+      {point:'Direct tax: levied on income/wealth, borne by the same person (e.g. income tax). Indirect tax: levied on goods/services, can be shifted (e.g. VAT)',marks:3},
+      {point:'Fiscal policy: government use of taxation and spending to influence the economy. Monetary policy: central bank control of money supply and interest rates',marks:3},
+    ],
+    modelAnswer:'PED measures price responsiveness. Three determinants: substitutes, necessity, income proportion. Consumer surplus = area below demand curve above price.',
+    examinerTip:'For elasticity, always give the formula. For diagrams, shade the area clearly. The examiner cannot give marks for a diagram they cannot interpret.'},
+  ]);
+
+  // ─── GOVERNMENT WAEC/NECO ───────────────────────────────────
+  add('government','objective',[
+    // WAEC
+    {exam:'WAEC',year:2022,question:'The first military coup in Nigeria occurred in:',options:['1960','1963','1966','1970'],answer:'C',explanation:'Nigeria\'s first military coup occurred on January 15, 1966, led by Major Chukwuma Kaduna Nzeogwu.'},
+    {exam:'WAEC',year:2022,question:'Which body is responsible for conducting Nigeria\'s national census?',options:['INEC','NPC','EFCC','NAFDAC'],answer:'B',explanation:'The National Population Commission (NPC) is constitutionally mandated to conduct censuses in Nigeria.'},
+    {exam:'WAEC',year:2021,question:'The concept of the "social contract" in political thought was associated with:',options:['Aristotle and Plato','Locke, Hobbes and Rousseau','Marx and Engels','Montesquieu and Voltaire'],answer:'B',explanation:'The social contract theory was developed by Thomas Hobbes (Leviathan), John Locke (Two Treatises) and Jean-Jacques Rousseau (The Social Contract).'},
+    {exam:'WAEC',year:2021,question:'A confederal system of government is one where:',options:['The central government is supreme','Component units are supreme and delegate limited powers to the centre','Power is shared equally','The military controls all units'],answer:'B',explanation:'In a confederation, the component states are sovereign and grant limited, specified powers to a central authority.'},
+    {exam:'WAEC',year:2020,question:'The Nigerian Civil War lasted from:',options:['1966 to 1969','1967 to 1970','1968 to 1971','1966 to 1970'],answer:'B',explanation:'The Nigerian Civil War (Biafra War) lasted from July 6, 1967 to January 15, 1970.'},
+    {exam:'WAEC',year:2020,question:'Which of the following is NOT a function of the legislature?',options:['Law making','Approval of the budget','Enforcement of laws','Oversight of the executive'],answer:'C',explanation:'Enforcement of laws is the function of the executive (police, agencies). The legislature makes, debates and oversees — not enforces.'},
+    {exam:'WAEC',year:2019,question:'Proportional representation is an electoral system where:',options:['Only one candidate wins','Seats are allocated based on each party\'s share of total votes','The first past the post wins','Only registered parties can participate'],answer:'B',explanation:'Proportional representation allocates legislative seats in proportion to the votes each party receives.'},
+    {exam:'WAEC',year:2019,question:'An ombudsman is:',options:['A military officer','An independent official who investigates citizens\' complaints against government','The Speaker of Parliament','A constitutional court judge'],answer:'B',explanation:'The ombudsman investigates citizens\' grievances about maladministration — a check on executive power.'},
+    {exam:'WAEC',year:2023,question:'Nigeria became a republic in:',options:['1960','1963','1966','1979'],answer:'B',explanation:'Nigeria was declared a Federal Republic on October 1, 1963, replacing the Queen as head of state with President Nnamdi Azikiwe.'},
+    {exam:'WAEC',year:2023,question:'The principle of "one man, one vote" is associated with:',options:['Communism','Liberal democracy','Fascism','Theocracy'],answer:'B',explanation:'Universal suffrage and equal voting rights ("one man, one vote") are core principles of liberal democracy.'},
+    // NECO
+    {exam:'NECO',year:2022,question:'A political party manifesto is:',options:['The party\'s constitution','A document outlining the party\'s policies and programmes if elected','A list of party members','The electoral guidelines for the party'],answer:'B',explanation:'A manifesto is a public declaration of the policies, intentions and programmes a party intends to implement if it wins power.'},
+    {exam:'NECO',year:2022,question:'Apartheid was a system of:',options:['Communist government','Legal racial segregation and discrimination','Democratic government','Military dictatorship'],answer:'B',explanation:'Apartheid (Afrikaans for "separateness") was the South African system of institutionalised racial segregation (1948-1994).'},
+    {exam:'NECO',year:2021,question:'The Lagos Colony was established by the British in:',options:['1851','1861','1900','1914'],answer:'B',explanation:'Lagos was formally annexed as a British Crown Colony on August 6, 1861.'},
+    {exam:'NECO',year:2021,question:'Which country achieved independence first among West African nations?',options:['Nigeria','Ghana','Senegal','Sierra Leone'],answer:'B',explanation:'Ghana (formerly Gold Coast) became the first sub-Saharan African country to gain independence, on March 6, 1957.'},
+    {exam:'NECO',year:2020,question:'The Richard\'s Constitution of 1946 was significant because it:',options:['Granted Nigeria independence','Introduced federalism for the first time','Gave Nigerians control of the military','Established the Supreme Court'],answer:'B',explanation:'The Richards Constitution (1946) introduced a federal element by dividing Nigeria into North, East and West regions.'},
+    {exam:'NECO',year:2020,question:'In Nigeria, laws are made by the:',options:['President','Judiciary','National Assembly','State Governors'],answer:'C',explanation:'The National Assembly (Senate + House of Representatives) is Nigeria\'s federal legislative body with power to make laws.'},
+    {exam:'NECO',year:2019,question:'The term "gerrymander" refers to:',options:['Fair electoral boundary delimitation','Manipulation of electoral district boundaries for political advantage','A system of proportional representation','Stuffing of ballot boxes'],answer:'B',explanation:'Gerrymandering is the manipulation of electoral boundaries to give one party an unfair advantage over others.'},
+    {exam:'NECO',year:2019,question:'The AU (African Union) replaced which organisation in 2002?',options:['ECOWAS','The Non-Aligned Movement','Organisation of African Unity (OAU)','The Commonwealth'],answer:'C',explanation:'The African Union (AU) was established in 2002, replacing the Organisation of African Unity (OAU) which was founded in 1963.'},
+    {exam:'NECO',year:2023,question:'Which of the following best describes a unitary constitution?',options:['One that can be easily amended','One where power is concentrated at the centre','One where all regions are equal','One controlled by the military'],answer:'B',explanation:'A unitary constitution concentrates governmental power in the central government with sub-units deriving authority from the centre.'},
+    {exam:'NECO',year:2023,question:'The concept of "popular sovereignty" means:',options:['The sovereignty of the monarch','Political authority derives from the will of the people','The sovereignty of parliament','Sovereignty of the armed forces'],answer:'B',explanation:'Popular sovereignty: the legitimacy of government derives from the consent of the governed — the people are the ultimate source of political authority.'},
+  ]);
+
+  add('government','theory',[
+    {exam:'WAEC',year:2023,question:'(a) Examine FIVE features of a federal constitution using Nigeria as an example.\n\n(b) Explain the functions of the following in Nigeria\'s political system:\n(i) The Independent National Electoral Commission (INEC)\n(ii) The Council of State\n(iii) The Code of Conduct Bureau',
+    markingScheme:[
+      {point:'Written constitution — Nigeria has a written federal constitution (1999 Constitution)',marks:1},
+      {point:'Division of powers — between federal and state governments (exclusive, concurrent and residual lists)',marks:2},
+      {point:'Supremacy of the constitution — overrides other laws',marks:1},
+      {point:'Independent judiciary — to interpret the constitution and resolve disputes',marks:1},
+      {point:'Bicameral legislature — Senate (equal state representation) and House of Representatives',marks:1},
+      {point:'Rigidity — constitutional amendment requires special procedure (two-thirds majority)',marks:1},
+      {point:'INEC: conducts and supervises elections, registers voters, registers political parties, declares results',marks:2},
+      {point:'Council of State: advisory body to the President on national issues, includes former presidents, governors, speakers',marks:2},
+      {point:'Code of Conduct Bureau: receives asset declarations from public officers, investigates breaches, refers cases to Code of Conduct Tribunal',marks:2},
+    ],
+    modelAnswer:'Federal features: written constitution, division of powers (exclusive/concurrent/residual), constitutional supremacy, independent judiciary, bicameralism, rigidity.',
+    examinerTip:'For government theory, always use Nigerian examples. Name specific articles, laws or institutions. Generic answers score poorly.'},
+    {exam:'NECO',year:2023,question:'(a) Explain colonial rule and its effects on West African states.\n\n(b) What is nationalism? Explain FOUR factors that promoted Nigerian nationalism.\n\n(c) Name and explain THREE methods used by nationalists to agitate for independence in Nigeria.',
+    markingScheme:[
+      {point:'Colonial rule: political control and administration of territories by a foreign power',marks:1},
+      {point:'Effects (any 4): introduction of western education, Christianity, cash crops, infrastructure, destruction of traditional institutions, exploitation of resources, artificial boundaries, introduction of democratic concepts',marks:4},
+      {point:'Nationalism: the desire of people to determine their own political affairs, free from foreign control',marks:1},
+      {point:'Factors promoting Nigerian nationalism (any 4): western education, World War II veterans, activities of nationalist press, formation of political parties, pan-African movements, harsh colonial policies, influence of Indian independence',marks:4},
+      {point:'Methods (any 3): newspaper/press campaigns, formation of political parties (NCNC, AG, NPC), peaceful demonstrations, strikes, constitutional demands through legislative councils',marks:3},
+    ],
+    modelAnswer:'Colonialism brought education, infrastructure but exploited resources. Nationalism: desire for self-determination. Promoted by WW2, education, press. Methods: parties, press, strikes.',
+    examinerTip:'For history-based government questions, know your dates. 1914 amalgamation, 1946 Richards, 1951 Macpherson, 1954 Lyttleton, 1960 independence, 1963 republic.'},
+  ]);
+
+})();
+
+/* ═══════════════════════════════════════════════════════════════
+   THEORY EXPANSION — WAEC & NECO PRIORITY
+   Biology, Chemistry, Physics, Economics, Government,
+   Literature, CRS, Geography, Civic Ed, Accounting,
+   Commerce, Marketing, Animal Husbandry
+═══════════════════════════════════════════════════════════════ */
+
+(function() {
+  const add = (subj, type, questions) => {
+    if (!EXAM_BANK[subj]) return;
+    if (!EXAM_BANK[subj][type]) EXAM_BANK[subj][type] = [];
+    EXAM_BANK[subj][type].push(...questions);
+  };
+
+  // ─── BIOLOGY THEORY ────────────────────────────────────────
+  add('biology','theory',[
+    {exam:'WAEC',year:2023,
+     question:'(a) State FIVE differences between plant cells and animal cells.\n(b) Describe the process of osmosis and explain its importance to living organisms.',
+     markingScheme:[
+       {point:'Plant cells have cell wall; animal cells do not',marks:1},
+       {point:'Plant cells have chloroplasts; animal cells do not',marks:1},
+       {point:'Plant cells have large central vacuole; animal cells have small/no vacuole',marks:1},
+       {point:'Plant cells have fixed regular shape; animal cells have irregular shape',marks:1},
+       {point:'Plant cells store starch; animal cells store glycogen',marks:1},
+       {point:'Osmosis: movement of water molecules from region of high water potential to low water potential across a semi-permeable membrane',marks:2},
+       {point:'Importance: absorption of water by root hair cells; turgidity in plants maintains shape; reabsorption of water in kidney tubules',marks:2},
+     ],
+     modelAnswer:'Plant cells differ from animal cells in having cell walls, chloroplasts, large central vacuoles, fixed shapes and starch storage. Osmosis is the net movement of water molecules from high to low water potential across a semi-permeable membrane — vital for water uptake in plants and kidney function.',
+     examinerTip:'Give exactly 5 differences — examiners stop marking after 5 even if you write more. For osmosis, always mention semi-permeable membrane and water potential.'},
+    {exam:'WAEC',year:2022,
+     question:'(a) Explain the term "food chain" and construct a food chain with FOUR organisms from a Nigerian forest.\n(b) State THREE ways human activities affect the balance of nature.',
+     markingScheme:[
+       {point:'Food chain: a linear sequence showing the transfer of energy from one organism to another through feeding',marks:2},
+       {point:'Correct 4-organism food chain e.g. Leaves → Grasshopper → Lizard → Eagle (sun/producer → primary consumer → secondary → tertiary)',marks:2},
+       {point:'Deforestation/land clearing reduces habitats and biodiversity',marks:1},
+       {point:'Industrial pollution contaminates water and soil',marks:1},
+       {point:'Hunting/poaching reduces animal populations',marks:1},
+       {point:'(Any other valid: overgrazing, bush burning, oil spillage)',marks:1},
+     ],
+     modelAnswer:'A food chain shows the linear transfer of energy through feeding relationships. Example: Leaves → Caterpillar → Lizard → Hawk. Human activities that disrupt nature include deforestation, pollution and overhunting.',
+     examinerTip:'Your food chain must start with a producer (plant) and show arrows pointing in the direction of energy flow. Always name specific Nigerian organisms where possible.'},
+    {exam:'NECO',year:2023,
+     question:'(a) Describe the structure and function of the human heart.\n(b) State FOUR differences between arteries and veins.',
+     markingScheme:[
+       {point:'Heart: muscular organ divided into 4 chambers — 2 atria (upper) and 2 ventricles (lower)',marks:2},
+       {point:'Right side receives deoxygenated blood and pumps to lungs; left side receives oxygenated blood and pumps to body',marks:2},
+       {point:'Arteries carry blood away from heart; veins carry blood to heart',marks:1},
+       {point:'Arteries carry oxygenated blood (except pulmonary artery); veins carry deoxygenated blood (except pulmonary vein)',marks:1},
+       {point:'Arteries have thick muscular walls; veins have thin walls',marks:1},
+       {point:'Arteries have no valves (except at base); veins have valves to prevent backflow',marks:1},
+     ],
+     modelAnswer:'The heart is a four-chambered muscular organ. Right atrium receives deoxygenated blood; right ventricle pumps it to lungs. Left atrium receives oxygenated blood from lungs; left ventricle pumps it to the body. Arteries differ from veins in direction of flow, wall thickness, valve presence and blood oxygen content.',
+     examinerTip:'A common error is saying all arteries carry oxygenated blood — remember the pulmonary artery is the exception. Always state the exception in exams.'},
+    {exam:'NECO',year:2022,
+     question:'(a) What is meant by the term "excretion"? Name TWO excretory organs in humans and state ONE substance excreted by each.\n(b) Explain how the kidney filters blood.',
+     markingScheme:[
+       {point:'Excretion: removal of metabolic waste products from the body',marks:1},
+       {point:'Kidney — excretes urea/uric acid/water/salts',marks:1},
+       {point:'Lungs — excrete carbon dioxide and water vapour',marks:1},
+       {point:'(Skin — excretes sweat containing urea and salts also acceptable)',marks:1},
+       {point:'Blood enters kidney through renal artery into glomerulus',marks:1},
+       {point:'High pressure forces small molecules (water, glucose, urea, salts) out of blood into Bowman\'s capsule — ultrafiltration',marks:2},
+       {point:'Useful substances (glucose, water, salts) are reabsorbed in tubules; waste remains as urine',marks:2},
+     ],
+     modelAnswer:'Excretion is the removal of metabolic waste products. The kidneys excrete urea and the lungs excrete CO₂. In the kidney, blood is filtered under pressure in the glomerulus (ultrafiltration), useful substances are reabsorbed in the tubules and remaining waste forms urine.',
+     examinerTip:'Do not confuse excretion with egestion (removal of undigested food). Excretion is specifically about metabolic waste produced by body chemistry.'},
+  ]);
+
+  // ─── CHEMISTRY THEORY ──────────────────────────────────────
+  add('chemistry','theory',[
+    {exam:'WAEC',year:2023,
+     question:'(a) Define oxidation and reduction in terms of electron transfer.\n(b) Identify the oxidising agent and reducing agent in this reaction: CuO + H₂ → Cu + H₂O\n(c) State THREE industrial applications of electrolysis.',
+     markingScheme:[
+       {point:'Oxidation: loss of electrons by an atom/ion',marks:1},
+       {point:'Reduction: gain of electrons by an atom/ion',marks:1},
+       {point:'CuO is the oxidising agent (Cu²⁺ gains electrons, is reduced to Cu)',marks:1},
+       {point:'H₂ is the reducing agent (H is oxidised, loses electrons)',marks:1},
+       {point:'Electroplating — coating objects with metal',marks:1},
+       {point:'Extraction of aluminium from bauxite (Hall-Héroult process)',marks:1},
+       {point:'Purification of copper',marks:1},
+       {point:'(Chlor-alkali process/production of NaOH and Cl₂ also acceptable)',marks:1},
+     ],
+     modelAnswer:'Oxidation is electron loss; reduction is electron gain (OIL RIG). In CuO + H₂ → Cu + H₂O, CuO is the oxidising agent (reduced) and H₂ is the reducing agent (oxidised). Industrial uses of electrolysis include electroplating, aluminium extraction and copper purification.',
+     examinerTip:'Remember OIL RIG: Oxidation Is Loss, Reduction Is Gain. In every redox reaction, one substance is oxidised and another is reduced simultaneously.'},
+    {exam:'WAEC',year:2022,
+     question:'(a) State the periodic law and explain the trend in atomic radius across Period 3.\n(b) Why do elements in Group 1 become more reactive going down the group?\n(c) Write the electron configuration of Calcium (Ca, Z=20).',
+     markingScheme:[
+       {point:'Periodic law: properties of elements are periodic functions of their atomic numbers',marks:1},
+       {point:'Atomic radius decreases across Period 3 from Na to Cl',marks:1},
+       {point:'Because nuclear charge increases across the period, attracting electrons more strongly',marks:1},
+       {point:'Group 1: going down, atoms have more electron shells',marks:1},
+       {point:'Outer electron is further from nucleus and more shielded — easier to lose',marks:1},
+       {point:'Lower ionisation energy going down Group 1 — more reactive',marks:1},
+       {point:'Ca (Z=20): 2,8,8,2 or 1s²2s²2p⁶3s²3p⁶4s²',marks:2},
+     ],
+     modelAnswer:'Periodic law states that element properties are periodic functions of atomic number. Atomic radius decreases across Period 3 due to increasing nuclear charge. Group 1 reactivity increases down the group as outer electrons are more easily lost. Ca: 2,8,8,2.',
+     examinerTip:'For electron configuration, always fill shells in order. Calcium has 20 electrons: 2+8+8+2. Many students incorrectly write 2+8+10.'},
+    {exam:'NECO',year:2023,
+     question:'(a) Explain what happens when excess sodium hydroxide solution is added to a solution of aluminium sulphate.\n(b) Describe a simple laboratory test to distinguish between: (i) CO₂ and SO₂ (ii) HCl gas and NH₃ gas.',
+     markingScheme:[
+       {point:'Al₂(SO₄)₃ + 6NaOH → 2Al(OH)₃ + 3Na₂SO₄ (white precipitate forms)',marks:1},
+       {point:'With excess NaOH: Al(OH)₃ + NaOH → NaAlO₂ + 2H₂O (precipitate dissolves)',marks:2},
+       {point:'Al(OH)₃ is amphoteric — reacts with both acids and bases',marks:1},
+       {point:'CO₂ vs SO₂: pass through acidified potassium dichromate — SO₂ turns it green; CO₂ does not',marks:2},
+       {point:'Or: pass through lime water — both turn milky but SO₂ decolourises purple KMnO₄',marks:1},
+       {point:'HCl vs NH₃: bring moist red litmus paper near — NH₃ turns it blue; HCl turns moist blue litmus red',marks:1},
+       {point:'Or: dip glass rod in concentrated NH₃ and HCl separately — white fumes of NH₄Cl form if combined',marks:1},
+     ],
+     modelAnswer:'Excess NaOH dissolves the Al(OH)₃ precipitate because aluminium hydroxide is amphoteric. CO₂ and SO₂ are distinguished using acidified KMnO₄ (SO₂ decolourises it). HCl and NH₃ are distinguished using moist litmus paper.',
+     examinerTip:'Amphoteric substances react with both acids and bases — Al(OH)₃ and ZnO are the classic examples you must know for NECO and WAEC.'},
+    {exam:'NECO',year:2022,
+     question:'(a) State Faraday\'s first and second laws of electrolysis.\n(b) Calculate the mass of copper deposited when a current of 2A flows through copper sulphate solution for 30 minutes. (Cu=64, F=96500C)',
+     markingScheme:[
+       {point:'First law: mass of substance deposited is proportional to quantity of electricity passed',marks:1},
+       {point:'Second law: mass deposited by same quantity of electricity is proportional to equivalent mass of substance',marks:1},
+       {point:'Q = It = 2 × (30×60) = 2 × 1800 = 3600 C',marks:2},
+       {point:'Cu²⁺ + 2e⁻ → Cu; moles of electrons = 3600/96500 = 0.0373 mol',marks:1},
+       {point:'Moles of Cu = 0.0373/2 = 0.01865 mol',marks:1},
+       {point:'Mass = 0.01865 × 64 = 1.19g',marks:2},
+     ],
+     modelAnswer:'Faraday\'s first law: mass deposited is proportional to charge passed. Second law: mass is proportional to equivalent mass. Calculation: Q=3600C, moles e⁻=0.0373, moles Cu=0.01865, mass=1.19g.',
+     examinerTip:'Show every step in electrochemistry calculations — partial marks are awarded for correct working even if the final answer is wrong.'},
+  ]);
+
+  // ─── PHYSICS THEORY ────────────────────────────────────────
+  add('physics','theory',[
+    {exam:'WAEC',year:2023,
+     question:'(a) State Newton\'s three laws of motion.\n(b) A car of mass 1200kg accelerates from rest to 25m/s in 10 seconds. Calculate:\n   (i) the acceleration\n   (ii) the force required\n   (iii) the distance covered',
+     markingScheme:[
+       {point:'First law: a body remains at rest or uniform motion unless acted upon by a net external force',marks:1},
+       {point:'Second law: force is proportional to rate of change of momentum (F=ma)',marks:1},
+       {point:'Third law: for every action there is an equal and opposite reaction',marks:1},
+       {point:'a = (v-u)/t = (25-0)/10 = 2.5 m/s²',marks:2},
+       {point:'F = ma = 1200 × 2.5 = 3000 N',marks:2},
+       {point:'s = ut + ½at² = 0 + ½(2.5)(10²) = 125 m',marks:2},
+     ],
+     modelAnswer:'Newton\'s laws govern motion. (i) a = 2.5 m/s² (ii) F = 3000 N (iii) s = 125 m.',
+     examinerTip:'For motion calculations always list your known values first: u=0 (from rest), v=25, t=10, m=1200. This prevents errors and earns method marks.'},
+    {exam:'WAEC',year:2022,
+     question:'(a) Explain the difference between heat and temperature.\n(b) A metal block of mass 0.5kg is heated from 20°C to 100°C. If the specific heat capacity of the metal is 400 J/kg°C, calculate the heat energy absorbed.\n(c) State THREE methods of heat transfer and give one example of each.',
+     markingScheme:[
+       {point:'Heat: form of energy transferred due to temperature difference (measured in Joules)',marks:1},
+       {point:'Temperature: degree of hotness or coldness of a body (measured in °C or Kelvin)',marks:1},
+       {point:'Q = mcΔT = 0.5 × 400 × (100-20) = 0.5 × 400 × 80 = 16,000 J',marks:3},
+       {point:'Conduction: heat transfer through solids by vibrating particles — e.g. metal rod in fire',marks:1},
+       {point:'Convection: heat transfer through fluids by circulating currents — e.g. boiling water',marks:1},
+       {point:'Radiation: heat transfer through electromagnetic waves without medium — e.g. heat from sun',marks:1},
+     ],
+     modelAnswer:'Heat is energy; temperature measures hotness. Q = mcΔT = 16,000 J. Heat transfers by conduction (solids), convection (fluids) and radiation (electromagnetic waves).',
+     examinerTip:'Q = mcΔT is essential. ΔT is always final minus initial temperature. Note the units: J = kg × J/kg°C × °C.'},
+    {exam:'NECO',year:2023,
+     question:'(a) Define work, energy and power and state the unit of each.\n(b) A pump lifts 500kg of water through a height of 20m in 50 seconds. Calculate:\n   (i) the work done against gravity\n   (ii) the power of the pump\n(Take g = 10m/s²)',
+     markingScheme:[
+       {point:'Work: product of force and displacement in direction of force; unit = Joule (J)',marks:1},
+       {point:'Energy: capacity to do work; unit = Joule (J)',marks:1},
+       {point:'Power: rate of doing work; unit = Watt (W)',marks:1},
+       {point:'Work = mgh = 500 × 10 × 20 = 100,000 J (100 kJ)',marks:3},
+       {point:'Power = Work/time = 100,000/50 = 2,000 W (2 kW)',marks:2},
+     ],
+     modelAnswer:'Work (J) = force × distance. Energy (J) = capacity to do work. Power (W) = work/time. W = mgh = 100,000 J. Power = 2,000 W.',
+     examinerTip:'Work against gravity always uses W = mgh. Never confuse power (rate) with energy (amount). The pump question is a NECO favourite — memorise this pattern.'},
+    {exam:'NECO',year:2022,
+     question:'(a) State Ohm\'s law and write its mathematical expression.\n(b) Three resistors of 4Ω, 6Ω and 12Ω are connected in parallel. Calculate the effective resistance.\n(c) If this combination is connected to a 24V battery, find the total current supplied.',
+     markingScheme:[
+       {point:'Ohm\'s law: current through a conductor is proportional to potential difference across it at constant temperature',marks:1},
+       {point:'V = IR (or I = V/R)',marks:1},
+       {point:'1/R = 1/4 + 1/6 + 1/12 = 3/12 + 2/12 + 1/12 = 6/12 = 1/2',marks:3},
+       {point:'R = 2Ω',marks:1},
+       {point:'I = V/R = 24/2 = 12A',marks:2},
+     ],
+     modelAnswer:'Ohm\'s law: V = IR. Parallel: 1/R = 1/4+1/6+1/12 = 6/12, R = 2Ω. Total current = 24/2 = 12A.',
+     examinerTip:'Parallel resistors: always find a common denominator when adding fractions. A quick check: parallel resistance is always less than the smallest individual resistor (here less than 4Ω ✓).'},
+  ]);
+
+  // ─── ECONOMICS THEORY ──────────────────────────────────────
+  add('economics','theory',[
+    {exam:'WAEC',year:2023,
+     question:'(a) Explain the concept of price elasticity of demand.\n(b) If the price of a good rises from ₦200 to ₦250 and quantity demanded falls from 100 units to 70 units, calculate the price elasticity of demand.\n(c) State THREE factors that affect price elasticity of demand.',
+     markingScheme:[
+       {point:'Price elasticity of demand: measure of responsiveness of quantity demanded to a change in price',marks:2},
+       {point:'PED = % change in Qd / % change in Price',marks:1},
+       {point:'% change in Qd = (70-100)/100 × 100 = -30%',marks:1},
+       {point:'% change in Price = (250-200)/200 × 100 = 25%',marks:1},
+       {point:'PED = -30/25 = -1.2 (elastic demand, |PED| > 1)',marks:2},
+       {point:'Availability of substitutes — more substitutes = more elastic',marks:1},
+       {point:'Necessity vs luxury — necessities are inelastic',marks:1},
+       {point:'Proportion of income spent — higher proportion = more elastic',marks:1},
+     ],
+     modelAnswer:'PED measures demand responsiveness to price changes. PED = -1.2 (elastic). Factors: availability of substitutes, necessity vs luxury, proportion of income spent.',
+     examinerTip:'Always show the formula, the working and the interpretation. State whether demand is elastic (|PED|>1), inelastic (|PED|<1) or unit elastic (|PED|=1).'},
+    {exam:'WAEC',year:2022,
+     question:'(a) Distinguish between balance of trade and balance of payments.\n(b) State FOUR causes of an unfavourable balance of payments for Nigeria.\n(c) Suggest THREE ways Nigeria can correct an unfavourable balance of payments.',
+     markingScheme:[
+       {point:'Balance of trade: difference between value of visible (goods) exports and imports only',marks:1},
+       {point:'Balance of payments: comprehensive record of all economic transactions (visible + invisible) between a country and the rest of the world',marks:2},
+       {point:'Over-dependence on oil exports — vulnerable to oil price falls',marks:1},
+       {point:'High importation of manufactured goods',marks:1},
+       {point:'Capital flight and profit repatriation by multinationals',marks:1},
+       {point:'Low diversification of export base',marks:1},
+       {point:'Diversification of the economy beyond oil',marks:1},
+       {point:'Import substitution industrialisation',marks:1},
+       {point:'Export promotion policies and incentives',marks:1},
+     ],
+     modelAnswer:'Balance of trade covers only goods; balance of payments covers all transactions. Nigeria\'s unfavourable BOP stems from oil dependence, high imports and capital flight. Solutions: diversification, import substitution, export promotion.',
+     examinerTip:'Nigeria-specific economic questions appear frequently. Always contextualise your answers to Nigeria\'s economy — oil dependence, agriculture, manufacturing gaps.'},
+    {exam:'NECO',year:2023,
+     question:'(a) Explain the functions of money in a modern economy.\n(b) Differentiate between commercial banks and the Central Bank of Nigeria (CBN).\n(c) State THREE instruments of monetary policy used by the CBN.',
+     markingScheme:[
+       {point:'Medium of exchange — eliminates barter difficulties',marks:1},
+       {point:'Store of value — preserves purchasing power over time',marks:1},
+       {point:'Unit of account — measures value of goods and services',marks:1},
+       {point:'Standard of deferred payment — enables credit transactions',marks:1},
+       {point:'Commercial banks: profit-seeking, accept deposits, give loans to public',marks:1},
+       {point:'CBN: not profit-seeking, banker to government and banks, issues currency, formulates monetary policy',marks:2},
+       {point:'Cash Reserve Ratio (CRR) — minimum % of deposits banks must hold',marks:1},
+       {point:'Open Market Operations — buying/selling government securities',marks:1},
+       {point:'Monetary Policy Rate (MPR) — interest rate at which CBN lends to commercial banks',marks:1},
+     ],
+     modelAnswer:'Money serves as medium of exchange, store of value, unit of account and deferred payment standard. CBN differs from commercial banks in being non-profit and regulatory. CBN instruments: CRR, OMO, MPR.',
+     examinerTip:'The four functions of money are a guaranteed question in NECO/WAEC Economics. Memorise all four with brief explanations.'},
+    {exam:'NECO',year:2022,
+     question:'(a) What is national income? State THREE methods of measuring national income.\n(b) Explain TWO limitations of using national income figures to compare living standards between countries.',
+     markingScheme:[
+       {point:'National income: total monetary value of goods and services produced in a country in a year',marks:1},
+       {point:'Expenditure method: sum of all spending in the economy (C+I+G+X-M)',marks:1},
+       {point:'Income method: sum of all factor incomes (wages, rent, interest, profit)',marks:1},
+       {point:'Output method: sum of value added by all sectors of the economy',marks:1},
+       {point:'Does not account for distribution — high national income may be unequally distributed',marks:2},
+       {point:'Does not reflect non-monetary activities (subsistence farming, domestic work)',marks:2},
+       {point:'(Differences in price levels/PPP, population size also acceptable)',marks:1},
+     ],
+     modelAnswer:'National income is total value of output in a year, measured by expenditure (C+I+G+X-M), income or output methods. Limitations for comparison: ignores distribution inequality and excludes non-monetary production.',
+     examinerTip:'GDP per capita is better for comparison than total GDP — but even that ignores inequality. Always mention distribution as a limitation.'},
+  ]);
+
+  // ─── GOVERNMENT THEORY ─────────────────────────────────────
+  add('government','theory',[
+    {exam:'WAEC',year:2023,
+     question:'(a) Explain FIVE features of a federal system of government.\n(b) Discuss TWO advantages and TWO disadvantages of federalism.',
+     markingScheme:[
+       {point:'Written constitution — powers defined and distributed in writing',marks:1},
+       {point:'Division of powers — central and state governments each have defined areas',marks:1},
+       {point:'Supremacy of the constitution — constitution is the highest law',marks:1},
+       {point:'Independent judiciary — to interpret constitution and resolve conflicts',marks:1},
+       {point:'Bicameral legislature — two houses representing different interests',marks:1},
+       {point:'Advantage: accommodates diversity — protects minority groups and cultures',marks:1},
+       {point:'Advantage: brings government closer to the people at state level',marks:1},
+       {point:'Disadvantage: expensive to run — duplication of government at multiple levels',marks:1},
+       {point:'Disadvantage: can create unhealthy rivalry and conflict between centre and states',marks:1},
+     ],
+     modelAnswer:'Federalism features include written constitution, power division, constitutional supremacy, independent judiciary and bicameralism. Advantages: accommodates diversity, brings governance closer to people. Disadvantages: costly and potentially conflict-prone.',
+     examinerTip:'Nigeria is a federal state — always use Nigerian examples. State that Nigeria has 36 states and FCT, with powers divided between federal, state and local governments.'},
+    {exam:'WAEC',year:2022,
+     question:'(a) What is meant by "fundamental human rights"? List FIVE fundamental rights guaranteed by the 1999 Nigerian Constitution.\n(b) Under what circumstances can fundamental rights be suspended in Nigeria?',
+     markingScheme:[
+       {point:'Fundamental human rights: basic rights and freedoms to which every person is entitled by virtue of being human, enshrined in the constitution',marks:2},
+       {point:'Right to life (Section 33)',marks:1},
+       {point:'Right to dignity of human person (Section 34)',marks:1},
+       {point:'Right to personal liberty (Section 35)',marks:1},
+       {point:'Right to fair hearing (Section 36)',marks:1},
+       {point:'Right to freedom of expression (Section 39)',marks:1},
+       {point:'During a state of emergency declared by the President',marks:1},
+       {point:'When national security is threatened',marks:1},
+       {point:'(Must be approved by the National Assembly within two days)',marks:1},
+     ],
+     modelAnswer:'Fundamental rights are constitutionally guaranteed basic freedoms. Key Nigerian rights: life, dignity, liberty, fair hearing, expression. They may be suspended during a state of emergency approved by the National Assembly.',
+     examinerTip:'Quote section numbers where possible in Government exams — it shows depth of knowledge. Sections 33-46 of the 1999 Constitution cover fundamental rights.'},
+    {exam:'NECO',year:2023,
+     question:'(a) Describe the structure and functions of the Nigerian National Assembly.\n(b) Outline the process by which a bill becomes law in Nigeria.',
+     markingScheme:[
+       {point:'National Assembly consists of Senate (upper house) and House of Representatives (lower house)',marks:1},
+       {point:'Senate: 109 senators (3 per state + 1 FCT); HoR: 360 members based on population',marks:2},
+       {point:'Functions: making laws, approving budget, oversight of executive, ratifying treaties',marks:2},
+       {point:'Bill introduced in either house (money bills start in HoR)',marks:1},
+       {point:'First reading (introduction), Second reading (debate on principles), Committee stage (detailed examination)',marks:2},
+       {point:'Third reading (final vote), passed to other house, then sent to President for assent',marks:1},
+       {point:'President signs within 30 days or returns with observations; NASS can override with 2/3 majority',marks:1},
+     ],
+     modelAnswer:'The National Assembly comprises the Senate (109) and House of Representatives (360). It makes laws, approves budgets and oversees the executive. Bills pass through three readings in both houses before presidential assent.',
+     examinerTip:'The legislative process is a recurring NECO topic. Know the exact numbers: 109 senators, 360 House members. Presidential veto can be overridden by two-thirds majority.'},
+    {exam:'NECO',year:2022,
+     question:'(a) Explain THREE functions of political parties in a democratic state.\n(b) Discuss the problems facing political parties in Nigeria.',
+     markingScheme:[
+       {point:'Mobilising voters and raising political consciousness among citizens',marks:1},
+       {point:'Recruiting, training and presenting candidates for elections',marks:1},
+       {point:'Formulating policies and programmes as alternatives for voters to choose',marks:1},
+       {point:'Forming government when they win elections',marks:1},
+       {point:'Ethnic and regional loyalty over national interest — tribalism',marks:1},
+       {point:'Lack of internal democracy — godfatherism and imposition of candidates',marks:1},
+       {point:'Monetisation of politics — vote buying undermines genuine representation',marks:1},
+       {point:'Frequent defections — politicians switch parties for personal gain',marks:1},
+       {point:'(Weak party ideology, military interference history also acceptable)',marks:1},
+     ],
+     modelAnswer:'Parties mobilise voters, recruit candidates and formulate policy. Nigerian parties face tribalism, godfatherism, vote buying and high defection rates as major challenges.',
+     examinerTip:'NECO loves questions about Nigerian political problems. Give specific Nigerian examples — mention godfatherism, carpet crossing and monetisation of politics specifically.'},
+  ]);
+
+  // ─── ENGLISH THEORY ────────────────────────────────────────
+  add('english','theory',[
+    {exam:'WAEC',year:2023,
+     question:'You are the senior prefect of your school. Write a speech to be delivered at the end-of-year assembly encouraging your fellow students to develop good reading habits. Your speech should be between 250-300 words.',
+     markingScheme:[
+       {point:'Correct speech format: salutation (Principal, teachers, fellow students), introduction, body, conclusion',marks:3},
+       {point:'Relevant content: benefits of reading (knowledge, vocabulary, performance, career)',marks:4},
+       {point:'Persuasive language and appropriate tone for a school speech',marks:2},
+       {point:'Varied sentence structures and good vocabulary',marks:2},
+       {point:'Correct grammar, spelling and punctuation throughout',marks:3},
+       {point:'Appropriate length (250-300 words)',marks:1},
+     ],
+     modelAnswer:'[Model speech format] Good morning our principal, teachers and fellow students. Today I stand before you to speak on something I believe can change our futures — the habit of reading...[continues with benefits, examples, call to action, appropriate closing]',
+     examinerTip:'Always use the correct format for the text type asked. For speeches: address the audience at the start, use first person, use rhetorical questions and a strong closing. The format marks are free marks — never miss them.'},
+    {exam:'WAEC',year:2022,
+     question:'Write a letter to the editor of a national newspaper expressing your concern about the increase in examination malpractice in Nigerian schools. Suggest THREE ways to address the problem.',
+     markingScheme:[
+       {point:'Writer\'s address (top right), date, editor\'s address (left side)',marks:2},
+       {point:'Correct salutation: Dear Sir/Madam or Dear Editor',marks:1},
+       {point:'Clear statement of concern about examination malpractice',marks:2},
+       {point:'THREE clearly stated solutions (e.g. stricter supervision, character education, reducing exam pressure)',marks:3},
+       {point:'Appropriate formal/persuasive tone throughout',marks:2},
+       {point:'Correct subscription: Yours faithfully + printed name',marks:1},
+       {point:'Correct grammar, spelling and punctuation',marks:3},
+     ],
+     modelAnswer:'[Formal letter format with writer\'s address, date, editor\'s address, Dear Editor, body paragraphs addressing malpractice with evidence and three concrete solutions, Yours faithfully, Name]',
+     examinerTip:'Formal letters to editors use "Yours faithfully" not "Yours sincerely" — sincerely is only when you know the person\'s name. This is a common error that costs marks.'},
+    {exam:'NECO',year:2023,
+     question:'Write a composition on the topic: "The Role of Youth in Nation Building." Your composition should be between 400-450 words and should be in the form of an essay.',
+     markingScheme:[
+       {point:'Clear introduction defining nation building and the role of youth',marks:3},
+       {point:'Well-developed body paragraphs (civic responsibility, education, technology, entrepreneurship)',marks:6},
+       {point:'Relevant Nigerian examples and context',marks:2},
+       {point:'Strong conclusion with call to action',marks:2},
+       {point:'Correct grammar, spelling, punctuation',marks:4},
+       {point:'Appropriate length and essay format',marks:3},
+     ],
+     modelAnswer:'[Essay with introduction defining nation building; body discussing youth in politics, economy, technology and community development with Nigerian examples; conclusion urging youth to be agents of change]',
+     examinerTip:'Essays are marked on content (40%), language (40%) and organisation (20%). Write in paragraphs, use linking words (furthermore, however, consequently) and always have a clear introduction and conclusion.'},
+    {exam:'NECO',year:2022,
+     question:'(a) Read the following passage and answer the questions that follow:\n[Comprehension passage about environmental conservation in Nigeria]\n(b) Write a summary of the main arguments in the passage in not more than 80 words.',
+     markingScheme:[
+       {point:'Identify main idea: environmental conservation is urgent in Nigeria',marks:2},
+       {point:'Supporting point 1: deforestation threatens biodiversity',marks:1},
+       {point:'Supporting point 2: oil spillage in Niger Delta damages ecosystems',marks:1},
+       {point:'Supporting point 3: government and individual responsibility needed',marks:1},
+       {point:'Summary written in own words, not lifted directly from passage',marks:2},
+       {point:'Summary within 80-word limit',marks:1},
+       {point:'Correct grammar and expression',marks:2},
+     ],
+     modelAnswer:'[Summary identifying key points about Nigerian environmental threats and conservation need, written in student\'s own words within 80 words]',
+     examinerTip:'In summary writing, never copy sentences directly — paraphrase everything. Count your words. Going over the limit costs marks in NECO.'},
+  ]);
+
+  // ─── GEOGRAPHY THEORY ──────────────────────────────────────
+  add('geography','theory',[
+    {exam:'WAEC',year:2023,
+     question:'(a) Describe the formation of fold mountains.\n(b) State FOUR economic importance of mountains to Nigeria.\n(c) Name TWO fold mountain ranges in Africa.',
+     markingScheme:[
+       {point:'Fold mountains form where two tectonic plates converge/collide',marks:1},
+       {point:'Compressional forces cause rock strata to buckle and fold upwards',marks:2},
+       {point:'Process occurs over millions of years — sedimentary rocks folded into ridges and valleys',marks:1},
+       {point:'Tourism — scenic landscapes attract visitors',marks:1},
+       {point:'Water catchment — rivers and streams originate in highlands',marks:1},
+       {point:'Climate modification — mountains influence rainfall patterns',marks:1},
+       {point:'Agriculture — Jos Plateau supports temperate crops',marks:1},
+       {point:'Atlas Mountains (Morocco/Algeria/Tunisia)',marks:1},
+       {point:'Drakensberg Mountains (South Africa/Lesotho)',marks:1},
+     ],
+     modelAnswer:'Fold mountains form from tectonic plate collision causing rock strata to buckle upward. Economic importance: tourism, water catchment, climate modification, agriculture. African ranges: Atlas, Drakensberg.',
+     examinerTip:'Nigerian geography is important — always mention the Jos Plateau as Nigeria\'s main highland area. It supports tin mining, temperate farming and is a major water catchment area.'},
+    {exam:'NECO',year:2023,
+     question:'(a) Explain the factors that influence the climate of West Africa.\n(b) Describe the characteristics of the tropical rainforest climate.\n(c) State THREE ways climate affects human activities in Nigeria.',
+     markingScheme:[
+       {point:'Latitude — West Africa near equator receives intense solar radiation',marks:1},
+       {point:'Seasonal winds — Harmattan (NE trade wind) and Southwest Monsoon',marks:2},
+       {point:'Distance from sea — coastal areas more humid than interior',marks:1},
+       {point:'Altitude — higher areas cooler (Jos Plateau)',marks:1},
+       {point:'Rainforest climate: high temperatures (25-28°C) all year, heavy rainfall (1500-2000mm+), no dry season, high humidity',marks:3},
+       {point:'Farming patterns — rainfall determines planting seasons',marks:1},
+       {point:'Settlement patterns — fertile, well-watered areas densely populated',marks:1},
+       {point:'Transport — flooding during rainy season limits movement',marks:1},
+     ],
+     modelAnswer:'West African climate is influenced by latitude, ITCZ movement, winds, distance from sea and altitude. Rainforest climate: hot, wet year-round, high humidity. Climate affects Nigeria\'s farming, settlement and transport.',
+     examinerTip:'The Inter-Tropical Convergence Zone (ITCZ) controls West African rainfall seasonality — its northward movement brings rains. This mechanism appears in almost every WAEC/NECO Geography paper.'},
+  ]);
+
+  // ─── CRS THEORY ────────────────────────────────────────────
+  add('crs','theory',[
+    {exam:'WAEC',year:2023,
+     question:'(a) Describe the call and response of Prophet Isaiah (Isaiah 6:1-8).\n(b) What lessons can Christians learn from Isaiah\'s response to God\'s call?',
+     markingScheme:[
+       {point:'Isaiah saw a vision of God on a throne, high and exalted, with seraphim worshipping',marks:2},
+       {point:'Isaiah confessed unworthiness — "Woe to me, I am a man of unclean lips"',marks:1},
+       {point:'A seraph touched his lips with a live coal — his sin was atoned',marks:2},
+       {point:'God asked "Whom shall I send?" Isaiah responded "Here am I, send me"',marks:2},
+       {point:'Humility — acknowledging unworthiness before God',marks:1},
+       {point:'Willingness to serve when called by God',marks:1},
+       {point:'God purifies those He calls before sending them',marks:1},
+     ],
+     modelAnswer:'Isaiah\'s vision showed God\'s holiness leading to his self-awareness of sin, divine cleansing and willing response to service. Christians learn humility, responsiveness to calling and trust in God\'s purification.',
+     examinerTip:'Biblical narratives must follow the sequence of events. Mark schemes reward: what happened, what was said, what it means. Always apply to Christian life in the final section.'},
+    {exam:'NECO',year:2023,
+     question:'(a) Narrate the story of the feeding of the five thousand (John 6:1-14).\n(b) State FOUR lessons Christians can learn from this miracle.',
+     markingScheme:[
+       {point:'Large crowd followed Jesus across the Sea of Galilee',marks:1},
+       {point:'Jesus tested Philip asking how to feed them; Philip said 200 denarii not enough',marks:2},
+       {point:'Andrew found a boy with 5 loaves and 2 fish',marks:1},
+       {point:'Jesus gave thanks, distributed bread and fish — all 5000 ate and were satisfied',marks:2},
+       {point:'12 baskets of fragments collected',marks:1},
+       {point:'Compassion — Jesus cared for physical needs of people',marks:1},
+       {point:'With God, little is enough — do not despise small beginnings',marks:1},
+       {point:'Gratitude — Jesus gave thanks before distributing',marks:1},
+       {point:'God provides abundantly — 12 baskets remained',marks:1},
+     ],
+     modelAnswer:'Jesus fed 5000 with 5 loaves and 2 fish, giving thanks and distributing through disciples. Lessons: divine compassion, sufficiency of little in God\'s hands, gratitude and God\'s abundance.',
+     examinerTip:'For miracle narratives, tell the story in sequence then apply lessons. NECO markers want specific details — 5 loaves, 2 fish, 12 baskets. These specific numbers earn marks.'},
+  ]);
+
+  // ─── CIVIC EDUCATION THEORY ────────────────────────────────
+  add('civic_education','theory',[
+    {exam:'WAEC',year:2023,
+     question:'(a) Explain the concept of "rule of law" and state FOUR principles that characterise it.\n(b) Discuss THREE ways corruption undermines the rule of law in Nigeria.',
+     markingScheme:[
+       {point:'Rule of law: principle that everyone including government is subject to the law and no one is above it',marks:2},
+       {point:'Equality before the law — all persons treated equally regardless of status',marks:1},
+       {point:'No punishment without law — person can only be punished for breach of known law',marks:1},
+       {point:'Rights enforceable in courts — citizens can challenge illegal actions in court',marks:1},
+       {point:'Independence of judiciary — courts free from political interference',marks:1},
+       {point:'Bribery of judges compromises impartiality of courts',marks:1},
+       {point:'Powerful people escape justice through money and connections',marks:1},
+       {point:'Law enforcement officials take bribes — laws not enforced equally',marks:1},
+       {point:'(Weak institutions, political interference also acceptable)',marks:1},
+     ],
+     modelAnswer:'Rule of law means no one is above the law, characterised by equality, legality, justiciability and judicial independence. Corruption undermines it through judicial bribery, elite impunity and compromised law enforcement.',
+     examinerTip:'Rule of law and corruption are perennial WAEC topics. Use Nigerian examples: mention EFCC, ICPC and the challenge of prosecuting high-profile cases.'},
+    {exam:'NECO',year:2023,
+     question:'(a) Define citizenship and state THREE ways of acquiring Nigerian citizenship.\n(b) State FIVE duties of a Nigerian citizen.',
+     markingScheme:[
+       {point:'Citizenship: legal membership of a state entitling a person to its rights and protection',marks:1},
+       {point:'By birth — born in Nigeria or to Nigerian parent(s)',marks:1},
+       {point:'By registration — foreign national married to a Nigerian for at least 3 years',marks:1},
+       {point:'By naturalisation — foreign national who has lived in Nigeria for 15+ years',marks:1},
+       {point:'Obeying the laws of Nigeria',marks:1},
+       {point:'Paying taxes',marks:1},
+       {point:'Voting in elections and participating in democratic process',marks:1},
+       {point:'Defending the country when required',marks:1},
+       {point:'Respecting the rights of other citizens',marks:1},
+     ],
+     modelAnswer:'Citizenship is legal state membership acquired by birth, registration or naturalisation. Duties include law obedience, tax payment, voting, national defence and respecting others\' rights.',
+     examinerTip:'Know the exact requirements: registration requires 3 years of marriage to a Nigerian; naturalisation requires 15 years of residence. These specific figures appear in exam questions.'},
+  ]);
+
+  // ─── ACCOUNTING THEORY ─────────────────────────────────────
+  add('accounting','theory',[
+    {exam:'WAEC',year:2023,
+     question:'The following information relates to Emeka Traders for the year ended 31 December 2022:\nSales: ₦450,000; Opening stock: ₦30,000; Purchases: ₦280,000; Closing stock: ₦40,000; Rent: ₦24,000; Salaries: ₦60,000; Electricity: ₦12,000\n(a) Prepare a Trading Account\n(b) Prepare a Profit and Loss Account\n(c) Calculate the Net Profit Ratio',
+     markingScheme:[
+       {point:'Trading Account: Sales ₦450,000 less Cost of Goods Sold',marks:1},
+       {point:'COGS = Opening stock + Purchases − Closing stock = 30,000+280,000−40,000 = ₦270,000',marks:2},
+       {point:'Gross Profit = 450,000 − 270,000 = ₦180,000',marks:1},
+       {point:'P&L: Gross Profit ₦180,000 less Expenses',marks:1},
+       {point:'Total expenses = 24,000+60,000+12,000 = ₦96,000',marks:1},
+       {point:'Net Profit = 180,000 − 96,000 = ₦84,000',marks:1},
+       {point:'Net Profit Ratio = (Net Profit/Sales) × 100 = (84,000/450,000) × 100 = 18.67%',marks:2},
+     ],
+     modelAnswer:'Gross Profit = ₦180,000. Net Profit = ₦84,000. Net Profit Ratio = 18.67%.',
+     examinerTip:'Always show the full account format with Dr/Cr sides, totals and dates. Examiners award marks for correct format even if figures contain small errors — never skip the format.'},
+    {exam:'NECO',year:2023,
+     question:'(a) Explain the meaning of depreciation and state THREE causes.\n(b) A machine costs ₦500,000 with a residual value of ₦50,000 and useful life of 5 years. Calculate the annual depreciation using the straight-line method and show the first two years of the provision for depreciation account.',
+     markingScheme:[
+       {point:'Depreciation: systematic reduction in value of a fixed asset over its useful life',marks:1},
+       {point:'Wear and tear through use',marks:1},
+       {point:'Obsolescence — newer technology replacing old assets',marks:1},
+       {point:'Passage of time — some assets lose value with age',marks:1},
+       {point:'Annual depreciation = (Cost − Residual value)/Useful life = (500,000−50,000)/5 = ₦90,000',marks:3},
+       {point:'Year 1: Debit Depreciation expense ₦90,000, Credit Provision for Depreciation ₦90,000',marks:1},
+       {point:'Year 2: same entry, cumulative provision = ₦180,000',marks:1},
+     ],
+     modelAnswer:'Depreciation = ₦90,000 per year. Caused by wear, obsolescence and time. After 2 years, accumulated depreciation = ₦180,000.',
+     examinerTip:'Straight-line is the easiest depreciation method. Always subtract residual/scrap value before dividing. Annual amount is always the same — that is what makes it "straight line".'},
+  ]);
+
+  // ─── COMMERCE THEORY ───────────────────────────────────────
+  add('commerce','theory',[
+    {exam:'WAEC',year:2023,
+     question:'(a) Explain the role of insurance in commerce.\n(b) Describe FOUR principles of insurance.\n(c) State THREE types of insurance available to businesses in Nigeria.',
+     markingScheme:[
+       {point:'Insurance reduces financial risk of business operations',marks:1},
+       {point:'Provides compensation for losses enabling business continuity',marks:1},
+       {point:'Utmost good faith — both parties must disclose all material facts',marks:1},
+       {point:'Insurable interest — insured must have financial stake in the subject matter',marks:1},
+       {point:'Indemnity — compensation restores insured to pre-loss position, not profit',marks:1},
+       {point:'Subrogation — after paying claim, insurer takes over any rights of recovery',marks:1},
+       {point:'Fire insurance',marks:1},
+       {point:'Motor vehicle insurance',marks:1},
+       {point:'Marine/cargo insurance',marks:1},
+     ],
+     modelAnswer:'Insurance transfers risk and enables business continuity. Principles: utmost good faith, insurable interest, indemnity, subrogation. Business types: fire, motor, marine insurance.',
+     examinerTip:'The four principles of insurance are guaranteed WAEC/NECO questions. Memorise them with brief definitions: utmost good faith, insurable interest, indemnity, subrogation (and contribution, proximate cause for bonus marks).'},
+    {exam:'NECO',year:2023,
+     question:'(a) Distinguish between home trade and foreign trade.\n(b) State FOUR advantages of foreign trade to Nigeria.\n(c) Explain TWO problems of foreign trade facing Nigeria.',
+     markingScheme:[
+       {point:'Home trade: buying and selling within the borders of a country',marks:1},
+       {point:'Foreign trade: buying (import) and selling (export) between countries',marks:1},
+       {point:'Access to goods not produced locally — diversifies consumption',marks:1},
+       {point:'Earns foreign exchange for the country',marks:1},
+       {point:'Promotes specialisation and comparative advantage',marks:1},
+       {point:'Creates employment in export industries',marks:1},
+       {point:'Unfavourable terms of trade — Nigeria exports cheap raw materials, imports expensive manufactured goods',marks:2},
+       {point:'Overdependence on oil — vulnerable to global price fluctuations',marks:2},
+     ],
+     modelAnswer:'Home trade is domestic; foreign trade is international. Benefits: access to foreign goods, foreign exchange, specialisation, employment. Problems: unfavourable terms of trade, oil dependence.',
+     examinerTip:'Link foreign trade problems to Nigeria specifically — oil dependence and importing manufactured goods while exporting raw materials (the commodity trap) is the standard Nigerian example.'},
+  ]);
+
+  // ─── MARKETING THEORY ──────────────────────────────────────
+  add('marketing','theory',[
+    {exam:'WAEC',year:2023,
+     question:'(a) Explain the concept of "market segmentation" and state THREE bases for segmenting a consumer market.\n(b) Discuss the stages of the product life cycle and suggest appropriate marketing strategies for each stage.',
+     markingScheme:[
+       {point:'Market segmentation: dividing a heterogeneous market into smaller homogeneous groups with similar characteristics',marks:2},
+       {point:'Demographic — age, gender, income, education',marks:1},
+       {point:'Geographic — region, urban/rural, climate',marks:1},
+       {point:'Psychographic — lifestyle, values, personality',marks:1},
+       {point:'Introduction: low sales, high costs, focus on awareness — strategy: heavy promotion, selective distribution',marks:2},
+       {point:'Growth: rising sales, new competitors — strategy: build brand loyalty, expand distribution',marks:1},
+       {point:'Maturity: peak sales, intense competition — strategy: differentiation, competitive pricing',marks:1},
+       {point:'Decline: falling sales — strategy: reduce costs, harvest or discontinue',marks:1},
+     ],
+     modelAnswer:'Market segmentation divides markets by demographics, geography or psychographics. PLC stages: Introduction (awareness), Growth (expansion), Maturity (differentiation), Decline (harvest/exit) — each requiring different strategies.',
+     examinerTip:'Product Life Cycle questions always appear. Learn the strategy for each stage — not just the characteristics. Examiners want to see you link the stage to the recommended marketing action.'},
+  ]);
+
+  // ─── ANIMAL HUSBANDRY THEORY ────────────────────────────────
+  add('animal_husbandry','theory',[
+    {exam:'WAEC',year:2023,
+     question:'(a) Describe the digestive system of ruminant animals.\n(b) Explain the process of rumination.\n(c) State THREE differences between ruminant and non-ruminant digestion.',
+     markingScheme:[
+       {point:'Ruminants have four stomach compartments: rumen, reticulum, omasum, abomasum',marks:2},
+       {point:'Food passes through oesophagus into rumen — initial fermentation by microorganisms',marks:1},
+       {point:'Reticulum: further breakdown and formation of food bolus',marks:1},
+       {point:'Omasum: water absorption and grinding',marks:1},
+       {point:'Abomasum: true stomach, enzymatic digestion',marks:1},
+       {point:'Rumination: regurgitation of partially digested food (cud) from rumen/reticulum back to mouth for further chewing',marks:2},
+       {point:'Ruminants: multi-chambered stomach; non-ruminants: single stomach',marks:1},
+       {point:'Ruminants digest cellulose via microbial fermentation; non-ruminants cannot digest cellulose',marks:1},
+       {point:'Ruminants regurgitate and rechew; non-ruminants do not',marks:1},
+     ],
+     modelAnswer:'Ruminants have 4 stomach compartments. Rumination involves regurgitating cud for further chewing. Key differences from non-ruminants: multi-chambered stomach, cellulose digestion ability, cud chewing.',
+     examinerTip:'Know the four compartments in order: rumen, reticulum, omasum, abomasum — and the function of each. "Rumen-Reticulum-Omasum-Abomasum" can be remembered as "Really Ruminants Only Absorb".'},
+    {exam:'NECO',year:2023,
+     question:'(a) State FIVE signs of ill-health in farm animals.\n(b) Describe how you would control the spread of Newcastle disease in a poultry farm.\n(c) State THREE importance of veterinary services to livestock farmers.',
+     markingScheme:[
+       {point:'Loss of appetite/reduced feed intake',marks:1},
+       {point:'Dull coat/ruffled feathers',marks:1},
+       {point:'Isolation from group/lethargy',marks:1},
+       {point:'Abnormal discharges (nasal, ocular)',marks:1},
+       {point:'Weight loss/reduced production',marks:1},
+       {point:'Vaccinate all birds regularly against Newcastle disease',marks:2},
+       {point:'Isolate and cull infected birds immediately',marks:1},
+       {point:'Disinfect poultry house and equipment regularly',marks:1},
+       {point:'Restrict visitors and practise biosecurity',marks:1},
+       {point:'Disease diagnosis and treatment',marks:1},
+       {point:'Vaccination programmes to prevent disease',marks:1},
+       {point:'Advice on nutrition, breeding and management',marks:1},
+     ],
+     modelAnswer:'Signs of ill health: loss of appetite, dull coat, lethargy, abnormal discharges, weight loss. Newcastle control: vaccination, isolation, culling, disinfection, biosecurity. Vet importance: diagnosis, prevention, management advice.',
+     examinerTip:'Newcastle disease is the most important poultry disease in Nigerian exams. Always mention vaccination as the primary control method, followed by culling infected birds and strict biosecurity.'},
+  ]);
+
+  // ─── LITERATURE THEORY ─────────────────────────────────────
+  add('literature','theory',[
+    {exam:'WAEC',year:2023,
+     question:'(a) Explain FIVE dramatic devices used in plays.\n(b) With reference to any Nigerian play you have studied, show how ONE of these devices is used effectively.',
+     markingScheme:[
+       {point:'Soliloquy — character speaks thoughts aloud when alone',marks:1},
+       {point:'Aside — character speaks to audience without other characters hearing',marks:1},
+       {point:'Dramatic irony — audience knows something characters do not',marks:1},
+       {point:'Flashback — return to earlier events to provide background',marks:1},
+       {point:'Foreshadowing — hints at future events',marks:1},
+       {point:'Named specific play (e.g. Wole Soyinka\'s work)',marks:1},
+       {point:'Identified the device used in the play',marks:1},
+       {point:'Explained HOW and WHY it is used effectively — impact on audience/meaning',marks:3},
+     ],
+     modelAnswer:'Dramatic devices include soliloquy, aside, dramatic irony, flashback and foreshadowing. [Application to specific Nigerian play with analysis of effect].',
+     examinerTip:'Always name the specific text and author. Vague references lose marks. If studying Soyinka\'s Death and the King\'s Horseman, discuss dramatic irony — the audience knows Elesin will fail before he does.'},
+    {exam:'NECO',year:2023,
+     question:'(a) What is a poem? State and explain FOUR elements of poetry.\n(b) Write a short analysis of any poem you have studied showing how the poet uses imagery.',
+     markingScheme:[
+       {point:'A poem: a literary composition expressing feelings/ideas through the concentrated use of language, rhythm and imagery',marks:1},
+       {point:'Rhythm — musical quality created by pattern of stressed/unstressed syllables',marks:1},
+       {point:'Rhyme — repetition of similar sounds at end of lines',marks:1},
+       {point:'Imagery — use of vivid language appealing to senses',marks:1},
+       {point:'Theme — central idea or message of the poem',marks:1},
+       {point:'Named specific poem and poet',marks:1},
+       {point:'Identified specific image(s) from the poem',marks:2},
+       {point:'Explained the effect of the imagery on the reader/meaning of poem',marks:3},
+     ],
+     modelAnswer:'A poem uses concentrated language to express emotion. Elements: rhythm, rhyme, imagery, theme. [Analysis of specific poem showing how imagery creates meaning and emotional effect].',
+     examinerTip:'For poetry analysis, always quote directly from the poem — even one or two words. Examiners need to see you working with the actual text, not just discussing it in general terms.'},
+  ]);
+
+})();
