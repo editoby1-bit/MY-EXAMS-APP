@@ -88,6 +88,7 @@
     renderStreak();
     countQuestions();
     initCommunityQuiz();
+    initContestNotify();
   }
 
   function countQuestions() {
@@ -1226,7 +1227,30 @@
     showQcPanel('qcLeaderboard');
   }
 
-  window._saveChallengeScore = saveChallengeScore;
+  function initContestNotify() {
+    const btn  = document.getElementById('contestNotifyBtn');
+    const note = document.getElementById('contestNoteText');
+    if (!btn) return;
+    const already = loadSafe('mea-contest-notify');
+    if (already) {
+      btn.textContent  = '✓ You\'re on the list';
+      btn.disabled     = true;
+      btn.style.opacity = '0.7';
+      if (note) note.textContent = 'We\'ll notify you when registration opens.';
+      return;
+    }
+    btn.addEventListener('click', () => {
+      if (!S.currentUser) {
+        alert('Please log in first so we know who to notify.');
+        return;
+      }
+      saveSafe('mea-contest-notify', { name: S.currentUser, date: new Date().toISOString() });
+      btn.textContent   = '✓ You\'re on the list!';
+      btn.disabled      = true;
+      btn.style.opacity = '0.7';
+      if (note) note.textContent = 'We\'ll notify you when registration opens. Tell your friends!';
+    });
+  }
   window._showChallengeLeaderboard = showChallengeLeaderboard;
 
   // Expose for result screen
