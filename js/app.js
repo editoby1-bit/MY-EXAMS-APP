@@ -68,7 +68,7 @@
     'theoryPanel','theoryQuestion','markingScheme','toggleAnswerBtn','modelAnswer','examTipBox',
     'prevBtn','nextBtn',
     'resultEmoji','resultScore','resultGrade','resultSummary','resultStatsGrid','resultBreakdown',
-    'reviewBtn','homeBtn','shareBtn',
+    'reviewBtn','homeBtn','shareBtn','shareSessionBtn',
     'upgradeBar','upgradeBarBtn','upgradeBarText',
     'resultUpgradTeaser','rutBtn','rutTitle',
     'teaserToast','teaserToastText','teaserToastUpgrade','teaserToastClose',
@@ -89,6 +89,7 @@
     countQuestions();
     initCommunityQuiz();
     initContestNotify();
+    checkForSharedSession();
   }
 
   function countQuestions() {
@@ -201,6 +202,7 @@
     E.reviewBtn.addEventListener('click', enterReview);
     E.homeBtn.addEventListener('click', goHome);
     E.shareBtn.addEventListener('click', shareApp);
+    if (E.shareSessionBtn) E.shareSessionBtn.addEventListener('click', shareSession);
 
     // Upgrade bar
     if (E.upgradeBarBtn) E.upgradeBarBtn.addEventListener('click', () => showPaywall('upgrade'));
@@ -719,6 +721,11 @@
     refreshStats();
     renderHistory();
     showScreen('result');
+
+    // Store for session sharing
+    _lastResult    = rec;
+    _lastQuestions = [...S.questions];
+    _lastAnswers   = [...S.answers];
 
     // Save challenge score if this was a challenge session
     if (S._challengeCode && total > 0) {
@@ -1284,6 +1291,118 @@
   }
 
   /* ════════ SHARE ════════ */
+  /* ════════════════════════════════
+     SESSION SHARING
+  ════════════════════════════════ */
+
+  // Store last result for sharing
+  let _lastResult = null;
+  let _lastQuestions = [];
+  let _lastAnswers = [];
+
+  function shareSession() {
+    if (!_lastResult) return;
+    const payload = {
+      r: _lastResult,
+      q: _lastQuestions.slice(0,20).map((q,i) => ({
+        q: q.question,
+        o: q.options || [],
+        a: q.answer,
+        ua: _lastAnswers[i],
+        t: q._type,
+        e: q.explanation || '',
+      })),
+    };
+    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+    const url = window.location.origin + window.location.pathname + '?session=' + encoded;
+    const text = `📊 ${_lastResult.student} scored ${_lastResult.pct !== null ? _lastResult.pct + '%' : 'Theory'} in ${_lastResult.subject} (${_lastResult.exam})\n\nSee my full session on My Exams App:\n${url}\n\nThink you can beat it? 💪`;
+
+    if (navigator.share) {
+      navigator.share({ title: 'My Exams App Result', text, url }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => alert('📋 Result link copied! Paste in WhatsApp or anywhere.'));
+    } else {
+      prompt('Copy this link:', url);
+    }
+  }
+
+  function checkForSharedSession() {
+    const params = new URLSearchParams(window.location.search);
+    const sessionData = params.get('session');
+    if (!sessionData) return;
+    history.replaceState(null, '', window.location.pathname);
+    try {
+      const payload = JSON.parse(decodeURIComponent(escape(atob(sessionData))));
+      showSharedSession(payload);
+    } catch(e) {
+      console.warn('Could not parse shared session:', e);
+    }
+  }
+
+  function showSharedSession(payload) {
+    const r = payload.r;
+    const qs = payload.q || [];
+    const modal = document.getElementById('sharedSessionModal');
+    if (!modal) return;
+
+    const hasObj = r.pct !== null;
+    const pct    = r.pct || 0;
+    const grade  = !hasObj ? 'Theory' : pct>=75 ? 'Distinction' : pct>=60 ? 'Credit' : pct>=50 ? 'Pass' : 'Below Pass';
+    const emoji  = !hasObj ? '📖' : pct>=75 ? '🏆' : pct>=60 ? '🎯' : pct>=50 ? '✅' : '💪';
+    const color  = !hasObj ? '#666' : pct>=50 ? '#27ae60' : '#e74c3c';
+
+    document.getElementById('ssEmoji').textContent = emoji;
+    document.getElementById('ssScore').textContent = hasObj ? pct + '%' : 'Theory';
+    document.getElementById('ssScore').style.color = color;
+    document.getElementById('ssGrade').textContent = grade;
+    document.getElementById('ssGrade').style.color = color;
+    document.getElementById('ssMeta').innerHTML =
+      `<strong>${safe(r.student)}</strong> · ${safe(r.subject)} · ${safe(r.exam)} · ${safe(r.mode)}` +
+      `<br><span style="font-size:.8rem;color:#888">${safe(r.date)}</span>`;
+
+    if (hasObj) {
+      document.getElementById('ssStats').innerHTML =
+        `<span class="ss-stat green">✓ ${r.correct} correct</span>` +
+        `<span class="ss-stat red">✗ ${r.wrong} wrong</span>` +
+        `<span class="ss-stat">⊘ ${r.skipped} skipped</span>`;
+      document.getElementById('ssBarFill').style.width = pct + '%';
+      document.getElementById('ssBarFill').style.background = color;
+    }
+
+    // Show first 5 questions as preview
+    const preview = qs.slice(0, 5);
+    document.getElementById('ssQuestions').innerHTML = preview.length ? `
+      <div class="ss-qs-title">Session Preview (${preview.length} of ${qs.length} questions)</div>
+      ${preview.map((q,i) => {
+        const correct  = q.ua === q.a;
+        const answered = q.ua !== null && q.ua !== undefined;
+        const icon = !answered ? '⊘' : correct ? '✓' : '✗';
+        const cls  = !answered ? 'ss-q-skip' : correct ? 'ss-q-correct' : 'ss-q-wrong';
+        return `<div class="ss-q-row ${cls}">
+          <span class="ss-q-icon">${icon}</span>
+          <span class="ss-q-text">${safe(q.q.substring(0,80))}${q.q.length>80?'…':''}</span>
+        </div>`;
+      }).join('')}
+    ` : '';
+
+    // Store subject for try button
+    document.getElementById('ssTryBtn').dataset.subject = r.subject;
+    document.getElementById('ssTryBtn').addEventListener('click', () => {
+      modal.classList.add('hidden');
+      // Pre-select the subject on home screen
+      S.subject = r.subject;
+      showScreen('home');
+      setTimeout(() => {
+        const btn = document.querySelector(`.subject-btn[data-key="${r.subject}"]`);
+        if (btn) btn.click();
+      }, 300);
+    });
+
+    document.getElementById('ssClose').addEventListener('click', () => modal.classList.add('hidden'));
+    modal.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden'); });
+    modal.classList.remove('hidden');
+  }
+
   function shareApp() {
     const url  = window.location.href;
     const text = '🎓 Preparing for WAEC/NECO? Try My Exams App!\nPast questions + model answers for 15 subjects + snap-and-mark theory.\n₦2,500 for 3 months — early access at ₦2,000.\n\n'+url;
