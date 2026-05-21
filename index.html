@@ -485,7 +485,10 @@
 
       <div class="share-nudge">
         <p>Know a student writing WAEC or NECO? Share this!</p>
-        <button id="shareBtn" class="btn-share">📤 Share My Exams App</button>
+        <div class="share-nudge-btns">
+          <button id="shareSessionBtn" class="btn-share-session">📊 Share My Result</button>
+          <button id="shareBtn" class="btn-share">📤 Share App</button>
+        </div>
       </div>
 
       <!-- Upgrade teaser on results — shown to free users only -->
@@ -586,7 +589,31 @@
     </div>
   </div>
 
-  <!-- Community quiz trigger button — shown on home screen for paid users -->
+  <!-- SHARED SESSION VIEW -->
+  <div id="sharedSessionModal" class="ss-overlay hidden">
+    <div class="ss-card">
+      <div class="ss-header">
+        <div class="ss-logo">⭐ My<em>Exams</em>App</div>
+        <button class="ss-close" id="ssClose">✕</button>
+      </div>
+      <div id="ssContent">
+        <div class="ss-emoji" id="ssEmoji">🏆</div>
+        <div class="ss-score" id="ssScore">0%</div>
+        <div class="ss-grade" id="ssGrade">Distinction</div>
+        <div class="ss-meta" id="ssMeta"></div>
+        <div class="ss-stats" id="ssStats"></div>
+        <div class="ss-bar-wrap"><div class="ss-bar-fill" id="ssBarFill"></div></div>
+        <div class="ss-questions" id="ssQuestions"></div>
+      </div>
+      <div class="ss-footer">
+        <p class="ss-cta">Think you can do better?</p>
+        <button class="ss-try-btn" id="ssTryBtn">Try This Subject →</button>
+        <p class="ss-app-link">My Exams App — WAEC · NECO · GCE · NABTEB · JAMB</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Community quiz trigger button -->
   <button id="quizChallengeBtn" class="qc-trigger-btn hidden">
     🏆 Challenge a Friend
   </button>
