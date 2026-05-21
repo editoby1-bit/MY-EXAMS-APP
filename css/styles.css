@@ -1646,3 +1646,184 @@ body {
   color: rgba(255,255,255,.5);
   line-height: 1.4;
 }
+
+/* ══════════════════════════════
+   SESSION SHARING
+══════════════════════════════ */
+.share-nudge-btns {
+  display: flex;
+  gap: .5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.btn-share-session {
+  font-family: var(--sans);
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--gold);
+  border: none;
+  border-radius: var(--r-s);
+  padding: .55rem 1rem;
+  cursor: pointer;
+  transition: all var(--t);
+}
+.btn-share-session:hover { background: var(--gold-dk); }
+
+.ss-overlay {
+  position: fixed; inset: 0;
+  background: rgba(10,22,40,.9);
+  backdrop-filter: blur(8px);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow-y: auto;
+}
+.ss-overlay.hidden { display: none; }
+
+.ss-card {
+  background: var(--white);
+  border-radius: var(--r-l);
+  max-width: 420px;
+  width: 100%;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,.4);
+  margin: auto;
+}
+.ss-header {
+  background: linear-gradient(135deg, #0a1628, #1a2d4a);
+  padding: .85rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ss-logo {
+  font-family: var(--serif);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--white);
+}
+.ss-logo em { color: var(--gold); font-style: italic; }
+.ss-close {
+  background: none; border: none;
+  color: rgba(255,255,255,.5);
+  font-size: .9rem; cursor: pointer;
+}
+.ss-close:hover { color: var(--white); }
+
+#ssContent {
+  padding: 1.5rem 1.5rem .5rem;
+  text-align: center;
+}
+.ss-emoji { font-size: 2.5rem; margin-bottom: .25rem; }
+.ss-score {
+  font-family: var(--serif);
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: .15rem;
+}
+.ss-grade {
+  font-family: var(--sans);
+  font-size: .85rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-bottom: .5rem;
+}
+.ss-meta {
+  font-size: .8rem;
+  color: var(--text-dim);
+  margin-bottom: .75rem;
+  line-height: 1.5;
+}
+.ss-stats {
+  display: flex;
+  gap: .5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: .75rem;
+}
+.ss-stat {
+  font-family: var(--sans);
+  font-size: .78rem;
+  font-weight: 600;
+  padding: .25rem .6rem;
+  border-radius: 99px;
+  background: var(--cream);
+}
+.ss-stat.green { background: #e8f5e9; color: #2e7d32; }
+.ss-stat.red   { background: #ffebee; color: #c62828; }
+
+.ss-bar-wrap {
+  height: 6px;
+  background: var(--cream-d, #e8e0d0);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+.ss-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width .6s ease;
+  width: 0%;
+}
+
+.ss-qs-title {
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: .4rem;
+  text-align: left;
+}
+.ss-q-row {
+  display: flex;
+  align-items: flex-start;
+  gap: .5rem;
+  padding: .4rem .5rem;
+  border-radius: var(--r-s);
+  margin-bottom: .25rem;
+  text-align: left;
+}
+.ss-q-correct { background: #e8f5e9; }
+.ss-q-wrong   { background: #ffebee; }
+.ss-q-skip    { background: var(--cream); }
+.ss-q-icon { font-size: .85rem; flex-shrink: 0; margin-top: .05rem; }
+.ss-q-text { font-size: .75rem; color: var(--ink); line-height: 1.4; }
+.ss-q-correct .ss-q-icon { color: #27ae60; }
+.ss-q-wrong   .ss-q-icon { color: #e74c3c; }
+
+.ss-footer {
+  padding: 1rem 1.5rem 1.25rem;
+  text-align: center;
+  border-top: 1px solid var(--border);
+  background: var(--cream);
+}
+.ss-cta {
+  font-size: .82rem;
+  color: var(--text-dim);
+  margin-bottom: .5rem;
+}
+.ss-try-btn {
+  width: 100%;
+  font-family: var(--sans);
+  font-size: .9rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--gold);
+  border: none;
+  border-radius: var(--r-s);
+  padding: .7rem;
+  cursor: pointer;
+  margin-bottom: .5rem;
+  transition: background var(--t);
+}
+.ss-try-btn:hover { background: var(--gold-dk); }
+.ss-app-link {
+  font-size: .7rem;
+  color: var(--text-dim);
+}
