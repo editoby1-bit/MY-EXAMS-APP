@@ -1827,3 +1827,106 @@ body {
   font-size: .7rem;
   color: var(--text-dim);
 }
+
+/* ══════════════════════════════
+   AI EXPLAIN BUTTON & PANEL
+══════════════════════════════ */
+.ai-explain-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  font-family: var(--sans);
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--gold-dk);
+  background: rgba(212,175,55,.08);
+  border: 1px solid rgba(212,175,55,.3);
+  border-radius: var(--r-s);
+  padding: .45rem .9rem;
+  cursor: pointer;
+  margin-top: .75rem;
+  transition: all var(--t);
+}
+.ai-explain-btn:hover { background: rgba(212,175,55,.15); border-color: var(--gold); }
+.ai-explain-btn.hidden { display: none; }
+
+.mea-ai-panel {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 150;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+.mea-ai-panel.hidden { display: none; }
+.mea-ai-inner {
+  background: var(--ink);
+  border-top: 2px solid var(--gold);
+  border-radius: var(--r-l) var(--r-l) 0 0;
+  padding: 1.25rem 1.5rem 2rem;
+  max-width: 760px;
+  margin: 0 auto;
+  box-shadow: 0 -8px 32px rgba(0,0,0,.3);
+}
+.mea-ai-head {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin-bottom: 1rem;
+}
+.mea-ai-title {
+  font-family: var(--sans);
+  font-weight: 700;
+  color: var(--gold);
+  flex: 1;
+  font-size: .9rem;
+}
+.mea-ai-credits {
+  font-size: .72rem;
+  font-weight: 600;
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.7);
+  border-radius: 99px;
+  padding: .2rem .65rem;
+}
+.mea-ai-close {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,.4);
+  cursor: pointer;
+  font-size: .9rem;
+  padding: .25rem;
+}
+.mea-ai-close:hover { color: var(--white); }
+.mea-ai-loading {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  color: rgba(255,255,255,.6);
+  font-size: .85rem;
+  padding: .5rem 0;
+}
+.mea-ai-loading.hidden { display: none; }
+.mea-ai-spinner {
+  width: 20px; height: 20px;
+  border: 2px solid rgba(212,175,55,.25);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: meaSpin .8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes meaSpin { to { transform: rotate(360deg); } }
+.mea-ai-response.hidden { display: none; }
+.mea-ai-q {
+  font-size: .78rem;
+  color: rgba(255,255,255,.45);
+  margin-bottom: .65rem;
+  padding-bottom: .5rem;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  line-height: 1.5;
+  font-style: italic;
+}
+.mea-ai-text {
+  font-size: .88rem;
+  color: rgba(255,255,255,.88);
+  line-height: 1.75;
+}
