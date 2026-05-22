@@ -72,6 +72,7 @@
     'upgradeBar','upgradeBarBtn','upgradeBarText',
     'resultUpgradTeaser','rutBtn','rutTitle',
     'teaserToast','teaserToastText','teaserToastUpgrade','teaserToastClose',
+    'aiExplainBtn','aiExplainTheoryBtn','meaAiPanel','meaAiClose','meaAiCredits','meaAiLoading','meaAiResponse','meaAiContent',
   ].forEach(id => {
     const el = document.getElementById(id);
     if (!el) console.warn('Missing element:', id);
@@ -217,6 +218,11 @@
       showPaywall('upgrade');
     });
     if (E.teaserToastClose) E.teaserToastClose.addEventListener('click', hideTeaserToast);
+
+    // AI explain
+    if (E.aiExplainBtn)       E.aiExplainBtn.addEventListener('click', () => triggerMeaAI('objective'));
+    if (E.aiExplainTheoryBtn) E.aiExplainTheoryBtn.addEventListener('click', () => triggerMeaAI('theory'));
+    if (E.meaAiClose)         E.meaAiClose.addEventListener('click', () => E.meaAiPanel?.classList.add('hidden'));
 
     document.addEventListener('keydown', onKey);
 
@@ -545,6 +551,13 @@
 
     E.qtypeBanner.textContent = obj ? 'Objective Question' : 'Theory / Essay Question';
     E.qtypeBanner.className   = `qtype-banner ${obj?'obj':'theory'}`;
+
+    // Show AI explain buttons for Plus subscribers only
+    const isPlus = S.hasAccess && (loadSafe(SK.tier) === 'plus');
+    if (E.aiExplainBtn)       E.aiExplainBtn.classList.toggle('hidden', !isPlus || !obj);
+    if (E.aiExplainTheoryBtn) E.aiExplainTheoryBtn.classList.toggle('hidden', !isPlus || obj);
+    // Reset AI panel when navigating
+    if (E.meaAiPanel) E.meaAiPanel.classList.add('hidden');
 
     E.objectivePanel.classList.toggle('hidden', !obj);
     E.theoryPanel.classList.toggle('hidden', obj);
@@ -1403,6 +1416,137 @@
     document.getElementById('ssClose').addEventListener('click', () => modal.classList.add('hidden'));
     modal.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden'); });
     modal.classList.remove('hidden');
+  }
+
+  /* ════════════════════════════════
+     AI EXPLANATIONS (Plus tier)
+  ════════════════════════════════ */
+  const SK_MEA_AI     = 'mea-ai-credits-v1';
+  const MEA_AI_QUOTA  = 100; // per quarter
+
+  function getMeaAICredits() {
+    const qtr = getMeaQuarter();
+    const d   = loadSafe(SK_MEA_AI);
+    if (!d || d.quarter !== qtr) {
+      saveSafe(SK_MEA_AI, { n: MEA_AI_QUOTA, quarter: qtr });
+      return MEA_AI_QUOTA;
+    }
+    return d.n;
+  }
+
+  function useMeaAICredit() {
+    const c = getMeaAICredits();
+    if (c <= 0) return false;
+    saveSafe(SK_MEA_AI, { n: c - 1, quarter: getMeaQuarter() });
+    return true;
+  }
+
+  function getMeaQuarter() {
+    const d = new Date();
+    return `${d.getFullYear()}-Q${Math.ceil((d.getMonth()+1)/3)}`;
+  }
+
+  function updateMeaAICredits() {
+    if (!E.meaAiCredits) return;
+    const c = getMeaAICredits();
+    E.meaAiCredits.textContent = `${c} credit${c===1?'':'s'} left`;
+    E.meaAiCredits.style.color = c < 10 ? '#e74c3c' : '#27ae60';
+  }
+
+  async function triggerMeaAI(qType) {
+    const isPlus = S.hasAccess && (loadSafe(SK.tier) === 'plus');
+    if (!isPlus) {
+      showPaywall('upgrade');
+      return;
+    }
+    const credits = getMeaAICredits();
+    if (credits <= 0) {
+      alert(`You've used all ${MEA_AI_QUOTA} AI explanation credits for this quarter.\n\nTop up: ₦500 = 50 more explanations.`);
+      return;
+    }
+
+    const q   = S.questions[S.idx];
+    const ans = S.answers[S.idx];
+    if (!q) return;
+
+    // Show panel
+    if (E.meaAiPanel) E.meaAiPanel.classList.remove('hidden');
+    if (E.meaAiLoading) E.meaAiLoading.classList.remove('hidden');
+    if (E.meaAiResponse) E.meaAiResponse.classList.add('hidden');
+    updateMeaAICredits();
+
+    let prompt = '';
+    if (qType === 'objective') {
+      const correctOpt  = q.options?.[q.answer] || q.answer;
+      const studentOpt  = ans !== null && ans !== undefined ? (q.options?.[ans] || ans) : 'Did not answer';
+      const wasCorrect  = ans === q.answer;
+      prompt = `You are a WAEC/NECO exam tutor helping a Nigerian student prepare for their exams.
+
+Question: ${q.question}
+Options: ${(q.options||[]).map((o,i)=>String.fromCharCode(65+i)+'. '+o).join(' | ')}
+Correct answer: ${correctOpt}
+Student answered: ${studentOpt} (${wasCorrect ? 'CORRECT ✓' : 'WRONG ✗'})
+Subject: ${SUBJECTS[S.subject]?.name || S.subject}
+Exam: ${q.exam || S.exam}
+
+Give a clear explanation in 3-4 sentences:
+1. Why the correct answer is right — the key concept or principle
+2. ${!wasCorrect ? "Why the student's choice was wrong and what trap they fell into" : "What makes this concept commonly tested in WAEC/NECO"}
+3. A memory tip or rule to remember for the exam
+
+Use plain English. Be encouraging. Keep it concise — this student is under exam pressure.`;
+    } else {
+      prompt = `You are a WAEC/NECO exam tutor helping a Nigerian student prepare.
+
+Theory question: ${q.question}
+Subject: ${SUBJECTS[S.subject]?.name || S.subject}
+Exam: ${q.exam || S.exam}
+
+The marking scheme awards points for: ${(q.markingScheme||[]).map(p=>p.point).join('; ')}
+
+Explain in 4-5 sentences:
+1. What the examiner is really asking for
+2. The key points that must appear in a top-scoring answer
+3. Common mistakes students make on this question
+4. One examiner tip for maximising marks
+
+Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
+    }
+
+    try {
+      if (!useMeaAICredit()) {
+        if (E.meaAiLoading) E.meaAiLoading.classList.add('hidden');
+        alert('No AI credits remaining.');
+        if (E.meaAiPanel) E.meaAiPanel.classList.add('hidden');
+        return;
+      }
+      const res  = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 400,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      const data = await res.json();
+      const text = data.content?.map(c => c.text||'').join('') || 'Could not get explanation. Please try again.';
+
+      if (E.meaAiLoading) E.meaAiLoading.classList.add('hidden');
+      if (E.meaAiResponse) {
+        E.meaAiResponse.innerHTML = `
+          <div class="mea-ai-q">${safe(q.question.substring(0,90))}${q.question.length>90?'…':''}</div>
+          <div class="mea-ai-text">${safe(text).replace(/\n/g,'<br/>')}</div>`;
+        E.meaAiResponse.classList.remove('hidden');
+      }
+      updateMeaAICredits();
+    } catch(err) {
+      if (E.meaAiLoading) E.meaAiLoading.classList.add('hidden');
+      if (E.meaAiResponse) {
+        E.meaAiResponse.innerHTML = '<p style="color:#e74c3c;font-size:.85rem">Could not reach AI. Check your connection and try again.</p>';
+        E.meaAiResponse.classList.remove('hidden');
+      }
+    }
   }
 
   function shareApp() {
