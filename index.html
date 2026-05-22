@@ -438,6 +438,8 @@
           <p class="question-text" id="objectiveQuestion"></p>
           <div class="options-list" id="optionsList"></div>
           <div class="explanation-area" id="explanationArea"></div>
+          <!-- AI Explain button — Plus tier only -->
+          <button id="aiExplainBtn" class="ai-explain-btn hidden">🧠 Explain Further</button>
           <div class="key-hint" id="keyHint">
             Keyboard: <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd> answer &nbsp;·&nbsp;
             <kbd>←</kbd><kbd>→</kbd> navigate &nbsp;·&nbsp; <kbd>F</kbd> flag
@@ -454,6 +456,8 @@
               <div class="model-answer" id="modelAnswer"></div>
             </div>
             <div class="exam-tip-box" id="examTipBox" style="display:none"></div>
+            <!-- AI Explain button — Plus tier, theory -->
+            <button id="aiExplainTheoryBtn" class="ai-explain-btn hidden" style="margin-top:.75rem">🧠 Ask AI About This</button>
           </div>
         </div>
 
@@ -509,6 +513,24 @@
       </footer>
     </div>
   </section><!-- #resultScreen -->
+
+  <!-- AI EXPLANATION PANEL -->
+  <div id="meaAiPanel" class="mea-ai-panel hidden">
+    <div class="mea-ai-inner">
+      <div class="mea-ai-head">
+        <span class="mea-ai-title">🧠 AI Explanation</span>
+        <span class="mea-ai-credits" id="meaAiCredits">100 credits left</span>
+        <button class="mea-ai-close" id="meaAiClose">✕</button>
+      </div>
+      <div id="meaAiContent" class="mea-ai-content">
+        <div class="mea-ai-loading hidden" id="meaAiLoading">
+          <div class="mea-ai-spinner"></div>
+          <span>Thinking...</span>
+        </div>
+        <div id="meaAiResponse" class="mea-ai-response hidden"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- Teaser toast — mid session nudge -->
   <div id="teaserToast" class="teaser-toast hidden">
