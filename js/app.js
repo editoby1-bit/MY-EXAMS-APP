@@ -90,6 +90,7 @@
     initCommunityQuiz();
     initContestNotify();
     checkForSharedSession();
+    refreshUpgradeBar();
   }
 
   function countQuestions() {
@@ -275,6 +276,7 @@
       renderHistory();
     }
     refreshStats();
+    refreshUpgradeBar();
   }
 
   function renderUser() {
@@ -1433,10 +1435,12 @@
     if (!E.upgradeBar) return;
     if (S.hasAccess) {
       E.upgradeBar.style.display = 'none';
-      if (qcBtn) qcBtn.classList.remove('hidden');
+      if (qcBtn && S.currentUser) qcBtn.classList.remove('hidden');
       return;
     }
-    if (qcBtn) qcBtn.classList.add('hidden');
+    // Show challenge button to free users too — they get paywall on click
+    // It acts as another conversion touchpoint
+    if (qcBtn && S.currentUser) qcBtn.classList.remove('hidden');
     E.upgradeBar.style.display = '';
     const remaining = Math.max(0, FREE_TRIAL_LIMIT - S.freeUsed);
     const msgs = [
@@ -1445,7 +1449,6 @@
       `🏆 Join students acing WAEC & NECO with full model answers — from ₦2,000`,
       `🔓 Unlimited sessions · All 15 subjects · Year-by-year papers — Student Pass`,
     ];
-    // Rotate message every 30 seconds
     const idx = Math.floor(Date.now() / 30000) % msgs.length;
     if (E.upgradeBarText) E.upgradeBarText.textContent = msgs[idx];
   }
