@@ -1589,9 +1589,11 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     const remaining = Math.max(0, FREE_TRIAL_LIMIT - S.freeUsed);
     const msgs = [
       `⚡ ${remaining} free question${remaining===1?'':'s'} left — unlock unlimited access from ₦2,000`,
+      `🧠 Ask AI why you got it wrong — Student Pass Plus explains every answer`,
       `📸 Snap your theory answers and get marked instantly — Student Pass`,
-      `🏆 Join students acing WAEC & NECO with full model answers — from ₦2,000`,
+      `🏆 WAEC & NECO prep — AI explanations, snap marking, community quiz from ₦2,000`,
       `🔓 Unlimited sessions · All 15 subjects · Year-by-year papers — Student Pass`,
+      `💡 "Why is this correct?" — AI explanations for your weak areas. Plus tier ₦3,500.`,
     ];
     const idx = Math.floor(Date.now() / 30000) % msgs.length;
     if (E.upgradeBarText) E.upgradeBarText.textContent = msgs[idx];
@@ -1600,9 +1602,19 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
   /* ════════ RESULT TEASER ════════ */
   const RESULT_TEASERS = [
     {
+      icon: '🧠',
+      title: 'Got questions wrong? Ask AI why.',
+      sub:   'Student Pass Plus explains every wrong answer in plain English — personalised to your weak areas. ₦3,500/quarter.'
+    },
+    {
       icon: '📸',
       title: 'Snap your theory answers. Get marked in seconds.',
-      sub:   'Student Pass includes 50 snap-and-mark credits. No other app does this in Nigeria.'
+      sub:   'Student Pass includes 50 snap-and-mark credits. No other exam prep app in Nigeria does this.'
+    },
+    {
+      icon: '💡',
+      title: '"Why is this the correct answer?"',
+      sub:   'AI explanations on Student Pass Plus break down every question — the concept, the trap, the memory tip. Built for WAEC & NECO.'
     },
     {
       icon: '📚',
@@ -1610,19 +1622,19 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
       sub:   'Subscribers access all 15 subjects, all years — WAEC, NECO, GCE and NABTEB. Unlimited sessions.'
     },
     {
-      icon: '💡',
-      title: 'Want to know why you got that wrong?',
-      sub:   'Student Pass Plus includes AI explanations personalised to your weak areas.'
-    },
-    {
       icon: '🎯',
       title: 'Serious students subscribe.',
-      sub:   'Early access at ₦2,000/quarter — only 100 spots. Lock in your price today.'
+      sub:   'Early access at ₦2,000/quarter — only 100 spots. AI explanations, snap marking, community quiz. All in.'
     },
     {
       icon: '📅',
       title: 'Drill past questions year by year.',
-      sub:   'Subscribers can filter by exam year — practice 2019, 2020, 2021, 2022, 2023 separately.'
+      sub:   'Filter by 2019, 2020, 2021, 2022 or 2023 — or mix all years. Subscribers unlock every year.'
+    },
+    {
+      icon: '🏆',
+      title: 'Challenge your friends. See who scores higher.',
+      sub:   'Community quiz lets paid subscribers create a challenge, share the code on WhatsApp, and compare scores.'
     },
   ];
 
@@ -1640,11 +1652,13 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
 
   /* ════════ TEASER TOAST (mid-session) ════════ */
   const SESSION_TEASERS = [
-    'Subscribers get step-by-step AI explanations for every question like this 💡',
-    'Student Pass — unlimited sessions across all 15 subjects. From ₦2,000 ⚡',
-    'Snap your theory answer and get it marked against the official scheme 📸',
-    'Serious about WAEC? Over 200 questions with full model answers await you 🎯',
-    'Lock in early access at ₦2,000 before the price goes up 🔐',
+    '🧠 Ask AI why you got that wrong — Student Pass Plus explains every answer. ₦3,500/quarter.',
+    '💡 "Why is this the correct answer?" — AI explanations built for WAEC & NECO. Upgrade to Plus.',
+    '📸 Snap your theory answer and get it marked against the official scheme — Student Pass.',
+    '⚡ Unlimited sessions across all 15 subjects from ₦2,000 — early access, 100 spots only.',
+    '🏆 Challenge a friend on this subject — subscribe and create a quiz challenge now.',
+    '🔐 Lock in early access at ₦2,000/quarter before the price goes up. Limited spots left.',
+    '📅 Filter by exam year — drill 2023 WAEC only, or mix all years. Subscribers unlock everything.',
   ];
 
   let _teaserTimer = null;
