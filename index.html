@@ -456,6 +456,15 @@
               <div class="model-answer" id="modelAnswer"></div>
             </div>
             <div class="exam-tip-box" id="examTipBox" style="display:none"></div>
+
+            <!-- Snap and Mark — Student Pass subscribers -->
+            <div class="snap-action-row" id="snapActionRow">
+              <button class="snap-btn" id="snapBtn">📸 Snap My Answer</button>
+              <input type="file" id="snapFileInput" accept="image/*" capture="environment" style="display:none"/>
+              <span class="snap-credits-badge" id="snapCreditsBadge"></span>
+            </div>
+            <p class="snap-tip" id="snapTip">💡 Write clearly — illegible handwriting costs marks in real exams too.</p>
+
             <!-- AI Explain button — Plus tier, theory -->
             <button id="aiExplainTheoryBtn" class="ai-explain-btn hidden" style="margin-top:.75rem">🧠 Ask AI About This</button>
           </div>
@@ -513,6 +522,46 @@
       </footer>
     </div>
   </section><!-- #resultScreen -->
+
+  <!-- SNAP AND MARK RESULTS -->
+  <div id="snapResultModal" class="snap-overlay hidden">
+    <div class="snap-result-card">
+      <button class="snap-result-close" id="snapResultClose">✕</button>
+      <div class="snap-result-head">
+        <div class="snap-result-score-wrap">
+          <div class="snap-result-score" id="snapResultScore">0/0</div>
+          <div class="snap-result-grade" id="snapResultGrade">Fair</div>
+          <div class="snap-result-pct" id="snapResultPct">0%</div>
+        </div>
+      </div>
+
+      <!-- Handwriting warning -->
+      <div class="snap-hw-warning hidden" id="snapHwWarning">
+        ✍️ <strong>Handwriting note:</strong> Some parts were difficult to read. In a real exam, illegible answers may not be marked. Practise writing clearly.
+      </div>
+
+      <!-- Feedback -->
+      <div class="snap-feedback" id="snapFeedback"></div>
+
+      <!-- Breakdown -->
+      <div class="snap-breakdown-title">Mark-by-mark breakdown:</div>
+      <div class="snap-breakdown" id="snapBreakdown"></div>
+
+      <!-- Examiner note -->
+      <div class="snap-examiner-note" id="snapExaminerNote"></div>
+
+      <button class="snap-result-done" id="snapResultDone">Got it — back to question</button>
+    </div>
+  </div>
+
+  <!-- Snap processing overlay -->
+  <div id="snapProcessing" class="snap-processing hidden">
+    <div class="snap-processing-inner">
+      <div class="snap-spinner"></div>
+      <div class="snap-processing-title">Marking your answer...</div>
+      <div class="snap-processing-sub">AI examiner is reading your handwriting</div>
+    </div>
+  </div>
 
   <!-- AI EXPLANATION PANEL -->
   <div id="meaAiPanel" class="mea-ai-panel hidden">
