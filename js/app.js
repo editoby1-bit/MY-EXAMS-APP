@@ -73,6 +73,10 @@
     'resultUpgradTeaser','rutBtn','rutTitle',
     'teaserToast','teaserToastText','teaserToastUpgrade','teaserToastClose',
     'aiExplainBtn','aiExplainTheoryBtn','meaAiPanel','meaAiClose','meaAiCredits','meaAiLoading','meaAiResponse','meaAiContent',
+    'snapBtn','snapFileInput','snapCreditsBadge','snapActionRow','snapTip',
+    'snapResultModal','snapResultClose','snapResultScore','snapResultGrade','snapResultPct',
+    'snapHwWarning','snapFeedback','snapBreakdown','snapExaminerNote','snapResultDone',
+    'snapProcessing',
   ].forEach(id => {
     const el = document.getElementById(id);
     if (!el) console.warn('Missing element:', id);
@@ -223,6 +227,12 @@
     if (E.aiExplainBtn)       E.aiExplainBtn.addEventListener('click', () => triggerMeaAI('objective'));
     if (E.aiExplainTheoryBtn) E.aiExplainTheoryBtn.addEventListener('click', () => triggerMeaAI('theory'));
     if (E.meaAiClose)         E.meaAiClose.addEventListener('click', () => E.meaAiPanel?.classList.add('hidden'));
+
+    // Snap and mark
+    if (E.snapBtn)        E.snapBtn.addEventListener('click', triggerSnap);
+    if (E.snapFileInput)  E.snapFileInput.addEventListener('change', handleSnapFile);
+    if (E.snapResultClose) E.snapResultClose.addEventListener('click', () => E.snapResultModal.classList.add('hidden'));
+    if (E.snapResultDone)  E.snapResultDone.addEventListener('click', () => E.snapResultModal.classList.add('hidden'));
 
     document.addEventListener('keydown', onKey);
 
@@ -556,8 +566,12 @@
     const isPlus = S.hasAccess && (loadSafe(SK.tier) === 'plus');
     if (E.aiExplainBtn)       E.aiExplainBtn.classList.toggle('hidden', !isPlus || !obj);
     if (E.aiExplainTheoryBtn) E.aiExplainTheoryBtn.classList.toggle('hidden', !isPlus || obj);
-    // Reset AI panel when navigating
     if (E.meaAiPanel) E.meaAiPanel.classList.add('hidden');
+
+    // Show snap button for all paid subscribers on theory questions
+    if (E.snapActionRow) E.snapActionRow.classList.toggle('hidden', !S.hasAccess || obj);
+    if (E.snapTip)       E.snapTip.classList.toggle('hidden', obj);
+    if (S.hasAccess && !obj) updateSnapCreditsBadge();
 
     E.objectivePanel.classList.toggle('hidden', !obj);
     E.theoryPanel.classList.toggle('hidden', obj);
@@ -1547,6 +1561,222 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
         E.meaAiResponse.classList.remove('hidden');
       }
     }
+  }
+
+  /* ════════════════════════════════
+     SNAP AND MARK
+  ════════════════════════════════ */
+  // ⚙️ Set your Vercel API URL here after deployment
+  const SNAP_API_URL   = 'https://editoby-api.vercel.app/api/mark';
+  const SK_SNAPS       = 'mea-snaps-v1';
+  const SNAP_QUARTERLY = 50; // snaps per quarter for Student Pass
+
+  function getSnapCredits() {
+    const qtr = getMeaQuarter();
+    const d   = loadSafe(SK_SNAPS);
+    if (!d || d.quarter !== qtr) {
+      saveSafe(SK_SNAPS, { n: SNAP_QUARTERLY, quarter: qtr });
+      return SNAP_QUARTERLY;
+    }
+    return d.n;
+  }
+
+  function useSnapCredit() {
+    const c = getSnapCredits();
+    if (c <= 0) return false;
+    saveSafe(SK_SNAPS, { n: c - 1, quarter: getMeaQuarter() });
+    return true;
+  }
+
+  function updateSnapCreditsBadge() {
+    if (!E.snapCreditsBadge) return;
+    const c = getSnapCredits();
+    E.snapCreditsBadge.textContent = `${c} snap${c===1?'':'s'} left this quarter`;
+    E.snapCreditsBadge.style.color = c < 5 ? '#e74c3c' : 'var(--text-dim)';
+  }
+
+  function triggerSnap() {
+    if (!S.hasAccess) { showPaywall('upgrade'); return; }
+    const credits = getSnapCredits();
+    if (credits <= 0) {
+      alert('You have used all your snap credits for this quarter.\n\nTop up: ₦300 = 10 more snaps.');
+      return;
+    }
+    // Open file picker — on mobile this triggers camera
+    if (E.snapFileInput) E.snapFileInput.click();
+  }
+
+  function handleSnapFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset input so same file can be reselected
+    e.target.value = '';
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file.');
+      return;
+    }
+
+    // Compress then send
+    compressImage(file, 800, 0.75)
+      .then(compressed => sendToMark(compressed))
+      .catch(err => {
+        console.error('Compression error:', err);
+        alert('Could not process image. Please try again.');
+      });
+  }
+
+  function compressImage(file, maxWidth, quality) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = ev => {
+        const img = new Image();
+        img.onerror = reject;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let w = img.width;
+          let h = img.height;
+
+          // Scale down if wider than maxWidth
+          if (w > maxWidth) {
+            h = Math.round(h * (maxWidth / w));
+            w = maxWidth;
+          }
+
+          canvas.width  = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+
+          // White background (prevents transparency issues)
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+
+          // Export as JPEG
+          const dataUrl = canvas.toDataURL('image/jpeg', quality);
+          const base64  = dataUrl.split(',')[1];
+
+          // Log compression ratio for debugging
+          const origKB = Math.round(file.size / 1024);
+          const compKB = Math.round(base64.length * 0.75 / 1024);
+          console.log(`Snap compressed: ${origKB}KB → ${compKB}KB`);
+
+          resolve({ base64, mediaType: 'image/jpeg', sizeKB: compKB });
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function sendToMark({ base64, mediaType }) {
+    const q = S.questions[S.idx];
+    if (!q || q._type !== 'theory') return;
+
+    // Show processing overlay
+    if (E.snapProcessing) E.snapProcessing.classList.remove('hidden');
+
+    if (!useSnapCredit()) {
+      if (E.snapProcessing) E.snapProcessing.classList.add('hidden');
+      alert('No snap credits remaining.');
+      return;
+    }
+    updateSnapCreditsBadge();
+
+    const scheme = (q.markingScheme || []).map(s => ({
+      point: s.point,
+      marks: s.marks || 1,
+    }));
+    const totalMarks = scheme.reduce((sum, s) => sum + s.marks, 0);
+
+    try {
+      const res = await fetch(SNAP_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image:      base64,
+          mediaType,
+          question:   q.question,
+          scheme,
+          totalMarks,
+          subject:    SUBJECTS[S.subject]?.name || S.subject,
+          examBody:   q.exam || S.exam,
+        }),
+      });
+
+      if (E.snapProcessing) E.snapProcessing.classList.add('hidden');
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (err.code === 'IMAGE_TOO_LARGE') {
+          alert('Image is too large even after compression. Please try again with better lighting to avoid needing maximum quality.');
+        } else {
+          alert(err.error || 'Could not reach marking server. Check your connection.');
+        }
+        return;
+      }
+
+      const result = await res.json();
+      showSnapResult(result);
+
+    } catch (err) {
+      if (E.snapProcessing) E.snapProcessing.classList.add('hidden');
+      console.error('Snap API error:', err);
+      alert('Could not reach the marking server. Check your internet connection and try again.');
+    }
+  }
+
+  function showSnapResult(result) {
+    const { awarded, total, percent, grade, feedback, examinerNote, breakdown, handwritingWarning } = result;
+
+    const color = percent >= 60 ? '#27ae60' : percent >= 40 ? '#e67e22' : '#e74c3c';
+
+    if (E.snapResultScore) {
+      E.snapResultScore.textContent = `${awarded}/${total}`;
+      E.snapResultScore.style.color = color;
+    }
+    if (E.snapResultGrade) {
+      E.snapResultGrade.textContent = grade;
+      E.snapResultGrade.style.color = color;
+    }
+    if (E.snapResultPct) {
+      E.snapResultPct.textContent = `${percent}%`;
+      E.snapResultPct.style.color = color;
+    }
+
+    // Handwriting warning
+    if (E.snapHwWarning) {
+      E.snapHwWarning.classList.toggle('hidden', !handwritingWarning);
+    }
+
+    // Feedback
+    if (E.snapFeedback) E.snapFeedback.textContent = feedback;
+
+    // Breakdown
+    if (E.snapBreakdown && breakdown?.length) {
+      E.snapBreakdown.innerHTML = breakdown.map(b => {
+        const full = b.awarded >= b.maxMarks;
+        const none = b.awarded === 0;
+        const cls  = full ? 'sbr-full' : none ? 'sbr-none' : 'sbr-part';
+        const icon = full ? '✓' : none ? '✗' : '½';
+        return `<div class="snap-breakdown-row ${cls}">
+          <span class="sbr-icon">${icon}</span>
+          <div class="sbr-body">
+            <div class="sbr-point">${safe(b.point)}</div>
+            <div class="sbr-comment">${safe(b.comment || '')}</div>
+          </div>
+          <span class="sbr-marks">${b.awarded}/${b.maxMarks}</span>
+        </div>`;
+      }).join('');
+    }
+
+    // Examiner note
+    if (E.snapExaminerNote && examinerNote) {
+      E.snapExaminerNote.innerHTML = `📌 <strong>Remember:</strong> ${safe(examinerNote)}`;
+    }
+
+    if (E.snapResultModal) E.snapResultModal.classList.remove('hidden');
   }
 
   function shareApp() {
