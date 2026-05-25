@@ -1808,6 +1808,9 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     if (name==='home') { renderHistory(); refreshStats(); renderStreak(); refreshUpgradeBar(); }
     if (name==='result') { renderResultTeaser(); }
     if (name==='quiz' && !S.hasAccess) { scheduleTeaserToast(); }
+    // Hide challenge button during quiz to avoid overlapping nav
+    const qcBtn = document.getElementById('quizChallengeBtn');
+    if (qcBtn) qcBtn.classList.toggle('hidden', name === 'quiz');
   }
 
   /* ════════ UPGRADE BAR ════════ */
