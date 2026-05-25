@@ -1071,7 +1071,7 @@ body {
   .quiz-sidebar.sidebar-open { transform:translateX(0); }
   .q-panel { padding:1.25rem 1.1rem; }
   .question-header { padding:.75rem 1.1rem; }
-  .nav-footer { padding:1rem 1.1rem; }
+  .nav-footer { padding:1rem 1.1rem; padding-right: 9rem; }
 }
 
 @media (max-width:640px) {
