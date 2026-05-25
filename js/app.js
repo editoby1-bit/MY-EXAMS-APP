@@ -571,7 +571,14 @@
     // Show snap button for all paid subscribers on theory questions
     if (E.snapActionRow) E.snapActionRow.classList.toggle('hidden', !S.hasAccess || obj);
     if (E.snapTip)       E.snapTip.classList.toggle('hidden', obj);
-    if (S.hasAccess && !obj) updateSnapCreditsBadge();
+    if (S.hasAccess && !obj) {
+      updateSnapCreditsBadge();
+      // Force visible — override any lingering hidden state
+      if (E.snapActionRow) E.snapActionRow.style.display = 'flex';
+      if (E.snapBtn) E.snapBtn.style.display = 'flex';
+    } else if (obj) {
+      if (E.snapActionRow) E.snapActionRow.style.display = 'none';
+    }
 
     E.objectivePanel.classList.toggle('hidden', !obj);
     E.theoryPanel.classList.toggle('hidden', obj);
