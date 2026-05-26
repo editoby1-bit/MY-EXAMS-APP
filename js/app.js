@@ -96,8 +96,9 @@
     initContestNotify();
     checkForSharedSession();
     refreshUpgradeBar();
-    // Set initial history state so back button never exits unexpectedly
+    // Seed history with two home states so back button never exits the app
     history.replaceState({ screen: 'home' }, '', window.location.pathname);
+    history.pushState({ screen: 'home' }, '', window.location.pathname);
   }
 
   function countQuestions() {
@@ -247,13 +248,21 @@
     // Intercept browser back button
     window.addEventListener('popstate', e => {
       const screen = e.state?.screen;
-      if (screen === 'quiz' || screen === 'result') {
-        // Back pressed while on quiz or result — treat as exit
+      const currentScreen = ['quiz','result'].find(n =>
+        document.getElementById(n+'Screen')?.classList.contains('active')
+      ) || 'home';
+
+      if (currentScreen === 'quiz') {
+        // Back pressed while on quiz — exit session
+        // Push a replacement state so back stays active
+        history.pushState({ screen: 'quiz' }, '', window.location.pathname);
         confirmExit();
-      } else if (!screen || screen === 'home') {
-        // Already at home — let normal back proceed or do nothing
-        if (S.inSession) confirmExit();
+      } else if (currentScreen === 'result') {
+        // Back pressed on results — go home
+        history.pushState({ screen: 'result' }, '', window.location.pathname);
+        goHome();
       }
+      // On home — do nothing, let browser handle it naturally
     });
   }
 
@@ -1822,18 +1831,17 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     if (name==='home') { renderHistory(); refreshStats(); renderStreak(); refreshUpgradeBar(); }
     if (name==='result') { renderResultTeaser(); }
     if (name==='quiz' && !S.hasAccess) { scheduleTeaserToast(); }
-    // Hide challenge button during quiz to avoid overlapping nav
     const qcBtn = document.getElementById('quizChallengeBtn');
     if (qcBtn) qcBtn.classList.toggle('hidden', name === 'quiz');
 
-    // Push browser history state so back button works
-    if (name === 'quiz') {
-      history.pushState({ screen: 'quiz' }, '', window.location.pathname);
-    } else if (name === 'result') {
-      history.pushState({ screen: 'result' }, '', window.location.pathname);
+    // Browser history — push state on every screen transition
+    // This keeps the back button active across multiple sessions
+    if (name === 'home') {
+      // Always push a new home state so back always has somewhere to go
+      // and the next quiz session can push on top of it
+      history.pushState({ screen: 'home' }, '', window.location.pathname);
     } else {
-      // On home — replace so back button doesn't loop
-      history.replaceState({ screen: 'home' }, '', window.location.pathname);
+      history.pushState({ screen: name }, '', window.location.pathname);
     }
   }
 
