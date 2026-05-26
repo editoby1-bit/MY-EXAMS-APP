@@ -96,6 +96,8 @@
     initContestNotify();
     checkForSharedSession();
     refreshUpgradeBar();
+    // Set initial history state so back button never exits unexpectedly
+    history.replaceState({ screen: 'home' }, '', window.location.pathname);
   }
 
   function countQuestions() {
@@ -239,6 +241,18 @@
     window.addEventListener('beforeunload', e => {
       if (S.inSession && S.mode === 'exam' && !S.reviewMode) {
         e.preventDefault(); e.returnValue = '';
+      }
+    });
+
+    // Intercept browser back button
+    window.addEventListener('popstate', e => {
+      const screen = e.state?.screen;
+      if (screen === 'quiz' || screen === 'result') {
+        // Back pressed while on quiz or result — treat as exit
+        confirmExit();
+      } else if (!screen || screen === 'home') {
+        // Already at home — let normal back proceed or do nothing
+        if (S.inSession) confirmExit();
       }
     });
   }
@@ -1811,6 +1825,16 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     // Hide challenge button during quiz to avoid overlapping nav
     const qcBtn = document.getElementById('quizChallengeBtn');
     if (qcBtn) qcBtn.classList.toggle('hidden', name === 'quiz');
+
+    // Push browser history state so back button works
+    if (name === 'quiz') {
+      history.pushState({ screen: 'quiz' }, '', window.location.pathname);
+    } else if (name === 'result') {
+      history.pushState({ screen: 'result' }, '', window.location.pathname);
+    } else {
+      // On home — replace so back button doesn't loop
+      history.replaceState({ screen: 'home' }, '', window.location.pathname);
+    }
   }
 
   /* ════════ UPGRADE BAR ════════ */
