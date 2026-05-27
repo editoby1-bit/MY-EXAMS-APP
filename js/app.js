@@ -96,9 +96,8 @@
     initContestNotify();
     checkForSharedSession();
     refreshUpgradeBar();
-    // Seed history with two home states so back button never exits the app
+    // Seed history so first back press is always interceptable
     history.replaceState({ screen: 'home' }, '', window.location.pathname);
-    history.pushState({ screen: 'home' }, '', window.location.pathname);
   }
 
   function countQuestions() {
@@ -245,24 +244,38 @@
       }
     });
 
-    // Intercept browser back button
-    window.addEventListener('popstate', e => {
-      const screen = e.state?.screen;
-      const currentScreen = ['quiz','result'].find(n =>
-        document.getElementById(n+'Screen')?.classList.contains('active')
-      ) || 'home';
+    // Back button — double-back to exit pattern
+    let _backPressedAt = 0;
+    window.addEventListener('popstate', () => {
+      const quizActive   = document.getElementById('quizScreen')?.classList.contains('active');
+      const resultActive = document.getElementById('resultScreen')?.classList.contains('active');
 
-      if (currentScreen === 'quiz') {
-        // Back pressed while on quiz — exit session
-        // Push a replacement state so back stays active
-        history.pushState({ screen: 'quiz' }, '', window.location.pathname);
-        confirmExit();
-      } else if (currentScreen === 'result') {
-        // Back pressed on results — go home
+      if (resultActive) {
+        // On results — back goes straight home, no warning needed
         history.pushState({ screen: 'result' }, '', window.location.pathname);
         goHome();
+        return;
       }
-      // On home — do nothing, let browser handle it naturally
+
+      if (quizActive) {
+        // Re-push so back button stays active
+        history.pushState({ screen: 'quiz' }, '', window.location.pathname);
+
+        const now = Date.now();
+        if (now - _backPressedAt < 3000) {
+          // Second back press within 3 seconds — exit
+          _backPressedAt = 0;
+          hideBackWarningToast();
+          confirmExit();
+        } else {
+          // First back press — show warning toast
+          _backPressedAt = now;
+          showBackWarningToast();
+        }
+        return;
+      }
+
+      // On home — do nothing, let browser minimise app
     });
   }
 
@@ -1809,6 +1822,41 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     if (E.snapResultModal) E.snapResultModal.classList.remove('hidden');
   }
 
+  /* ════════ BACK BUTTON WARNING TOAST ════════ */
+  let _backToastTimer = null;
+
+  function showBackWarningToast() {
+    let toast = document.getElementById('backWarningToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'backWarningToast';
+      toast.style.cssText = `
+        position:fixed; bottom:5rem; left:50%; transform:translateX(-50%);
+        background:#0a1628; color:white; border:1.5px solid #d4af37;
+        border-radius:10px; padding:.75rem 1.25rem;
+        font-family:var(--sans,sans-serif); font-size:.82rem; font-weight:500;
+        text-align:center; z-index:9999; max-width:320px; width:calc(100% - 2rem);
+        box-shadow:0 4px 20px rgba(0,0,0,.4); line-height:1.5;
+        animation:toastSlideUp .25s ease;
+      `;
+      document.body.appendChild(toast);
+    }
+    const isExam = S.mode === 'exam';
+    toast.innerHTML = isExam
+      ? '⚠️ <strong>Press back again to exit exam.</strong><br>Use <strong>← Prev / Next →</strong> to navigate questions.'
+      : '← <strong>Press back again to exit session.</strong><br>Use <strong>← Prev / Next →</strong> to navigate questions.';
+    toast.style.display = 'block';
+
+    if (_backToastTimer) clearTimeout(_backToastTimer);
+    _backToastTimer = setTimeout(hideBackWarningToast, 3000);
+  }
+
+  function hideBackWarningToast() {
+    const toast = document.getElementById('backWarningToast');
+    if (toast) toast.style.display = 'none';
+    if (_backToastTimer) { clearTimeout(_backToastTimer); _backToastTimer = null; }
+  }
+
   function shareApp() {
     const url  = window.location.href;
     const text = '🎓 Preparing for WAEC/NECO? Try My Exams App!\nPast questions + model answers for 15 subjects + snap-and-mark theory.\n₦2,500 for 3 months — early access at ₦2,000.\n\n'+url;
@@ -1834,14 +1882,15 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     const qcBtn = document.getElementById('quizChallengeBtn');
     if (qcBtn) qcBtn.classList.toggle('hidden', name === 'quiz');
 
-    // Browser history — push state on every screen transition
-    // This keeps the back button active across multiple sessions
-    if (name === 'home') {
-      // Always push a new home state so back always has somewhere to go
-      // and the next quiz session can push on top of it
-      history.pushState({ screen: 'home' }, '', window.location.pathname);
-    } else {
+    // History management — push when entering quiz or result
+    // so browser back button has a state to pop
+    if (name === 'quiz' || name === 'result') {
       history.pushState({ screen: name }, '', window.location.pathname);
+    } else {
+      // Returning home — replace current state, keep one entry in stack
+      history.replaceState({ screen: 'home' }, '', window.location.pathname);
+      // Then push a fresh home entry so next session's back still works
+      history.pushState({ screen: 'home' }, '', window.location.pathname);
     }
   }
 
