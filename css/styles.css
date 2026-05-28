@@ -2163,3 +2163,54 @@ body {
   transition: background var(--t);
 }
 .snap-result-done:hover { background: var(--gold-dk); }
+
+/* ══════════════════════════════
+   EXIT CONFIRMATION MODAL
+══════════════════════════════ */
+.exit-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(10,22,40,.75);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  padding: 1.5rem;
+}
+.exit-modal-overlay.hidden { display: none; }
+.exit-modal-card {
+  background: var(--white);
+  border-radius: var(--r-l);
+  padding: 2rem 1.75rem;
+  max-width: 320px; width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,.3);
+}
+.exit-modal-icon { font-size: 2rem; margin-bottom: .5rem; }
+.exit-modal-title {
+  font-family: var(--serif);
+  font-size: 1.35rem; font-weight: 700;
+  margin-bottom: .4rem;
+}
+.exit-modal-sub {
+  font-size: .85rem; color: var(--text-dim);
+  line-height: 1.5; margin-bottom: 1.5rem;
+}
+.exit-modal-btns {
+  display: flex; gap: .75rem;
+}
+.exit-modal-stay {
+  flex: 1;
+  font-family: var(--sans); font-size: .9rem; font-weight: 600;
+  color: var(--ink); background: var(--cream);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-s); padding: .7rem;
+  cursor: pointer; transition: all var(--t);
+}
+.exit-modal-stay:hover { border-color: var(--gold); }
+.exit-modal-leave {
+  flex: 1;
+  font-family: var(--sans); font-size: .9rem; font-weight: 700;
+  color: white; background: #e74c3c;
+  border: none; border-radius: var(--r-s); padding: .7rem;
+  cursor: pointer; transition: all var(--t);
+}
+.exit-modal-leave:hover { background: #c0392b; }
