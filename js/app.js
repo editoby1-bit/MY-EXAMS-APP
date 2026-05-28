@@ -244,38 +244,33 @@
       }
     });
 
-    // Back button — double-back to exit pattern
-    let _backPressedAt = 0;
+    // Back button — clean single implementation
+    let _backLastPress = 0;
     window.addEventListener('popstate', () => {
       const quizActive   = document.getElementById('quizScreen')?.classList.contains('active');
       const resultActive = document.getElementById('resultScreen')?.classList.contains('active');
 
+      if (!quizActive && !resultActive) return; // on home — let browser handle
+
+      // Always re-push so back button stays active
+      history.pushState({ screen: quizActive ? 'quiz' : 'result' }, '', window.location.pathname);
+
       if (resultActive) {
-        // On results — back goes straight home, no warning needed
-        history.pushState({ screen: 'result' }, '', window.location.pathname);
+        // Results — back goes home immediately, no warning
         goHome();
         return;
       }
 
-      if (quizActive) {
-        // Re-push so back button stays active
-        history.pushState({ screen: 'quiz' }, '', window.location.pathname);
-
-        const now = Date.now();
-        if (now - _backPressedAt < 3000) {
-          // Second back press within 3 seconds — exit
-          _backPressedAt = 0;
-          hideBackWarningToast();
-          confirmExit();
-        } else {
-          // First back press — show warning toast
-          _backPressedAt = now;
-          showBackWarningToast();
-        }
-        return;
+      // Quiz — double back pattern
+      const now = Date.now();
+      if (now - _backLastPress < 3000) {
+        _backLastPress = 0;
+        hideBackWarningToast();
+        confirmExit();
+      } else {
+        _backLastPress = now;
+        showBackWarningToast();
       }
-
-      // On home — do nothing, let browser minimise app
     });
   }
 
@@ -858,18 +853,61 @@
   }
 
   /* ════════ EXIT ════════ */
+  /* ════════ EXIT CONFIRMATION ════════ */
   function confirmExit() {
-    if (S.mode==='exam' && S.inSession && !S.reviewMode) {
-      if (!confirm('Exit exam? Your answers will be submitted.')) return;
-      finishSession(false);
-    } else {
-      if (S.inSession && !S.reviewMode) {
-        if (!confirm('Exit this session?')) return;
-      }
-      if (S.timerId) { clearInterval(S.timerId); S.timerId=null; }
-      S.inSession=false;
+    if (!S.inSession || S.reviewMode) {
+      // Not in active session — just go home
+      if (S.timerId) { clearInterval(S.timerId); S.timerId = null; }
+      S.inSession = false;
       showScreen('home');
+      return;
     }
+    showExitModal(
+      S.mode === 'exam',
+      () => {
+        // Confirmed exit
+        if (S.mode === 'exam') {
+          finishSession(false);
+        } else {
+          if (S.timerId) { clearInterval(S.timerId); S.timerId = null; }
+          S.inSession = false;
+          showScreen('home');
+        }
+      }
+    );
+  }
+
+  function showExitModal(isExam, onConfirm) {
+    const modal = document.getElementById('exitConfirmModal');
+    const icon  = document.getElementById('exitModalIcon');
+    const title = document.getElementById('exitModalTitle');
+    const sub   = document.getElementById('exitModalSub');
+    const stay  = document.getElementById('exitModalStay');
+    const leave = document.getElementById('exitModalLeave');
+    if (!modal) { onConfirm(); return; }
+
+    icon.textContent  = isExam ? '⚠️' : '🚪';
+    title.textContent = isExam ? 'Exit Exam?' : 'Exit Session?';
+    sub.textContent   = isExam
+      ? 'Your answers will be submitted and scored.'
+      : 'Your progress in this session will be lost.';
+    leave.textContent = isExam ? 'Submit & Exit' : 'Exit';
+
+    modal.classList.remove('hidden');
+
+    // Clean up old listeners
+    const newStay  = stay.cloneNode(true);
+    const newLeave = leave.cloneNode(true);
+    stay.parentNode.replaceChild(newStay, stay);
+    leave.parentNode.replaceChild(newLeave, leave);
+
+    document.getElementById('exitModalStay').addEventListener('click', () => {
+      modal.classList.add('hidden');
+    });
+    document.getElementById('exitModalLeave').addEventListener('click', () => {
+      modal.classList.add('hidden');
+      onConfirm();
+    });
   }
 
   function goHome() {
