@@ -250,18 +250,23 @@
       const quizActive   = document.getElementById('quizScreen')?.classList.contains('active');
       const resultActive = document.getElementById('resultScreen')?.classList.contains('active');
 
-      if (!quizActive && !resultActive) return; // on home — let browser handle
+      if (!quizActive && !resultActive) return;
 
-      // Always re-push so back button stays active
-      history.pushState({ screen: quizActive ? 'quiz' : 'result' }, '', window.location.pathname);
+      // Defer pushState — Chrome throttles synchronous pushState inside popstate
+      setTimeout(() => {
+        history.pushState(
+          { screen: quizActive ? 'quiz' : 'result' },
+          '',
+          window.location.pathname
+        );
+      }, 0);
 
       if (resultActive) {
-        // Results — back goes home immediately, no warning
         goHome();
         return;
       }
 
-      // Quiz — double back pattern
+      // Double-back to exit — works on Chrome mobile/PC and Firefox
       const now = Date.now();
       if (now - _backLastPress < 3000) {
         _backLastPress = 0;
