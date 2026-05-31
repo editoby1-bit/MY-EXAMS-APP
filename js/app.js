@@ -96,8 +96,10 @@
     initContestNotify();
     checkForSharedSession();
     refreshUpgradeBar();
-    // Seed history so first back press is always interceptable
-    history.replaceState({ screen: 'home' }, '', window.location.pathname);
+    // Clear any stale hash on load
+    if (window.location.hash) {
+      history.replaceState(null, '', window.location.pathname);
+    }
   }
 
   function countQuestions() {
@@ -245,28 +247,25 @@
     });
 
     // Back button — clean single implementation
+    // Back button — hash-based approach works reliably on Chrome mobile/PC and Firefox
     let _backLastPress = 0;
-    window.addEventListener('popstate', () => {
+
+    window.addEventListener('hashchange', () => {
       const quizActive   = document.getElementById('quizScreen')?.classList.contains('active');
       const resultActive = document.getElementById('resultScreen')?.classList.contains('active');
 
       if (!quizActive && !resultActive) return;
 
-      // Defer pushState — Chrome throttles synchronous pushState inside popstate
-      setTimeout(() => {
-        history.pushState(
-          { screen: quizActive ? 'quiz' : 'result' },
-          '',
-          window.location.pathname
-        );
-      }, 0);
+      // Immediately restore the hash so back button stays active
+      if (quizActive)   window.location.hash = 'quiz';
+      if (resultActive) window.location.hash = 'result';
 
       if (resultActive) {
         goHome();
         return;
       }
 
-      // Double-back to exit — works on Chrome mobile/PC and Firefox
+      // Double-back to exit
       const now = Date.now();
       if (now - _backLastPress < 3000) {
         _backLastPress = 0;
@@ -1925,15 +1924,13 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     const qcBtn = document.getElementById('quizChallengeBtn');
     if (qcBtn) qcBtn.classList.toggle('hidden', name === 'quiz');
 
-    // History management — push when entering quiz or result
-    // so browser back button has a state to pop
+    // Hash-based navigation — reliable on Chrome mobile/PC and Firefox
     if (name === 'quiz' || name === 'result') {
-      history.pushState({ screen: name }, '', window.location.pathname);
+      // Set hash without triggering hashchange (we only want it to trigger on back)
+      history.pushState(null, '', window.location.pathname + '#' + name);
     } else {
-      // Returning home — replace current state, keep one entry in stack
-      history.replaceState({ screen: 'home' }, '', window.location.pathname);
-      // Then push a fresh home entry so next session's back still works
-      history.pushState({ screen: 'home' }, '', window.location.pathname);
+      // Going home — clear hash
+      history.pushState(null, '', window.location.pathname);
     }
   }
 
