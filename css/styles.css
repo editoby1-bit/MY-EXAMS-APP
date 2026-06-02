@@ -774,7 +774,6 @@ body {
 /* ── Quiz main ── */
 .quiz-main {
   display: flex; flex-direction:column;
-  min-height: 100vh;
   background: var(--cream);
 }
 
