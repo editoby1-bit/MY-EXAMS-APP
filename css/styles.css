@@ -654,11 +654,10 @@ body {
 /* ══════════════════════════════
    QUIZ SCREEN
 ══════════════════════════════ */
-#quizScreen { min-height:100vh; background:var(--cream); }
+#quizScreen { background:var(--cream); }
 .quiz-layout {
   display: grid;
   grid-template-columns: 248px 1fr;
-  min-height: 100vh;
 }
 
 /* Mobile sidebar toggle */
