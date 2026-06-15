@@ -2212,3 +2212,54 @@ body {
   cursor: pointer; transition: all var(--t);
 }
 .exit-modal-leave:hover { background: #c0392b; }
+
+/* ══════════════════════════════
+   SECTION TABS (Both mode)
+══════════════════════════════ */
+.section-tabs {
+  display: flex;
+  border-bottom: 2px solid var(--border);
+  background: var(--white);
+}
+.section-tabs.hidden { display: none; }
+.section-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: .6rem 1rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all var(--t);
+  gap: .1rem;
+}
+.section-tab.active {
+  border-bottom-color: var(--gold);
+  background: rgba(212,175,55,.06);
+}
+.section-tab-label {
+  font-family: var(--sans);
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.section-tab.active .section-tab-label { color: var(--gold-dk); }
+.section-tab-sub {
+  font-size: .68rem;
+  color: var(--text-dim);
+}
+.section-tab-count {
+  font-size: .65rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  background: var(--cream-d,#e8e0d0);
+  border-radius: 99px;
+  padding: .1rem .45rem;
+}
+.section-tab.active .section-tab-count {
+  background: rgba(212,175,55,.2);
+  color: var(--gold-dk);
+}
