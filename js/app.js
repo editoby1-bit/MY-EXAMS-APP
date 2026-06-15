@@ -27,7 +27,11 @@
     freeSnaps:   getFreeSnaps(),      // lifetime snaps used on free tier
     streak:      loadSafe(SK.streak, { count:0, lastDate:'' }),
     exam:        'WAEC',
-    year:        'random',            // 'random' or e.g. 2023
+    year:        'random',
+    bothMode:    'sections',
+    section:     'A',
+    sectionA:    [],
+    sectionB:    [],            // 'random' or e.g. 2023
     subject:     '',
     mode:        'practice',
     type:        'objective',
@@ -49,6 +53,8 @@
     'homeScreen','quizScreen','resultScreen',
     'studentNameInput','loginBtn','studentPill','streakDisplay',
     'subjectGrid','modeToggle','typeToggle','qCountSelect','durationSelect',
+    'bothModeGroup','bothModeToggle',
+    'sectionTabs','sectionTabA','sectionTabB','sectionACount','sectionBCount',
     'startBtn','startBtnText',
     'historyList','clearHistoryBtn',
     'hStatSessions','hStatAvg','hStatBest','hStatQs',
@@ -445,28 +451,31 @@
     const examFilter = q => (!q.exam || q.exam === S.exam) &&
                             (S.year === 'random' || !q.year || q.year === S.year);
 
+    // Helper to get filtered pool for a type
+    const getPool = (type) => {
+      const raw = (bank[type]||[]);
+      let qs = raw.filter(examFilter);
+      if (!qs.length) qs = raw.filter(q => !q.exam || q.exam === S.exam);
+      if (!qs.length) qs = [...raw];
+      return shuffle(qs).map(q => ({...q, _type: type === 'objective' ? 'objective' : 'theory'}));
+    };
+
     let pool = [];
     if (S.type === 'objective') {
-      let qs = (bank.objective||[]).filter(examFilter);
-      if (!qs.length) qs = (bank.objective||[]).filter(q => !q.exam || q.exam === S.exam); // drop year fallback
-      if (!qs.length) qs = [...(bank.objective||[])]; // final fallback: all
-      pool = shuffle(qs).map(q => ({...q, _type:'objective'}));
+      pool = getPool('objective');
     } else if (S.type === 'theory') {
-      let qs = (bank.theory||[]).filter(examFilter);
-      if (!qs.length) qs = (bank.theory||[]).filter(q => !q.exam || q.exam === S.exam);
-      if (!qs.length) qs = [...(bank.theory||[])];
-      pool = shuffle(qs).map(q => ({...q, _type:'theory'}));
+      pool = getPool('theory');
+    } else if (S.type === 'both' && S.bothMode === 'sections') {
+      // Sections mode — keep pools separate, start with Section A
+      S.sectionA = getPool('objective').slice(0, S.count);
+      S.sectionB = getPool('theory').slice(0, Math.max(3, Math.ceil(S.count * 0.2)));
+      S.section  = 'A';
+      pool = [...S.sectionA];
     } else {
-      let objQs = (bank.objective||[]).filter(examFilter);
-      if (!objQs.length) objQs = (bank.objective||[]).filter(q => !q.exam || q.exam === S.exam);
-      if (!objQs.length) objQs = [...(bank.objective||[])];
-      let thQs  = (bank.theory||[]).filter(examFilter);
-      if (!thQs.length)  thQs  = (bank.theory||[]).filter(q => !q.exam || q.exam === S.exam);
-      if (!thQs.length)  thQs  = [...(bank.theory||[])];
-      pool = [
-        ...shuffle(objQs).map(q => ({...q, _type:'objective'})),
-        ...shuffle(thQs).map(q =>  ({...q, _type:'theory'})),
-      ];
+      // Mixed mode — interleave objectives and theory
+      const objQs = getPool('objective');
+      const thQs  = getPool('theory');
+      pool = [...objQs, ...thQs];
     }
 
     if (!pool.length) {
@@ -588,6 +597,17 @@
     const q   = S.questions[S.idx];
     const ans = S.answers[S.idx];
     const obj = q._type === 'objective';
+
+    // Update section tabs if in sections mode
+    if (S.type === 'both' && S.bothMode === 'sections') {
+      if (E.sectionTabs) E.sectionTabs.classList.remove('hidden');
+      if (E.sectionTabA) E.sectionTabA.classList.toggle('active', S.section === 'A');
+      if (E.sectionTabB) E.sectionTabB.classList.toggle('active', S.section === 'B');
+      if (E.sectionACount) E.sectionACount.textContent = S.sectionA.length + 'Q';
+      if (E.sectionBCount) E.sectionBCount.textContent = S.sectionB.length + 'Q';
+    } else {
+      if (E.sectionTabs) E.sectionTabs.classList.add('hidden');
+    }
 
     E.qNumBadge.textContent     = `Q${S.idx+1}`;
     E.qSubjectTag.textContent   = SUBJECTS[S.subject]?.name || S.subject;
@@ -1897,6 +1917,28 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     const toast = document.getElementById('backWarningToast');
     if (toast) toast.style.display = 'none';
     if (_backToastTimer) { clearTimeout(_backToastTimer); _backToastTimer = null; }
+  }
+
+  /* ════════ SECTION SWITCHING ════════ */
+  function switchSection(section) {
+    if (section === S.section) return;
+    // Save answers for current section before switching
+    if (S.section === 'A') {
+      S.sectionA = S.questions.map((q, i) => ({...q, _savedAns: S.answers[i], _savedFlag: S.flagged[i]}));
+    } else {
+      S.sectionB = S.questions.map((q, i) => ({...q, _savedAns: S.answers[i], _savedFlag: S.flagged[i]}));
+    }
+    S.section = section;
+    const newPool = section === 'A' ? S.sectionA : S.sectionB;
+    S.questions = newPool.map(q => {const c={...q}; delete c._savedAns; delete c._savedFlag; return c;});
+    S.answers   = newPool.map(q => q._savedAns !== undefined ? q._savedAns : null);
+    S.flagged   = newPool.map(q => q._savedFlag || false);
+    S.idx = 0;
+    S.showAnswer = false;
+    buildPills();
+    renderQ();
+    if (E.sectionTabA) E.sectionTabA.classList.toggle('active', section === 'A');
+    if (E.sectionTabB) E.sectionTabB.classList.toggle('active', section === 'B');
   }
 
   function shareApp() {
