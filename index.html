@@ -126,6 +126,13 @@
                 <button class="mode-btn" data-type="both">Both</button>
               </div>
             </div>
+            <div class="option-group hidden" id="bothModeGroup">
+              <label class="opt-label">Both Mode</label>
+              <div class="mode-toggle" id="bothModeToggle">
+                <button class="mode-btn active" data-bothmode="sections">📋 Sections A+B</button>
+                <button class="mode-btn" data-bothmode="mixed">🔀 Mixed</button>
+              </div>
+            </div>
           </div>
           <div class="options-row" style="margin-top:0.6rem">
             <div class="option-group">
@@ -418,6 +425,20 @@
       </aside>
 
       <main class="quiz-main">
+
+        <!-- Section tabs — sections mode only -->
+        <div class="section-tabs hidden" id="sectionTabs">
+          <button class="section-tab active" id="sectionTabA" data-section="A">
+            <span class="section-tab-label">Section A</span>
+            <span class="section-tab-sub">Objectives</span>
+            <span class="section-tab-count" id="sectionACount"></span>
+          </button>
+          <button class="section-tab" id="sectionTabB" data-section="B">
+            <span class="section-tab-label">Section B</span>
+            <span class="section-tab-sub">Theory</span>
+            <span class="section-tab-count" id="sectionBCount"></span>
+          </button>
+        </div>
 
         <div class="qtype-banner" id="qtypeBanner">Objective</div>
 
