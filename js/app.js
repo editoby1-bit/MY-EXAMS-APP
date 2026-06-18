@@ -753,6 +753,12 @@
   /* ════════ NAVIGATE ════════ */
   function navigate(dir) {
     if (dir>0 && S.idx===S.questions.length-1) {
+      // Auto-advance to Section B if in sections mode and currently in A
+      if (S.type === 'both' && S.bothMode === 'sections' && S.section === 'A' && S.sectionB.length > 0) {
+        // Show a brief prompt before switching
+        showSectionTransition();
+        return;
+      }
       if (S.reviewMode) showScreen('result');
       else confirmSubmit();
       return;
@@ -1920,6 +1926,34 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
   }
 
   /* ════════ SECTION SWITCHING ════════ */
+  function showSectionTransition() {
+    // Show a modal prompting student to move to Section B
+    const modal = document.getElementById('exitConfirmModal');
+    const icon  = document.getElementById('exitModalIcon');
+    const title = document.getElementById('exitModalTitle');
+    const sub   = document.getElementById('exitModalSub');
+    const stay  = document.getElementById('exitModalStay');
+    const leave = document.getElementById('exitModalLeave');
+    if (!modal) { switchSection('B'); return; }
+
+    icon.textContent  = '📋';
+    title.textContent = 'Section A Complete';
+    sub.textContent   = 'You have reached the end of Section A (Objectives). Move to Section B (Theory) or stay to review your answers.';
+    leave.textContent = 'Go to Section B →';
+    const stayBtn  = stay.cloneNode(true);
+    const leaveBtn = leave.cloneNode(true);
+    stay.parentNode.replaceChild(stayBtn, stay);
+    leave.parentNode.replaceChild(leaveBtn, leave);
+    document.getElementById('exitModalStay').textContent  = 'Stay in Section A';
+    document.getElementById('exitModalLeave').textContent = 'Go to Section B →';
+    document.getElementById('exitModalStay').addEventListener('click',  () => modal.classList.add('hidden'));
+    document.getElementById('exitModalLeave').addEventListener('click', () => {
+      modal.classList.add('hidden');
+      switchSection('B');
+    });
+    modal.classList.remove('hidden');
+  }
+
   function switchSection(section) {
     if (section === S.section) return;
     // Save answers for current section before switching
