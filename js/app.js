@@ -1980,7 +1980,15 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     }
     S.section = section;
     const newPool = section === 'A' ? S.sectionA : S.sectionB;
-    S.questions = newPool.map(q => {const c={...q}; delete c._savedAns; delete c._savedFlag; return c;});
+    // Explicitly preserve _type when cleaning up saved fields
+    S.questions = newPool.map(q => {
+      const c = {...q};
+      delete c._savedAns;
+      delete c._savedFlag;
+      // Ensure _type is always set correctly
+      if (!c._type) c._type = section === 'A' ? 'objective' : 'theory';
+      return c;
+    });
     S.answers   = newPool.map(q => q._savedAns !== undefined ? q._savedAns : null);
     S.flagged   = newPool.map(q => q._savedFlag || false);
     S.idx = 0;
