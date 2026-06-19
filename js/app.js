@@ -1924,6 +1924,26 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     }
 
     if (E.snapResultModal) E.snapResultModal.classList.remove('hidden');
+
+    // Practice mode — reveal model answer and examiner tip after snap
+    // Same behaviour as clicking an option in objective mode
+    if (S.mode === 'practice' && !S.reviewMode) {
+      S.showAnswer = true;
+      if (E.modelAnswer) {
+        E.modelAnswer.classList.add('visible');
+      }
+      if (E.toggleAnswerBtn) {
+        E.toggleAnswerBtn.textContent = '🙈 Hide Model Answer';
+      }
+      // Show examiner tip now that student has attempted
+      const q = S.questions[S.idx];
+      if (q?.examTip && E.examTipBox) {
+        E.examTipBox.innerHTML =
+          `<div class="tip-head">⚡ Examiner's Tip</div>` +
+          `<div class="tip-body">${safe(q.examTip)}</div>`;
+        E.examTipBox.style.display = 'block';
+      }
+    }
   }
 
   /* ════════ BACK BUTTON WARNING TOAST ════════ */
