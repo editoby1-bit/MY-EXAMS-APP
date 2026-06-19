@@ -184,6 +184,7 @@
         E.typeToggle.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
         b.classList.add('active');
         S.type = b.dataset.type;
+        if (E.bothModeGroup) E.bothModeGroup.classList.toggle('hidden', S.type !== 'both');
         updateSubjectCounts();
         refreshStartBtn();
       })
@@ -243,6 +244,21 @@
     if (E.snapFileInput)  E.snapFileInput.addEventListener('change', handleSnapFile);
     if (E.snapResultClose) E.snapResultClose.addEventListener('click', () => E.snapResultModal.classList.add('hidden'));
     if (E.snapResultDone)  E.snapResultDone.addEventListener('click', () => E.snapResultModal.classList.add('hidden'));
+
+    // Both mode toggle
+    if (E.bothModeToggle) {
+      E.bothModeToggle.querySelectorAll('.mode-btn').forEach(b =>
+        b.addEventListener('click', () => {
+          E.bothModeToggle.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
+          b.classList.add('active');
+          S.bothMode = b.dataset.bothmode;
+        })
+      );
+    }
+
+    // Section tab clicks
+    if (E.sectionTabA) E.sectionTabA.addEventListener('click', () => switchSection('A'));
+    if (E.sectionTabB) E.sectionTabB.addEventListener('click', () => switchSection('B'));
 
     document.addEventListener('keydown', onKey);
 
