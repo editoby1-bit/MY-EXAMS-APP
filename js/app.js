@@ -722,39 +722,59 @@
     const total = q.totalMarks ||
       (q.markingScheme||[]).reduce((s,p) => s+(p.marks||0), 0);
 
-    E.markingScheme.innerHTML =
-      `<div class="ms-head">` +
-        `<span class="ms-title">📋 Marking Scheme</span>` +
-        `<span class="ms-badge">${total} mark${total!==1?'s':''}</span>` +
-      `</div>` +
-      `<div class="ms-list">` +
-      (q.markingScheme||[]).map((pt,i) =>
-        `<div class="ms-pt">` +
-          `<span class="ms-n">${i+1}</span>` +
-          `<span class="ms-txt">${safe(pt.point)}</span>` +
-          `<span class="ms-mk">${pt.marks}mk</span>` +
-        `</div>`
-      ).join('') +
-      `</div>`;
+    const isExam    = S.mode === 'exam';
+    const inReview  = S.reviewMode;
+    const attempted = S.answers[S.idx] === 'seen' || S.answers[S.idx] !== null;
 
-    E.modelAnswer.innerHTML = q.modelAnswer
-      ? q.modelAnswer.split('\n').map(l =>
-          l.trim()==='' ? '<br>' : `<p>${safe(l)}</p>`
-        ).join('')
-      : '<p><em>No model answer available.</em></p>';
-
-    const showAns = S.reviewMode;
-    E.modelAnswer.classList.toggle('visible', showAns);
-    E.toggleAnswerBtn.textContent = showAns ? '🙈 Hide Model Answer' : '📄 Show Model Answer';
-    S.showAnswer = showAns;
-
-    if (q.examTip) {
-      E.examTipBox.innerHTML =
-        `<div class="tip-head">⚡ Examiner's Tip</div>` +
-        `<div class="tip-body">${safe(q.examTip)}</div>`;
-      E.examTipBox.style.display = 'block';
-    } else {
+    // Exam mode — hide everything until review
+    // Practice mode — show marking scheme so student knows what's expected
+    //                 model answer hidden until explicitly revealed
+    if (isExam && !inReview) {
+      // Exam mode: hide marking scheme, model answer, tip
+      E.markingScheme.innerHTML = '';
+      E.markingScheme.style.display = 'none';
+      E.modelAnswer.classList.remove('visible');
+      E.toggleAnswerBtn.style.display = 'none';
       E.examTipBox.style.display = 'none';
+    } else {
+      // Practice or review mode: show marking scheme
+      E.markingScheme.style.display = '';
+      E.markingScheme.innerHTML =
+        `<div class="ms-head">` +
+          `<span class="ms-title">📋 Marking Scheme</span>` +
+          `<span class="ms-badge">${total} mark${total!==1?'s':''}</span>` +
+        `</div>` +
+        `<div class="ms-list">` +
+        (q.markingScheme||[]).map((pt,i) =>
+          `<div class="ms-pt">` +
+            `<span class="ms-n">${i+1}</span>` +
+            `<span class="ms-txt">${safe(pt.point)}</span>` +
+            `<span class="ms-mk">${pt.marks}mk</span>` +
+          `</div>`
+        ).join('') +
+        `</div>`;
+
+      E.modelAnswer.innerHTML = q.modelAnswer
+        ? q.modelAnswer.split('\n').map(l =>
+            l.trim()==='' ? '<br>' : `<p>${safe(l)}</p>`
+          ).join('')
+        : '<p><em>No model answer available.</em></p>';
+
+      // Show model answer only in review mode or if student explicitly revealed it
+      const showAns = inReview || S.showAnswer;
+      E.modelAnswer.classList.toggle('visible', showAns);
+      E.toggleAnswerBtn.style.display = '';
+      E.toggleAnswerBtn.textContent = showAns ? '🙈 Hide Model Answer' : '📄 Show Model Answer';
+      S.showAnswer = showAns;
+
+      if (q.examTip && (inReview || attempted)) {
+        E.examTipBox.innerHTML =
+          `<div class="tip-head">⚡ Examiner's Tip</div>` +
+          `<div class="tip-body">${safe(q.examTip)}</div>`;
+        E.examTipBox.style.display = 'block';
+      } else {
+        E.examTipBox.style.display = 'none';
+      }
     }
 
     if (S.answers[S.idx]===null) S.answers[S.idx]='seen';
