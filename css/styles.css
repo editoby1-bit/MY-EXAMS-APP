@@ -2263,3 +2263,12 @@ body {
   background: rgba(212,175,55,.2);
   color: var(--gold-dk);
 }
+
+/* Snap hint in practice mode theory */
+.ms-snap-hint {
+  font-size: .82rem;
+  color: var(--text-dim);
+  font-style: italic;
+  padding: .75rem 0 .25rem;
+  text-align: center;
+}
