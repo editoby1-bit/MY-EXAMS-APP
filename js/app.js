@@ -1147,7 +1147,7 @@
     const email = prompt(`Enter your email address to continue:`);
     if (!email?.includes('@')) { if (email !== null) alert('Please enter a valid email address.'); return; }
 
-    const PAYSTACK_KEY = 'pk_test_1ac5e055de30ca320129b0e5b6f57d0df7ab2281';
+    const PAYSTACK_KEY = 'pk_live_5d12ee2a90900116dc222107e059a06214c085ff';
     // 🔑 When Paystack approves your account, replace the line above with:
     // const PAYSTACK_KEY = 'pk_live_YOUR_LIVE_KEY_HERE';
 
