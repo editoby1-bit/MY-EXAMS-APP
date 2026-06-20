@@ -724,20 +724,31 @@
 
     const isExam    = S.mode === 'exam';
     const inReview  = S.reviewMode;
-    const attempted = S.answers[S.idx] === 'seen' || S.answers[S.idx] !== null;
+    const snapped   = S.answers[S.idx] === 'snapped';
+    const showFull  = inReview || snapped; // reveal everything after snap or in review
 
-    // Exam mode — hide everything until review
-    // Practice mode — show marking scheme so student knows what's expected
-    //                 model answer hidden until explicitly revealed
     if (isExam && !inReview) {
-      // Exam mode: hide marking scheme, model answer, tip
+      // Exam mode: hide everything
       E.markingScheme.innerHTML = '';
       E.markingScheme.style.display = 'none';
       E.modelAnswer.classList.remove('visible');
       E.toggleAnswerBtn.style.display = 'none';
       E.examTipBox.style.display = 'none';
+    } else if (!showFull) {
+      // Practice mode — before snap: show only total marks, hide details
+      E.markingScheme.style.display = '';
+      E.markingScheme.innerHTML =
+        `<div class="ms-head">` +
+          `<span class="ms-title">📋 Marking Scheme</span>` +
+          `<span class="ms-badge">${total} mark${total!==1?'s':''} available</span>` +
+        `</div>` +
+        `<div class="ms-snap-hint">📸 Snap your answer to see the marking scheme and model answer.</div>`;
+      E.modelAnswer.classList.remove('visible');
+      E.toggleAnswerBtn.style.display = 'none';
+      E.examTipBox.style.display = 'none';
+      S.showAnswer = false;
     } else {
-      // Practice or review mode: show marking scheme
+      // Practice after snap, or review mode: show everything
       E.markingScheme.style.display = '';
       E.markingScheme.innerHTML =
         `<div class="ms-head">` +
@@ -760,14 +771,13 @@
           ).join('')
         : '<p><em>No model answer available.</em></p>';
 
-      // Show model answer only in review mode or if student explicitly revealed it
       const showAns = inReview || S.showAnswer;
       E.modelAnswer.classList.toggle('visible', showAns);
       E.toggleAnswerBtn.style.display = '';
       E.toggleAnswerBtn.textContent = showAns ? '🙈 Hide Model Answer' : '📄 Show Model Answer';
       S.showAnswer = showAns;
 
-      if (q.examTip && (inReview || attempted)) {
+      if (q.examTip) {
         E.examTipBox.innerHTML =
           `<div class="tip-head">⚡ Examiner's Tip</div>` +
           `<div class="tip-body">${safe(q.examTip)}</div>`;
@@ -777,7 +787,7 @@
       }
     }
 
-    if (S.answers[S.idx]===null) S.answers[S.idx]='seen';
+    // Don't auto-mark as seen — only snap counts as an attempt in practice mode
   }
 
   function toggleAnswer() {
@@ -1925,24 +1935,13 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
 
     if (E.snapResultModal) E.snapResultModal.classList.remove('hidden');
 
-    // Practice mode — reveal model answer and examiner tip after snap
-    // Same behaviour as clicking an option in objective mode
+    // Practice mode — mark as snapped and reveal marking scheme + model answer
     if (S.mode === 'practice' && !S.reviewMode) {
+      S.answers[S.idx] = 'snapped';
       S.showAnswer = true;
-      if (E.modelAnswer) {
-        E.modelAnswer.classList.add('visible');
-      }
-      if (E.toggleAnswerBtn) {
-        E.toggleAnswerBtn.textContent = '🙈 Hide Model Answer';
-      }
-      // Show examiner tip now that student has attempted
+      // Re-render theory panel to reveal full marking scheme
       const q = S.questions[S.idx];
-      if (q?.examTip && E.examTipBox) {
-        E.examTipBox.innerHTML =
-          `<div class="tip-head">⚡ Examiner's Tip</div>` +
-          `<div class="tip-body">${safe(q.examTip)}</div>`;
-        E.examTipBox.style.display = 'block';
-      }
+      if (q && q._type === 'theory') renderTheory(q);
     }
   }
 
