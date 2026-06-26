@@ -1094,14 +1094,56 @@
   }
 
   function grantAccess(days, tier) {
-    const exp = new Date();
+    // Extend from current expiry if still active, not from today
+    const existing = loadSafe(SK.access);
+    const base = (existing?.expires && new Date(existing.expires) > new Date())
+      ? new Date(existing.expires)   // active sub — extend from expiry
+      : new Date();                  // no active sub — start from today
+    const exp = new Date(base);
     exp.setDate(exp.getDate() + days);
     saveSafe(SK.access, { expires: exp.toISOString() });
     saveSafe(SK.tier, tier || 'student');
     S.hasAccess = true;
     S.tier = tier || 'student';
     E.paywallOverlay.classList.add('hidden');
-    alert(`✅ Access granted for ${days} days! Welcome to My Exams App.`);
+    const extendedFrom = existing?.expires && new Date(existing.expires) > new Date()
+      ? ` (extended from your current expiry)` : '';
+    alert(`✅ Access granted until ${exp.toLocaleDateString('en-NG')}${extendedFrom}. Welcome to My Exams App.`);
+  }
+
+  function upgradeToPlus(mode) {
+    // mode: 'upgrade' = pay difference ₦1,000, keep expiry
+    //       'renew'   = pay full ₦3,500, extend from current expiry
+    const email = prompt('Enter your email address to continue:');
+    if (!email?.includes('@')) { if (email !== null) alert('Please enter a valid email address.'); return; }
+
+    const PAYSTACK_KEY = 'pk_live_5d12ee2a90900116dc222107e059a06214c085ff';
+
+    if (mode === 'upgrade') {
+      // Pay ₦1,000 difference — keep existing expiry, just upgrade tier
+      const handler = window.PaystackPop.setup({
+        key: PAYSTACK_KEY, email,
+        amount: 100000, // ₦1,000 in kobo
+        currency: 'NGN',
+        ref: 'MEA-UPGRADE-' + Date.now(),
+        metadata: { custom_fields: [
+          { display_name: 'Plan', variable_name: 'plan', value: 'Upgrade to Student Pass Plus (₦1,000)' },
+        ]},
+        onClose() {},
+        callback() {
+          // Keep existing expiry, just change tier
+          saveSafe(SK.tier, 'plus');
+          S.tier = 'plus';
+          E.paywallOverlay?.classList.add('hidden');
+          alert('✅ Upgraded to Student Pass Plus! AI explanations are now unlocked for your current subscription period.');
+          renderQ(); // re-render to show AI buttons
+        }
+      });
+      handler.openIframe();
+    } else {
+      // Renew as Plus — full ₦3,500, extends from current expiry
+      handlePayment('plus', 'quarterly');
+    }
   }
 
   function handlePayment(tier, period) {
@@ -1626,8 +1668,13 @@
 
   async function triggerMeaAI(qType) {
     const isPlus = S.hasAccess && (loadSafe(SK.tier) === 'plus');
-    if (!isPlus) {
+    if (!S.hasAccess) {
       showPaywall('upgrade');
+      return;
+    }
+    if (!isPlus) {
+      // Student Pass user — show upgrade prompt
+      showPlusUpgradePrompt();
       return;
     }
     const credits = getMeaAICredits();
@@ -1943,6 +1990,58 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
       const q = S.questions[S.idx];
       if (q && q._type === 'theory') renderTheory(q);
     }
+  }
+
+  function showPlusUpgradePrompt() {
+    // Reuse exit modal for upgrade prompt — two options
+    const modal = document.getElementById('exitConfirmModal');
+    const icon  = document.getElementById('exitModalIcon');
+    const title = document.getElementById('exitModalTitle');
+    const sub   = document.getElementById('exitModalSub');
+    const stay  = document.getElementById('exitModalStay');
+    const leave = document.getElementById('exitModalLeave');
+    if (!modal) { showPaywall('upgrade'); return; }
+
+    icon.textContent  = '🧠';
+    title.textContent = 'AI Explanations — Plus Feature';
+    sub.textContent   = 'You are on Student Pass. Upgrade to Plus to unlock AI explanations that break down every question in plain English.';
+
+    // Clone to clear old listeners
+    const newStay  = stay.cloneNode(true);
+    const newLeave = leave.cloneNode(true);
+    stay.parentNode.replaceChild(newStay, stay);
+    leave.parentNode.replaceChild(newLeave, leave);
+
+    const existing = loadSafe(SK.access);
+    const hasActive = existing?.expires && new Date(existing.expires) > new Date();
+
+    if (hasActive) {
+      // Has active sub — offer upgrade for ₦1,000 or renew as Plus
+      sub.textContent = 'You are on Student Pass. Upgrade now for ₦1,000 and keep your current expiry, or renew as Plus for ₦3,500 and extend your access.';
+      document.getElementById('exitModalStay').textContent  = 'Upgrade for ₦1,000';
+      document.getElementById('exitModalLeave').textContent = 'Renew as Plus ₦3,500 →';
+      document.getElementById('exitModalStay').style.background  = 'var(--gold)';
+      document.getElementById('exitModalStay').style.color       = 'var(--ink)';
+      document.getElementById('exitModalStay').style.border      = 'none';
+      document.getElementById('exitModalStay').addEventListener('click', () => {
+        modal.classList.add('hidden');
+        upgradeToPlus('upgrade');
+      });
+      document.getElementById('exitModalLeave').addEventListener('click', () => {
+        modal.classList.add('hidden');
+        upgradeToPlus('renew');
+      });
+    } else {
+      // No active sub — go to full paywall
+      document.getElementById('exitModalStay').textContent  = 'Maybe Later';
+      document.getElementById('exitModalLeave').textContent = 'Get Student Pass Plus →';
+      document.getElementById('exitModalStay').addEventListener('click', () => modal.classList.add('hidden'));
+      document.getElementById('exitModalLeave').addEventListener('click', () => {
+        modal.classList.add('hidden');
+        showPaywall('upgrade');
+      });
+    }
+    modal.classList.remove('hidden');
   }
 
   /* ════════ BACK BUTTON WARNING TOAST ════════ */
