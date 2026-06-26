@@ -1135,7 +1135,7 @@
           saveSafe(SK.tier, 'plus');
           S.tier = 'plus';
           E.paywallOverlay?.classList.add('hidden');
-          alert('✅ Upgraded to Student Pass Plus! AI explanations are now unlocked for your current subscription period.');
+          alert('✅ Upgraded to Student Pass Plus! Teach Me are now unlocked for your current subscription period.');
           renderQ(); // re-render to show AI buttons
         }
       });
@@ -1679,7 +1679,7 @@
     }
     const credits = getMeaAICredits();
     if (credits <= 0) {
-      alert(`You've used all ${MEA_AI_QUOTA} AI explanation credits for this quarter.\n\nTop up: ₦500 = 50 more explanations.`);
+      alert(`You've used all ${MEA_AI_QUOTA} Teach Me credits for this quarter.\n\nTop up: ₦500 = 50 more explanations.`);
       return;
     }
 
@@ -1993,7 +1993,6 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
   }
 
   function showPlusUpgradePrompt() {
-    // Reuse exit modal for upgrade prompt — two options
     const modal = document.getElementById('exitConfirmModal');
     const icon  = document.getElementById('exitModalIcon');
     const title = document.getElementById('exitModalTitle');
@@ -2003,44 +2002,22 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     if (!modal) { showPaywall('upgrade'); return; }
 
     icon.textContent  = '🧠';
-    title.textContent = 'AI Explanations — Plus Feature';
-    sub.textContent   = 'You are on Student Pass. Upgrade to Plus to unlock AI explanations that break down every question in plain English.';
+    title.textContent = '"Teach Me" is a Plus Feature';
+    sub.textContent   = 'Tap "Teach Me" on any question and AI breaks it down — the concept, the trap, a memory tip. Upgrade to Student Pass Plus for ₦3,500/quarter.';
 
-    // Clone to clear old listeners
     const newStay  = stay.cloneNode(true);
     const newLeave = leave.cloneNode(true);
     stay.parentNode.replaceChild(newStay, stay);
     leave.parentNode.replaceChild(newLeave, leave);
 
-    const existing = loadSafe(SK.access);
-    const hasActive = existing?.expires && new Date(existing.expires) > new Date();
-
-    if (hasActive) {
-      // Has active sub — offer upgrade for ₦1,000 or renew as Plus
-      sub.textContent = 'You are on Student Pass. Upgrade now for ₦1,000 and keep your current expiry, or renew as Plus for ₦3,500 and extend your access.';
-      document.getElementById('exitModalStay').textContent  = 'Upgrade for ₦1,000';
-      document.getElementById('exitModalLeave').textContent = 'Renew as Plus ₦3,500 →';
-      document.getElementById('exitModalStay').style.background  = 'var(--gold)';
-      document.getElementById('exitModalStay').style.color       = 'var(--ink)';
-      document.getElementById('exitModalStay').style.border      = 'none';
-      document.getElementById('exitModalStay').addEventListener('click', () => {
-        modal.classList.add('hidden');
-        upgradeToPlus('upgrade');
-      });
-      document.getElementById('exitModalLeave').addEventListener('click', () => {
-        modal.classList.add('hidden');
-        upgradeToPlus('renew');
-      });
-    } else {
-      // No active sub — go to full paywall
-      document.getElementById('exitModalStay').textContent  = 'Maybe Later';
-      document.getElementById('exitModalLeave').textContent = 'Get Student Pass Plus →';
-      document.getElementById('exitModalStay').addEventListener('click', () => modal.classList.add('hidden'));
-      document.getElementById('exitModalLeave').addEventListener('click', () => {
-        modal.classList.add('hidden');
-        showPaywall('upgrade');
-      });
-    }
+    document.getElementById('exitModalStay').textContent  = 'Not Now';
+    document.getElementById('exitModalLeave').textContent = 'Upgrade to Plus — ₦3,500 →';
+    document.getElementById('exitModalStay').style.cssText  = '';
+    document.getElementById('exitModalStay').addEventListener('click',  () => modal.classList.add('hidden'));
+    document.getElementById('exitModalLeave').addEventListener('click', () => {
+      modal.classList.add('hidden');
+      handlePayment('plus', 'quarterly');
+    });
     modal.classList.remove('hidden');
   }
 
@@ -2188,11 +2165,11 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     const remaining = Math.max(0, FREE_TRIAL_LIMIT - S.freeUsed);
     const msgs = [
       `⚡ ${remaining} free question${remaining===1?'':'s'} left — unlock unlimited access from ₦2,000`,
-      `🧠 Ask AI why you got it wrong — Student Pass Plus explains every answer`,
+      `🧠 Tap Teach Me you got it wrong — Student Pass Plus explains every answer`,
       `📸 Snap your theory answers and get marked instantly — Student Pass`,
-      `🏆 WAEC & NECO prep — AI explanations, snap marking, community quiz from ₦2,000`,
+      `🏆 WAEC & NECO prep — Teach Me, snap marking, community quiz from ₦2,000`,
       `🔓 Unlimited sessions · All 15 subjects · Year-by-year papers — Student Pass`,
-      `💡 "Why is this correct?" — AI explanations for your weak areas. Plus tier ₦3,500.`,
+      `💡 "Why is this correct?" — Teach Me for your weak areas. Plus tier ₦3,500.`,
     ];
     const idx = Math.floor(Date.now() / 30000) % msgs.length;
     if (E.upgradeBarText) E.upgradeBarText.textContent = msgs[idx];
@@ -2202,8 +2179,8 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
   const RESULT_TEASERS = [
     {
       icon: '🧠',
-      title: 'Got questions wrong? Ask AI why.',
-      sub:   'Student Pass Plus explains every wrong answer in plain English — personalised to your weak areas. ₦3,500/quarter.'
+      title: 'Got questions wrong? Tap Teach Me.',
+      sub:   'Student Pass Plus — tap "Teach Me" on any question. AI breaks down the concept, the trap, the memory tip. ₦3,500/quarter.'
     },
     {
       icon: '📸',
@@ -2212,8 +2189,8 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     },
     {
       icon: '💡',
-      title: '"Why is this the correct answer?"',
-      sub:   'AI explanations on Student Pass Plus break down every question — the concept, the trap, the memory tip. Built for WAEC & NECO.'
+      title: '"Teach Me" — tap to understand any answer',
+      sub:   'Teach Me on Tap "Teach Me" and AI breaks down every question — the concept, the trap, the memory tip. Built for WAEC & NECO.'
     },
     {
       icon: '📚',
@@ -2223,7 +2200,7 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     {
       icon: '🎯',
       title: 'Serious students subscribe.',
-      sub:   'Early access at ₦2,000/quarter — only 100 spots. AI explanations, snap marking, community quiz. All in.'
+      sub:   'Early access at ₦2,000/quarter — only 100 spots. Teach Me, snap marking, community quiz. All in.'
     },
     {
       icon: '📅',
@@ -2251,8 +2228,8 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
 
   /* ════════ TEASER TOAST (mid-session) ════════ */
   const SESSION_TEASERS = [
-    '🧠 Ask AI why you got that wrong — Student Pass Plus explains every answer. ₦3,500/quarter.',
-    '💡 "Why is this the correct answer?" — AI explanations built for WAEC & NECO. Upgrade to Plus.',
+    '🧠 Tap Teach Me you got that wrong — Student Pass Plus explains every answer. ₦3,500/quarter.',
+    '💡 "Teach Me" — tap to understand any answer — Teach Me built for WAEC & NECO. Upgrade to Plus.',
     '📸 Snap your theory answer and get it marked against the official scheme — Student Pass.',
     '⚡ Unlimited sessions across all 15 subjects from ₦2,000 — early access, 100 spots only.',
     '🏆 Challenge a friend on this subject — subscribe and create a quiz challenge now.',
