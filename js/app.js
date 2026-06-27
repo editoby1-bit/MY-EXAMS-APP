@@ -33,8 +33,9 @@
     sectionA:    [],
     sectionB:    [],            // 'random' or e.g. 2023
     subject:     '',
-    mode:        'practice',
-    type:        'objective',
+    mode:        '',
+    type:        '',
+    bothMode:    'sections',
     count:       20,
     questions:   [],
     answers:     [],
@@ -102,6 +103,7 @@
     initContestNotify();
     checkForSharedSession();
     refreshUpgradeBar();
+    renderPlanBadge();
     // Clear any stale hash on load
     if (window.location.hash) {
       history.replaceState(null, '', window.location.pathname);
@@ -173,7 +175,7 @@
       b.addEventListener('click', () => {
         E.modeToggle.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
         b.classList.add('active');
-        S.mode = b.dataset.mode;
+        S.mode = b.dataset.mode || '';
         E.durationSelect.disabled = (S.mode !== 'exam');
         refreshStartBtn();
       })
@@ -183,7 +185,7 @@
       b.addEventListener('click', () => {
         E.typeToggle.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
         b.classList.add('active');
-        S.type = b.dataset.type;
+        S.type = b.dataset.type || '';
         if (E.bothModeGroup) E.bothModeGroup.classList.toggle('hidden', S.type !== 'both');
         updateSubjectCounts();
         refreshStartBtn();
@@ -448,9 +450,19 @@
       return;
     }
 
+    // Validate mode and type with gentle popups
+    if (!S.mode) {
+      showGentleInlinePopup('👇 Please select a Mode first', document.getElementById('modeToggle'));
+      return;
+    }
+    if (!S.type) {
+      showGentleInlinePopup('👇 Please select a Type first', document.getElementById('typeToggle'));
+      return;
+    }
+
     // Must have subject
     if (!S.subject) {
-      alert('Please select a subject first.');
+      showGentleInlinePopup('👇 Please select a Subject first', document.getElementById('subjectGrid'));
       return;
     }
 
@@ -1528,6 +1540,33 @@
   let _lastQuestions = [];
   let _lastAnswers = [];
 
+  function showGentleInlinePopup(msg, anchorEl) {
+    document.querySelectorAll('.gentle-inline-popup').forEach(p => p.remove());
+    const popup = document.createElement('div');
+    popup.className = 'gentle-inline-popup';
+    popup.textContent = msg;
+    popup.style.cssText = [
+      'background:rgba(10,22,40,0.97)',
+      'color:white',
+      'border:1.5px solid var(--gold)',
+      'border-radius:var(--r-s)',
+      'padding:.55rem .9rem',
+      'font-size:.8rem','font-weight:600',
+      'margin-bottom:.5rem',
+      'text-align:center',
+      'animation:gentlePopIn .18s ease',
+    ].join(';');
+    if (anchorEl) {
+      anchorEl.parentNode.insertBefore(popup, anchorEl);
+      anchorEl.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    }
+    setTimeout(() => {
+      popup.style.opacity = '0';
+      popup.style.transition = 'opacity .3s';
+      setTimeout(() => popup.remove(), 300);
+    }, 3000);
+  }
+
   function shareSession() {
     if (!_lastResult) return;
     const payload = {
@@ -2150,6 +2189,30 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
   }
 
   /* ════════ UPGRADE BAR ════════ */
+  function renderPlanBadge() {
+    const badge = document.getElementById('planBadge');
+    if (!badge) return;
+    if (!S.currentUser) { badge.classList.add('hidden'); return; }
+
+    const tier = loadSafe(SK.tier) || 'free';
+    const access = loadSafe(SK.access);
+    const active = access?.expires && new Date(access.expires) > new Date();
+    const exp = active ? new Date(access.expires) : null;
+    const expStr = exp ? exp.toLocaleDateString('en-NG', {day:'numeric',month:'short',year:'numeric'}) : '';
+
+    if (!active) {
+      badge.textContent = '🆓 Free Trial';
+      badge.className = 'plan-badge plan-free';
+    } else if (tier === 'plus') {
+      badge.textContent = `⭐ Student Pass Plus${expStr ? ' · expires ' + expStr : ''}`;
+      badge.className = 'plan-badge plan-plus';
+    } else {
+      badge.textContent = `✅ Student Pass${expStr ? ' · expires ' + expStr : ''}`;
+      badge.className = 'plan-badge plan-student';
+    }
+    badge.classList.remove('hidden');
+  }
+
   function refreshUpgradeBar() {
     const qcBtn = document.getElementById('quizChallengeBtn');
     if (!E.upgradeBar) return;
