@@ -2294,11 +2294,13 @@ body {
    PLAN BADGE
 ══════════════════════════════ */
 .plan-badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
   font-size: .72rem;
-  font-weight: 700;
+  font-weight: 600;
   border-radius: 99px;
-  padding: .25rem .75rem;
+  padding: .25rem .5rem .25rem .75rem;
   margin-top: .4rem;
   letter-spacing: .02em;
 }
@@ -2306,6 +2308,29 @@ body {
 .plan-free    { background: var(--cream-d,#e8e0d0); color: var(--text-mid); }
 .plan-student { background: #e8f5e9; color: #2e7d32; }
 .plan-plus    { background: linear-gradient(135deg,#fff8e1,#fff3cd); color: #a06800; border: 1px solid rgba(212,175,55,.4); }
+
+.plan-badge-upgrade,
+.plan-badge-renew {
+  font-family: var(--sans);
+  font-size: .68rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 99px;
+  padding: .2rem .6rem;
+  cursor: pointer;
+  transition: all var(--t);
+  white-space: nowrap;
+}
+.plan-badge-upgrade {
+  background: var(--gold);
+  color: var(--ink);
+}
+.plan-badge-upgrade:hover { background: var(--gold-dk); }
+.plan-badge-renew {
+  background: rgba(160,104,0,.15);
+  color: #a06800;
+}
+.plan-badge-renew:hover { background: rgba(160,104,0,.25); }
 
 /* Gentle inline popup */
 @keyframes gentlePopIn {
