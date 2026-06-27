@@ -2194,20 +2194,21 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     if (!badge) return;
     if (!S.currentUser) { badge.classList.add('hidden'); return; }
 
-    const tier = loadSafe(SK.tier) || 'free';
+    const tier   = loadSafe(SK.tier) || 'free';
     const access = loadSafe(SK.access);
     const active = access?.expires && new Date(access.expires) > new Date();
-    const exp = active ? new Date(access.expires) : null;
+    const exp    = active ? new Date(access.expires) : null;
     const expStr = exp ? exp.toLocaleDateString('en-NG', {day:'numeric',month:'short',year:'numeric'}) : '';
 
     if (!active) {
-      badge.textContent = '🆓 Free Trial';
+      badge.innerHTML = `<span>🆓 Free Trial</span><button class="plan-badge-upgrade" onclick="showPaywall('upgrade')">Upgrade →</button>`;
       badge.className = 'plan-badge plan-free';
     } else if (tier === 'plus') {
-      badge.textContent = `⭐ Student Pass Plus${expStr ? ' · expires ' + expStr : ''}`;
+      badge.innerHTML = `<span>⭐ Student Pass Plus${expStr ? ' · expires ' + expStr : ''}</span><button class="plan-badge-renew" onclick="handlePayment('plus','quarterly')">Renew →</button>`;
       badge.className = 'plan-badge plan-plus';
     } else {
-      badge.textContent = `✅ Student Pass${expStr ? ' · expires ' + expStr : ''}`;
+      // Student Pass — offer upgrade to Plus
+      badge.innerHTML = `<span>✅ Student Pass${expStr ? ' · expires ' + expStr : ''}</span><button class="plan-badge-upgrade" onclick="showPlusUpgradePrompt()">Upgrade to Plus →</button>`;
       badge.className = 'plan-badge plan-student';
     }
     badge.classList.remove('hidden');
