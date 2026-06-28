@@ -548,9 +548,8 @@
     buildPills();
     renderQ();
     showScreen('quiz');
+    if (window._collapseContest) window._collapseContest();
   }
-
-  /* ════════ TIMER ════════ */
   function runTimer() {
     tickClock();
     S.timerId = setInterval(() => {
@@ -828,6 +827,10 @@
     // Show teaser toast at question 5 for free users
     if (!S.hasAccess && S.idx === 4 && !S.reviewMode) {
       setTimeout(showTeaserToast, 1500);
+    }
+    // Section B nudge — Both/Sections mode, on question 5 of Section A
+    if (S.type === 'both' && S.bothMode === 'sections' && S.section === 'A' && S.idx === 4 && !S.reviewMode) {
+      setTimeout(showSectionBNudge, 2000);
     }
   }
 
@@ -1477,6 +1480,33 @@
   function initContestNotify() {
     const btn  = document.getElementById('contestNotifyBtn');
     const note = document.getElementById('contestNoteText');
+
+    // Collapse/expand logic
+    const collapseBtn = document.getElementById('contestCollapseBtn');
+    const expandBtn   = document.getElementById('contestExpandBtn');
+    const expanded    = document.getElementById('contestExpanded');
+    const collapsed   = document.getElementById('contestCollapsed');
+
+    function collapseContest() {
+      if (expanded) expanded.style.display = 'none';
+      if (collapsed) collapsed.style.display = 'flex';
+      saveSafe('mea-contest-collapsed', true);
+    }
+    function expandContest() {
+      if (expanded) expanded.style.display = '';
+      if (collapsed) collapsed.style.display = 'none';
+      saveSafe('mea-contest-collapsed', false);
+    }
+
+    // Restore state
+    if (loadSafe('mea-contest-collapsed')) collapseContest();
+
+    if (collapseBtn) collapseBtn.addEventListener('click', collapseContest);
+    if (expandBtn)   expandBtn.addEventListener('click', expandContest);
+
+    // Auto-collapse when user starts a session (called from startSession)
+    window._collapseContest = collapseContest;
+
     if (!btn) return;
     const already = loadSafe('mea-contest-notify');
     if (already) {
@@ -1539,6 +1569,44 @@
   let _lastResult = null;
   let _lastQuestions = [];
   let _lastAnswers = [];
+
+  function showSectionBNudge() {
+    if (S.section !== 'A') return; // already in B
+    const sectionTabs = document.getElementById('sectionTabs');
+    const tabB = document.getElementById('sectionTabB');
+    if (!sectionTabs || sectionTabs.classList.contains('hidden')) return;
+
+    // Highlight Section B tab with a pulse
+    if (tabB) {
+      tabB.style.animation = 'sectionBPulse 1s ease 3';
+      setTimeout(() => { tabB.style.animation = ''; }, 3000);
+    }
+
+    // Show inline nudge above the section tabs
+    const existing = document.getElementById('sectionBNudge');
+    if (existing) existing.remove();
+    const nudge = document.createElement('div');
+    nudge.id = 'sectionBNudge';
+    nudge.style.cssText = [
+      'background:rgba(10,22,40,0.95)',
+      'color:white',
+      'border:1.5px solid var(--gold)',
+      'border-radius:var(--r-s)',
+      'padding:.55rem .9rem',
+      'font-size:.8rem','font-weight:600',
+      'text-align:center',
+      'margin-bottom:.5rem',
+      'cursor:pointer',
+    ].join(';');
+    nudge.innerHTML = '📋 Did you know? Tap <strong>Section B</strong> above to switch to Theory questions at any time.';
+    nudge.addEventListener('click', () => { nudge.remove(); switchSection('B'); });
+    sectionTabs.parentNode.insertBefore(nudge, sectionTabs);
+    setTimeout(() => {
+      nudge.style.opacity = '0';
+      nudge.style.transition = 'opacity .4s';
+      setTimeout(() => nudge.remove(), 400);
+    }, 6000);
+  }
 
   function showGentleInlinePopup(msg, anchorEl) {
     document.querySelectorAll('.gentle-inline-popup').forEach(p => p.remove());
