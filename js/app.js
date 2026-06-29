@@ -1571,41 +1571,108 @@
   let _lastAnswers = [];
 
   function showSectionBNudge() {
-    if (S.section !== 'A') return; // already in B
-    const sectionTabs = document.getElementById('sectionTabs');
+    if (S.section !== 'A') return;
     const tabB = document.getElementById('sectionTabB');
-    if (!sectionTabs || sectionTabs.classList.contains('hidden')) return;
+    if (!tabB) return;
 
-    // Highlight Section B tab with a pulse
-    if (tabB) {
-      tabB.style.animation = 'sectionBPulse 1s ease 3';
-      setTimeout(() => { tabB.style.animation = ''; }, 3000);
-    }
+    // Remove any existing nudge
+    document.getElementById('sectionBNudge')?.remove();
 
-    // Show inline nudge above the section tabs
-    const existing = document.getElementById('sectionBNudge');
-    if (existing) existing.remove();
-    const nudge = document.createElement('div');
-    nudge.id = 'sectionBNudge';
-    nudge.style.cssText = [
-      'background:rgba(10,22,40,0.95)',
+    // Get Section B tab position
+    const rect = tabB.getBoundingClientRect();
+
+    // Create overlay container
+    const overlay = document.createElement('div');
+    overlay.id = 'sectionBNudge';
+    overlay.style.cssText = [
+      'position:fixed','inset:0',
+      'z-index:500',
+      'pointer-events:none',
+    ].join(';');
+
+    // Highlight ring around Section B tab
+    const ring = document.createElement('div');
+    ring.style.cssText = [
+      'position:absolute',
+      `top:${rect.top - 4}px`,
+      `left:${rect.left - 4}px`,
+      `width:${rect.width + 8}px`,
+      `height:${rect.height + 8}px`,
+      'border:2.5px solid var(--gold,#d4af37)',
+      'border-radius:10px',
+      'animation:sectionBPulse 1s ease infinite',
+      'pointer-events:none',
+    ].join(';');
+
+    // Tooltip card — centered on screen, pointing up to tab
+    const tipTop  = rect.bottom + 16;
+    const tipLeft = Math.max(16, Math.min(rect.left + rect.width/2 - 140, window.innerWidth - 296));
+
+    const tip = document.createElement('div');
+    tip.style.cssText = [
+      'position:absolute',
+      `top:${tipTop}px`,
+      `left:${tipLeft}px`,
+      'width:280px',
+      'background:rgba(10,22,40,0.97)',
       'color:white',
-      'border:1.5px solid var(--gold)',
-      'border-radius:var(--r-s)',
-      'padding:.55rem .9rem',
-      'font-size:.8rem','font-weight:600',
+      'border:1.5px solid var(--gold,#d4af37)',
+      'border-radius:12px',
+      'padding:.85rem 1rem',
+      'font-size:.82rem','font-weight:500',
+      'line-height:1.55',
       'text-align:center',
-      'margin-bottom:.5rem',
+      'box-shadow:0 8px 32px rgba(0,0,0,.5)',
+      'pointer-events:auto',
       'cursor:pointer',
     ].join(';');
-    nudge.innerHTML = '📋 Did you know? Tap <strong>Section B</strong> above to switch to Theory questions at any time.';
-    nudge.addEventListener('click', () => { nudge.remove(); switchSection('B'); });
-    sectionTabs.parentNode.insertBefore(nudge, sectionTabs);
+
+    // Arrow pointing UP toward the tab
+    const arrow = document.createElement('div');
+    const arrowLeft = rect.left + rect.width/2 - tipLeft - 8;
+    arrow.style.cssText = [
+      'position:absolute',
+      'top:-8px',
+      `left:${Math.max(12, Math.min(arrowLeft, 252))}px`,
+      'width:0','height:0',
+      'border-left:8px solid transparent',
+      'border-right:8px solid transparent',
+      'border-bottom:8px solid var(--gold,#d4af37)',
+    ].join(';');
+
+    // Hand emoji that slides up toward the tab
+    const hand = document.createElement('div');
+    hand.style.cssText = [
+      'position:absolute',
+      `top:${rect.bottom + 8}px`,
+      `left:${rect.left + rect.width/2 - 16}px`,
+      'font-size:1.5rem',
+      'animation:handSlideUp 1.2s ease infinite',
+      'pointer-events:none',
+    ].join(';');
+    hand.textContent = '👆';
+
+    tip.appendChild(arrow);
+    tip.innerHTML += '<strong style="color:var(--gold,#d4af37);display:block;margin-bottom:.3rem">Did you know?</strong>Tap <strong>Section B</strong> to switch to Theory questions anytime — your Section A answers are saved!<br/><span style="font-size:.72rem;color:rgba(255,255,255,.5);margin-top:.4rem;display:block">Tap here or Section B to dismiss</span>';
+    tip.insertBefore(arrow, tip.firstChild);
+
+    overlay.appendChild(ring);
+    overlay.appendChild(hand);
+    overlay.appendChild(tip);
+    document.body.appendChild(overlay);
+
+    // Clicking tip or overlay dismisses
+    tip.addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+
+    // Auto dismiss after 7 seconds
     setTimeout(() => {
-      nudge.style.opacity = '0';
-      nudge.style.transition = 'opacity .4s';
-      setTimeout(() => nudge.remove(), 400);
-    }, 6000);
+      overlay.style.opacity = '0';
+      overlay.style.transition = 'opacity .4s';
+      setTimeout(() => overlay.remove(), 400);
+    }, 7000);
   }
 
   function showGentleInlinePopup(msg, anchorEl) {
