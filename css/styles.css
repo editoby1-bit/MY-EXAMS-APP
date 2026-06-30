@@ -2491,3 +2491,60 @@ body {
 .tc-slow-q { font-weight: 700; color: var(--gold-dk); flex-shrink: 0; }
 .tc-slow-text { flex: 1; color: var(--text-mid); }
 .tc-slow-time { font-weight: 700; color: #e65100; flex-shrink: 0; }
+
+/* ══════════════════════════════
+   SECTION A COMPLETE MODAL
+══════════════════════════════ */
+.section-end-card {
+  position: relative;
+  max-width: 380px;
+}
+.section-end-close {
+  position: absolute;
+  top: .75rem; right: .75rem;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: .9rem;
+  cursor: pointer;
+  padding: .25rem;
+  line-height: 1;
+}
+.section-end-close:hover { color: var(--ink); }
+.section-end-btns {
+  display: flex;
+  flex-direction: column;
+  gap: .55rem;
+  margin-top: .5rem;
+}
+.se-btn {
+  width: 100%;
+  font-family: var(--sans);
+  font-size: .85rem;
+  font-weight: 600;
+  border-radius: var(--r-s);
+  padding: .7rem .85rem;
+  cursor: pointer;
+  transition: all var(--t);
+  text-align: center;
+}
+.se-secondary {
+  background: var(--white);
+  color: var(--text-mid);
+  border: 1.5px solid var(--border);
+}
+.se-secondary:hover { border-color: var(--gold); color: var(--gold-dk); }
+.se-primary {
+  background: var(--gold);
+  color: var(--ink);
+  border: none;
+  font-weight: 700;
+}
+.se-primary:hover { background: var(--gold-dk); }
+.se-finish {
+  background: transparent;
+  color: #c0392b;
+  border: 1.5px solid rgba(192,57,43,.35);
+  font-weight: 600;
+}
+.se-finish:hover { background: rgba(192,57,43,.06); border-color: #c0392b; }
