@@ -2300,37 +2300,48 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
 
   /* ════════ SECTION SWITCHING ════════ */
   function showSectionEndChoice() {
-    const modal = document.getElementById('exitConfirmModal');
-    const icon  = document.getElementById('exitModalIcon');
-    const title = document.getElementById('exitModalTitle');
-    const sub   = document.getElementById('exitModalSub');
-    const stay  = document.getElementById('exitModalStay');
-    const leave = document.getElementById('exitModalLeave');
+    const modal = document.getElementById('sectionEndModal');
+    const sub   = document.getElementById('sectionEndSub');
     if (!modal) { showSectionTransition(); return; }
 
-    icon.textContent  = '📋';
-    title.textContent = 'Section A Complete';
-    sub.textContent   = `You have finished Section A (${S.sectionA.length} Objective questions). Move to Section B (Theory) to complete the full exam — your Section A answers are saved.`;
+    sub.textContent = `You have finished Section A (${S.sectionA.length} Objective questions). Choose what to do next — your answers in both sections are saved.`;
 
-    const newStay  = stay.cloneNode(true);
-    const newLeave = leave.cloneNode(true);
-    stay.parentNode.replaceChild(newStay, stay);
-    leave.parentNode.replaceChild(newLeave, leave);
+    modal.classList.remove('hidden');
 
-    document.getElementById('exitModalStay').textContent  = 'Submit Section A Only';
-    document.getElementById('exitModalStay').style.cssText = 'background:transparent;color:var(--text-dim);border:1px solid var(--border);font-size:.8rem';
-    document.getElementById('exitModalLeave').textContent = '📋 Go to Section B →';
-    document.getElementById('exitModalLeave').style.cssText = '';
+    const closeBtn   = document.getElementById('sectionEndClose');
+    const remainBtn  = document.getElementById('seRemainBtn');
+    const goBBtn     = document.getElementById('seGoBBtn');
+    const finishBtn  = document.getElementById('seFinishBtn');
 
-    document.getElementById('exitModalStay').addEventListener('click', () => {
-      modal.classList.add('hidden');
-      confirmSubmit();
-    });
-    document.getElementById('exitModalLeave').addEventListener('click', () => {
-      modal.classList.add('hidden');
+    // Clone all to clear old listeners
+    const newClose  = closeBtn.cloneNode(true);
+    const newRemain = remainBtn.cloneNode(true);
+    const newGoB    = goBBtn.cloneNode(true);
+    const newFinish = finishBtn.cloneNode(true);
+    closeBtn.parentNode.replaceChild(newClose, closeBtn);
+    remainBtn.parentNode.replaceChild(newRemain, remainBtn);
+    goBBtn.parentNode.replaceChild(newGoB, goBBtn);
+    finishBtn.parentNode.replaceChild(newFinish, finishBtn);
+
+    const hide = () => modal.classList.add('hidden');
+
+    // Close — stay in Section A, card dismisses, can reappear if they tap Next again
+    document.getElementById('sectionEndClose').addEventListener('click', hide);
+
+    // Remain in Section A — same as close, explicit wording
+    document.getElementById('seRemainBtn').addEventListener('click', hide);
+
+    // Go to Section B — switch sections, answers preserved
+    document.getElementById('seGoBBtn').addEventListener('click', () => {
+      hide();
       switchSection('B');
     });
-    modal.classList.remove('hidden');
+
+    // Finish — submit current state across both sections now
+    document.getElementById('seFinishBtn').addEventListener('click', () => {
+      hide();
+      confirmSubmit();
+    });
   }
 
   function showSectionTransition() {
