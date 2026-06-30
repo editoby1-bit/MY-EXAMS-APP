@@ -515,6 +515,7 @@
     S.questions  = pool.slice(0, n);
     S.answers    = new Array(n).fill(null);
     S.flagged    = new Array(n).fill(false);
+    S.qTimings   = new Array(n).fill(null);
     S.idx        = 0;
     S.reviewMode = false;
     S.showAnswer = false;
@@ -625,6 +626,10 @@
     const ans = S.answers[S.idx];
     const obj = q._type === 'objective';
 
+    // Track time student arrives at this question
+    if (!S.qTimings[S.idx]) S.qTimings[S.idx] = { start: Date.now(), answered: null };
+    else if (!S.qTimings[S.idx].start) S.qTimings[S.idx].start = Date.now();
+
     // Update section tabs if in sections mode
     if (S.type === 'both' && S.bothMode === 'sections') {
       if (E.sectionTabs) E.sectionTabs.classList.remove('hidden');
@@ -710,7 +715,16 @@
 
       btn.disabled = locked;
       if (!locked) {
-        btn.addEventListener('click', () => { S.answers[S.idx]=i; renderQ(); });
+        btn.addEventListener('click', () => {
+          // Record answer timing
+          if (!S.qTimings) S.qTimings = [];
+          if (!S.qTimings[S.idx]) S.qTimings[S.idx] = { start: Date.now() };
+          if (!S.qTimings[S.idx].answered) {
+            S.qTimings[S.idx].answered = Date.now();
+            S.qTimings[S.idx].duration = S.qTimings[S.idx].answered - (S.qTimings[S.idx].start || S.qTimings[S.idx].answered);
+          }
+          S.answers[S.idx]=i; renderQ();
+        });
       }
       E.optionsList.appendChild(btn);
     });
@@ -810,14 +824,13 @@
   /* ════════ NAVIGATE ════════ */
   function navigate(dir) {
     if (dir>0 && S.idx===S.questions.length-1) {
-      // Auto-advance to Section B if in sections mode and currently in A
+      if (S.reviewMode) { showScreen('result'); return; }
+      // Sections mode end of Section A — offer Section B before submit
       if (S.type === 'both' && S.bothMode === 'sections' && S.section === 'A' && S.sectionB.length > 0) {
-        // Show a brief prompt before switching
-        showSectionTransition();
+        showSectionEndChoice();
         return;
       }
-      if (S.reviewMode) showScreen('result');
-      else confirmSubmit();
+      confirmSubmit();
       return;
     }
     S.idx = Math.max(0, Math.min(S.questions.length-1, S.idx+dir));
@@ -879,6 +892,9 @@
     refreshStats();
     renderHistory();
     showScreen('result');
+    if (window._collapseContest) window._collapseContest();
+    S._timingAnalysis = calcTimingAnalysis();
+    setTimeout(renderTimingCard, 150);
 
     // Store for session sharing
     _lastResult    = rec;
@@ -892,6 +908,23 @@
   }
 
   /* ════════ RESULTS ════════ */
+  function calcTimingAnalysis() {
+    const timings = S.qTimings.filter(t => t && t.duration);
+    if (timings.length < 3) return null;
+    const durations = timings.map(t => t.duration);
+    const avg = durations.reduce((a,b) => a+b, 0) / durations.length;
+    const slow = S.questions
+      .map((q,i) => ({ q, i, dur: S.qTimings[i]?.duration }))
+      .filter(x => x.dur && x.dur > avg * 2 && x.dur > 30000) // >2x avg and >30s
+      .slice(0, 3);
+    const totalMs = S.qTimings.reduce((sum,t) => sum + (t?.duration||0), 0);
+    const verdict = avg < 30000 ? 'Very fast — double-check your answers' :
+                    avg < 60000 ? 'Good pace' :
+                    avg < 90000 ? 'A little slow — try to speed up' :
+                                  'Too slow — practise more to build speed';
+    return { avg: Math.round(avg/1000), totalSec: Math.round(totalMs/1000), slow, verdict };
+  }
+
   function paintResults(r) {
     const hasObj = r.pct!==null;
     const pct    = r.pct||0;
@@ -1490,16 +1523,19 @@
     function collapseContest() {
       if (expanded) expanded.style.display = 'none';
       if (collapsed) collapsed.style.display = 'flex';
-      saveSafe('mea-contest-collapsed', true);
+      // Only persist collapsed state if user has already clicked notify
+      if (loadSafe('mea-contest-notify')) saveSafe('mea-contest-session-collapsed', true);
     }
     function expandContest() {
       if (expanded) expanded.style.display = '';
       if (collapsed) collapsed.style.display = 'none';
-      saveSafe('mea-contest-collapsed', false);
+      saveSafe('mea-contest-session-collapsed', false);
     }
 
-    // Restore state
-    if (loadSafe('mea-contest-collapsed')) collapseContest();
+    // Only restore collapsed if they've notified AND previously collapsed
+    if (loadSafe('mea-contest-notify') && loadSafe('mea-contest-session-collapsed')) {
+      collapseContest();
+    }
 
     if (collapseBtn) collapseBtn.addEventListener('click', collapseContest);
     if (expandBtn)   expandBtn.addEventListener('click', expandContest);
@@ -1700,6 +1736,38 @@
       popup.style.transition = 'opacity .3s';
       setTimeout(() => popup.remove(), 300);
     }, 3000);
+  }
+
+  function renderTimingCard() {
+    const ta = S._timingAnalysis;
+    if (!ta) return;
+    const breakdown = document.getElementById('resultBreakdown');
+    if (!breakdown) return;
+    const existing = document.getElementById('timingCard');
+    if (existing) existing.remove();
+    const mins = Math.floor(ta.totalSec / 60);
+    const secs = ta.totalSec % 60;
+    const slowHtml = ta.slow.length ? `
+      <div class="tc-slow-title">Questions you spent the most time on:</div>
+      ${ta.slow.map(x => `<div class="tc-slow-row">
+        <span class="tc-slow-q">Q${x.i+1}</span>
+        <span class="tc-slow-text">${safe(x.q.question.substring(0,55))}…</span>
+        <span class="tc-slow-time">${Math.round(x.dur/1000)}s</span>
+      </div>`).join('')}` : '';
+
+    const card = document.createElement('div');
+    card.id = 'timingCard';
+    card.className = 'timing-card';
+    card.innerHTML = `
+      <div class="tc-head">⏱ Session Timing</div>
+      <div class="tc-stats">
+        <div class="tc-stat"><span class="tc-val">${mins}m ${secs}s</span><span class="tc-label">Total time</span></div>
+        <div class="tc-stat"><span class="tc-val">${ta.avg}s</span><span class="tc-label">Avg per question</span></div>
+      </div>
+      <div class="tc-verdict ${ta.avg < 60 ? 'tc-fast' : ta.avg < 90 ? 'tc-ok' : 'tc-slow'}">${ta.verdict}</div>
+      ${slowHtml}
+    `;
+    breakdown.after(card);
   }
 
   function shareSession() {
@@ -2231,6 +2299,40 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
   }
 
   /* ════════ SECTION SWITCHING ════════ */
+  function showSectionEndChoice() {
+    const modal = document.getElementById('exitConfirmModal');
+    const icon  = document.getElementById('exitModalIcon');
+    const title = document.getElementById('exitModalTitle');
+    const sub   = document.getElementById('exitModalSub');
+    const stay  = document.getElementById('exitModalStay');
+    const leave = document.getElementById('exitModalLeave');
+    if (!modal) { showSectionTransition(); return; }
+
+    icon.textContent  = '📋';
+    title.textContent = 'Section A Complete';
+    sub.textContent   = `You have finished Section A (${S.sectionA.length} Objective questions). Move to Section B (Theory) to complete the full exam — your Section A answers are saved.`;
+
+    const newStay  = stay.cloneNode(true);
+    const newLeave = leave.cloneNode(true);
+    stay.parentNode.replaceChild(newStay, stay);
+    leave.parentNode.replaceChild(newLeave, leave);
+
+    document.getElementById('exitModalStay').textContent  = 'Submit Section A Only';
+    document.getElementById('exitModalStay').style.cssText = 'background:transparent;color:var(--text-dim);border:1px solid var(--border);font-size:.8rem';
+    document.getElementById('exitModalLeave').textContent = '📋 Go to Section B →';
+    document.getElementById('exitModalLeave').style.cssText = '';
+
+    document.getElementById('exitModalStay').addEventListener('click', () => {
+      modal.classList.add('hidden');
+      confirmSubmit();
+    });
+    document.getElementById('exitModalLeave').addEventListener('click', () => {
+      modal.classList.add('hidden');
+      switchSection('B');
+    });
+    modal.classList.remove('hidden');
+  }
+
   function showSectionTransition() {
     // Show a modal prompting student to move to Section B
     const modal = document.getElementById('exitConfirmModal');
