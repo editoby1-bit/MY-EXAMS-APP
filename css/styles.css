@@ -2548,3 +2548,24 @@ body {
   font-weight: 600;
 }
 .se-finish:hover { background: rgba(192,57,43,.06); border-color: #c0392b; }
+
+/* ══════════════════════════════
+   SECTION JUMP BUTTON
+══════════════════════════════ */
+.btn-section-jump {
+  font-family: var(--sans);
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--gold-dk);
+  background: rgba(212,175,55,.1);
+  border: 1.5px solid var(--gold);
+  border-radius: var(--r-s);
+  padding: .55rem .9rem;
+  cursor: pointer;
+  transition: all var(--t);
+  white-space: nowrap;
+}
+.btn-section-jump:hover {
+  background: rgba(212,175,55,.2);
+}
+.btn-section-jump.hidden { display: none; }
