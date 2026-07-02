@@ -212,6 +212,11 @@
     E.submitQuizBtn.addEventListener('click', confirmSubmit);
     E.prevBtn.addEventListener('click', () => navigate(-1));
     E.nextBtn.addEventListener('click', () => navigate(1));
+    if (E.sectionJumpBtn) E.sectionJumpBtn.addEventListener('click', () => {
+      if (S.type === 'both' && S.bothMode === 'sections') {
+        switchSection(S.section === 'A' ? 'B' : 'A');
+      }
+    });
     E.toggleAnswerBtn.addEventListener('click', toggleAnswer);
     E.flagBtn.addEventListener('click', toggleFlag);
 
@@ -639,6 +644,15 @@
       if (E.sectionBCount) E.sectionBCount.textContent = S.sectionB.length + 'Q';
     } else {
       if (E.sectionTabs) E.sectionTabs.classList.add('hidden');
+    }
+
+    // Section jump button — always visible in sections mode
+    if (E.sectionJumpBtn) {
+      const inSections = S.type === 'both' && S.bothMode === 'sections';
+      E.sectionJumpBtn.classList.toggle('hidden', !inSections);
+      if (inSections) {
+        E.sectionJumpBtn.textContent = S.section === 'A' ? '📋 Go to Section B →' : '📋 Go to Section A ←';
+      }
     }
 
     E.qNumBadge.textContent     = `Q${S.idx+1}`;
