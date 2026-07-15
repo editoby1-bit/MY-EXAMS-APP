@@ -73,7 +73,7 @@
     'qtypeBanner','qNumBadge','qSubjectTag','qYearTag','qPosIndicator','flagBtn',
     'objectivePanel','objectiveQuestion','optionsList','explanationArea','keyHint',
     'theoryPanel','theoryQuestion','markingScheme','toggleAnswerBtn','modelAnswer','examTipBox',
-    'prevBtn','nextBtn',
+    'prevBtn','nextBtn','sectionJumpBtn',
     'resultEmoji','resultScore','resultGrade','resultSummary','resultStatsGrid','resultBreakdown',
     'reviewBtn','homeBtn','shareBtn','shareSessionBtn',
     'upgradeBar','upgradeBarBtn','upgradeBarText',
