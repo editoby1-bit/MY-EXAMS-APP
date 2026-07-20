@@ -2569,3 +2569,49 @@ body {
   background: rgba(212,175,55,.2);
 }
 .btn-section-jump.hidden { display: none; }
+
+/* ══════════════════════════════
+   SNAP LOCKED INDICATOR
+══════════════════════════════ */
+.snap-locked-indicator {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  background: var(--cream);
+  border: 1.5px dashed var(--gold);
+  border-radius: var(--r-s);
+  padding: .65rem .85rem;
+  margin-top: .85rem;
+}
+.sli-icon { font-size: 1.25rem; flex-shrink: 0; }
+.sli-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+}
+.sli-title {
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.sli-sub {
+  font-size: .72rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+.sli-btn {
+  font-family: var(--sans);
+  font-size: .78rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--gold);
+  border: none;
+  border-radius: 99px;
+  padding: .38rem .85rem;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background var(--t);
+}
+.sli-btn:hover { background: var(--gold-dk); }
