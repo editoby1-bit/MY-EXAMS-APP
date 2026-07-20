@@ -670,14 +670,24 @@
     if (E.meaAiPanel) E.meaAiPanel.classList.add('hidden');
 
     // Show snap button for all paid subscribers on theory questions
-    if (E.snapActionRow) E.snapActionRow.classList.toggle('hidden', !S.hasAccess || obj);
-    if (E.snapTip)       E.snapTip.classList.toggle('hidden', obj);
+    if (E.snapTip) E.snapTip.classList.toggle('hidden', obj);
+    document.getElementById('snapLockedIndicator')?.remove();
     if (S.hasAccess && !obj) {
+      // Paid user on theory — show snap button
       updateSnapCreditsBadge();
-      // Force visible — override any lingering hidden state
-      if (E.snapActionRow) E.snapActionRow.style.display = 'flex';
+      if (E.snapActionRow) { E.snapActionRow.style.display = 'flex'; E.snapActionRow.classList.remove('hidden'); }
       if (E.snapBtn) E.snapBtn.style.display = 'flex';
-    } else if (obj) {
+    } else if (!S.hasAccess && !obj) {
+      // Free trial user on theory — show locked indicator
+      if (E.snapActionRow) E.snapActionRow.style.display = 'none';
+      const locked = document.createElement('div');
+      locked.id = 'snapLockedIndicator';
+      locked.className = 'snap-locked-indicator';
+      locked.innerHTML = '<span class="sli-icon">📸</span><div class="sli-body"><span class="sli-title">Snap & Mark — Subscribe to Unlock</span><span class="sli-sub">Snap your theory answer and get marked by AI against the official scheme</span></div><button class="sli-btn" id="snapLockedBtn">Unlock →</button>';
+      if (E.snapTip?.parentNode) E.snapTip.parentNode.insertBefore(locked, E.snapTip);
+      document.getElementById('snapLockedBtn')?.addEventListener('click', () => showPaywall('upgrade'));
+    } else {
+      // Objective question — hide snap
       if (E.snapActionRow) E.snapActionRow.style.display = 'none';
     }
 
