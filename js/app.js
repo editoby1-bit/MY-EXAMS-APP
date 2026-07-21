@@ -663,10 +663,9 @@
     E.qtypeBanner.textContent = obj ? 'Objective Question' : 'Theory / Essay Question';
     E.qtypeBanner.className   = `qtype-banner ${obj?'obj':'theory'}`;
 
-    // Show AI explain buttons for Plus subscribers only
-    const isPlus = S.hasAccess && (loadSafe(SK.tier) === 'plus');
-    if (E.aiExplainBtn)       E.aiExplainBtn.classList.toggle('hidden', !isPlus || !obj);
-    if (E.aiExplainTheoryBtn) E.aiExplainTheoryBtn.classList.toggle('hidden', !isPlus || obj);
+    // Show Teach Me to all logged-in users — non-Plus see upgrade prompt on click
+    if (E.aiExplainBtn)       E.aiExplainBtn.classList.toggle('hidden', !S.currentUser || !obj);
+    if (E.aiExplainTheoryBtn) E.aiExplainTheoryBtn.classList.toggle('hidden', !S.currentUser || obj);
     if (E.meaAiPanel) E.meaAiPanel.classList.add('hidden');
 
     // Show snap button for all paid subscribers on theory questions
@@ -850,9 +849,15 @@
     if (dir>0 && S.idx===S.questions.length-1) {
       if (S.reviewMode) { showScreen('result'); return; }
       // Sections mode end of Section A — offer Section B before submit
-      if (S.type === 'both' && S.bothMode === 'sections' && S.section === 'A' && S.sectionB.length > 0) {
-        showSectionEndChoice();
-        return;
+      if (S.type === 'both' && S.bothMode === 'sections') {
+        if (S.section === 'A' && S.sectionB.length > 0) {
+          showSectionEndChoice('A');
+          return;
+        }
+        if (S.section === 'B') {
+          showSectionEndChoice('B');
+          return;
+        }
       }
       confirmSubmit();
       return;
@@ -2323,12 +2328,20 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
   }
 
   /* ════════ SECTION SWITCHING ════════ */
-  function showSectionEndChoice() {
+  function showSectionEndChoice(fromSection) {
     const modal = document.getElementById('sectionEndModal');
     const sub   = document.getElementById('sectionEndSub');
     if (!modal) { showSectionTransition(); return; }
 
-    sub.textContent = `You have finished Section A (${S.sectionA.length} Objective questions). Choose what to do next — your answers in both sections are saved.`;
+    const isA = fromSection === 'A';
+    const count = isA ? S.sectionA.length : S.sectionB.length;
+    const type  = isA ? 'Objective' : 'Theory';
+    const label = isA ? 'Section A' : 'Section B';
+    sub.textContent = `You have finished ${label} (${count} ${type} questions). Choose what to do next — your answers in both sections are saved.`;
+
+    // Update icon and title
+    document.querySelector('#sectionEndModal .exit-modal-icon').textContent = isA ? '📋' : '📝';
+    document.querySelector('#sectionEndModal .exit-modal-title').textContent = `${label} Complete`;
 
     modal.classList.remove('hidden');
 
@@ -2353,12 +2366,21 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     document.getElementById('sectionEndClose').addEventListener('click', hide);
 
     // Remain in Section A — same as close, explicit wording
+    const remainBtn2  = document.getElementById('seRemainBtn');
+    const goBBtn2     = document.getElementById('seGoBBtn');
+    if (remainBtn2) remainBtn2.textContent = fromSection === 'A'
+      ? '📖 Remain in Section A — Review/Complete'
+      : '📖 Remain in Section B — Review/Complete';
+    if (goBBtn2) goBBtn2.textContent = fromSection === 'A'
+      ? '📋 Go to Section B →'
+      : '📋 Go to Section A ←';
+
     document.getElementById('seRemainBtn').addEventListener('click', hide);
 
-    // Go to Section B — switch sections, answers preserved
+    // Switch to other section
     document.getElementById('seGoBBtn').addEventListener('click', () => {
       hide();
-      switchSection('B');
+      switchSection(fromSection === 'A' ? 'B' : 'A');
     });
 
     // Finish — submit current state across both sections now
