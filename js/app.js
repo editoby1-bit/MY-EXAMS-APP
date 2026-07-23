@@ -1135,9 +1135,9 @@
     if (pill && !S.hasAccess && S.currentUser) {
       const orig = pill.textContent;
       if (remaining <= 3 && remaining > 0) {
-        pill.innerHTML = `${S.currentUser} &nbsp;·&nbsp; <span style="color:var(--amber);font-weight:600">${remaining} free question${remaining===1?'':'s'} left</span>`;
+        pill.innerHTML = `${safe(S.currentUser)} &nbsp;·&nbsp; <span style="color:var(--amber);font-weight:600">${remaining} free question${remaining===1?'':'s'} left</span>`;
       } else if (remaining === 0) {
-        pill.innerHTML = `${S.currentUser} &nbsp;·&nbsp; <span style="color:var(--red,#e55)">Free trial complete</span>`;
+        pill.innerHTML = `${safe(S.currentUser)} &nbsp;·&nbsp; <span style="color:var(--red,#e55)">Free trial complete</span>`;
       }
     }
   }
@@ -1188,6 +1188,39 @@
     alert(`✅ Access granted until ${exp.toLocaleDateString('en-NG')}${extendedFrom}. Welcome to My Exams App.`);
   }
 
+  // ⚙️ Same Vercel project as the snap-and-mark API — add a /api/verify-payment
+  // serverless function there (see handoff notes) that calls Paystack's
+  // /transaction/verify/:reference with your SECRET key and returns the
+  // entitlement (tier + days) based on the amount actually paid.
+  const API_BASE = 'https://editoby-api.vercel.app';
+
+  // Grants access ONLY after the payment is confirmed server-side against
+  // Paystack — the client-side Paystack callback firing is not sufficient
+  // proof of payment on its own (it can be triggered without a real charge
+  // via devtools), so we never call grantAccess() directly from a Paystack
+  // callback anymore.
+  async function verifyAndGrant(reference, fallbackTier, fallbackDays) {
+    try {
+      const res = await fetch(API_BASE + '/api/verify-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reference })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.verified) {
+        // Trust the server's determination of tier/days (based on amount
+        // actually paid), not whatever the client thinks it bought.
+        grantAccess(data.days || fallbackDays, data.tier || fallbackTier);
+        return true;
+      }
+      alert('We could not confirm this payment yet. If you were charged, please contact support with reference: ' + reference);
+      return false;
+    } catch (err) {
+      alert('Could not verify payment (network error). If you were charged, please contact support with reference: ' + reference);
+      return false;
+    }
+  }
+
   function upgradeToPlus(mode) {
     // mode: 'upgrade' = pay difference ₦1,000, keep expiry
     //       'renew'   = pay full ₦3,500, extend from current expiry
@@ -1207,7 +1240,17 @@
           { display_name: 'Plan', variable_name: 'plan', value: 'Upgrade to Student Pass Plus (₦1,000)' },
         ]},
         onClose() {},
-        callback() {
+        async callback(response) {
+          const res = await fetch(API_BASE + '/api/verify-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reference: response.reference })
+          }).catch(() => null);
+          const data = res ? await res.json().catch(() => ({})) : {};
+          if (!res || !res.ok || !data.verified) {
+            alert('We could not confirm this payment yet. If you were charged, please contact support with reference: ' + response.reference);
+            return;
+          }
           // Keep existing expiry, just change tier
           saveSafe(SK.tier, 'plus');
           S.tier = 'plus';
@@ -1284,11 +1327,11 @@
         ]
       },
       onClose() {},
-      callback(response) {
-        if ((tier === 'student' || tier === 'jamb') && isEarlyAdopter && period === 'quarterly') {
+      async callback(response) {
+        const verified = await verifyAndGrant(response.reference, tier, daysToGrant);
+        if (verified && (tier === 'student' || tier === 'jamb') && isEarlyAdopter && period === 'quarterly') {
           saveSafe('mea-ea-sold', sold + 1);
         }
-        grantAccess(daysToGrant, tier);
       }
     });
     handler.openIframe();
@@ -1529,7 +1572,7 @@
       list.innerHTML = scores.map(([name, data], i) => `
         <div class="qc-score-row ${name === S.currentUser ? 'qc-score-me' : ''}">
           <span class="qc-rank">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#' + (i+1)}</span>
-          <span class="qc-score-name">${name}${name === S.currentUser ? ' (you)' : ''}</span>
+          <span class="qc-score-name">${safe(name)}${name === S.currentUser ? ' (you)' : ''}</span>
           <span class="qc-score-val">${data.score}/${data.total} · ${data.pct}%</span>
         </div>
       `).join('');
@@ -1611,11 +1654,15 @@
     const codes = {
       'MEA-DEMO-2025':  { days: 90,  tier: 'student' },
       'MEA-PLUS-DEMO':  { days: 90,  tier: 'plus'    },
-      'WAEC-PROMO':     { days: 30,  tier: 'student' },
-      'NECO-PROMO':     { days: 30,  tier: 'student' },
+      // 'WAEC-PROMO' and 'NECO-PROMO' — not in the official demo-code list,
+      // disabled here since they'd have been visible to anyone via view-source
+      // and grant free access. Re-enable only if this was an intentional campaign.
       'JAMB-PROMO':     { days: 90,  tier: 'jamb'    },
       'TEST7':          { days: 7,   tier: 'student' },
     };
+    // ⚠️ These codes are still readable by anyone who views this file's source.
+    // For long-lived or high-value codes, validate them server-side (via the
+    // same Vercel API) instead of listing them in client JS.
     if (codes[code]) {
       grantAccess(codes[code].days, codes[code].tier);
     } else {
@@ -2009,17 +2056,18 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
         if (E.meaAiPanel) E.meaAiPanel.classList.add('hidden');
         return;
       }
-      const res  = await fetch('https://api.anthropic.com/v1/messages', {
+      // ⚙️ Calls the same Vercel project as snap-and-mark — add a /api/teach
+      // serverless function there that holds ANTHROPIC_API_KEY server-side
+      // and forwards { prompt } to Claude. Calling api.anthropic.com directly
+      // from the browser needs a key in the client bundle, which is visible
+      // to anyone in the network tab — never do that for a paid feature.
+      const res  = await fetch(API_BASE + '/api/teach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 400,
-          messages: [{ role: 'user', content: prompt }]
-        })
+        body: JSON.stringify({ prompt })
       });
       const data = await res.json();
-      const text = data.content?.map(c => c.text||'').join('') || 'Could not get explanation. Please try again.';
+      const text = data.text || data.content?.map(c => c.text||'').join('') || 'Could not get explanation. Please try again.';
 
       if (E.meaAiLoading) E.meaAiLoading.classList.add('hidden');
       if (E.meaAiResponse) {
