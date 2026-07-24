@@ -1221,11 +1221,65 @@
     }
   }
 
-  function upgradeToPlus(mode) {
+  /* ════════ EMAIL MODAL (replaces native prompt() for payment email) ════════ */
+  function getEmailViaModal() {
+    return new Promise((resolve) => {
+      let overlay = document.getElementById('emailModalOverlay');
+      if (overlay) overlay.remove(); // fresh each time, avoids stale listeners
+
+      overlay = document.createElement('div');
+      overlay.id = 'emailModalOverlay';
+      overlay.style.cssText = `
+        position:fixed; inset:0; background:rgba(5,10,20,.72);
+        display:flex; align-items:center; justify-content:center;
+        z-index:10000; padding:1rem; font-family:var(--sans,sans-serif);
+        animation:toastSlideUp .2s ease;
+      `;
+      overlay.innerHTML = `
+        <div style="background:#0a1628; border:1.5px solid var(--gold,#d4af37); border-radius:14px;
+                    padding:1.75rem 1.5rem; max-width:340px; width:100%; box-shadow:0 10px 40px rgba(0,0,0,.5);">
+          <h3 style="margin:0 0 .5rem; color:#fff; font-size:1.05rem; font-weight:700;">Enter your email</h3>
+          <p style="margin:0 0 1rem; color:var(--text-dim,#9aa5b1); font-size:.85rem; line-height:1.4;">
+            We'll send your payment receipt here.
+          </p>
+          <input id="emailModalInput" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com"
+                 style="width:100%; box-sizing:border-box; padding:.7rem .85rem; border-radius:9px;
+                        border:1.5px solid #26344a; background:#0d1b2a; color:#fff; font-size:.95rem; outline:none;" />
+          <p id="emailModalError" style="display:none; color:var(--red,#e55); font-size:.78rem; margin:.4rem 0 0;">
+            Please enter a valid email address.
+          </p>
+          <div style="display:flex; gap:.6rem; margin-top:1.1rem;">
+            <button id="emailModalCancel" style="flex:1; padding:.65rem; border-radius:9px; border:1.5px solid #26344a;
+                    background:transparent; color:#fff; font-weight:600; font-size:.85rem;">Cancel</button>
+            <button id="emailModalContinue" style="flex:1; padding:.65rem; border-radius:9px; border:none;
+                    background:var(--gold,#d4af37); color:#0a1628; font-weight:700; font-size:.85rem;">Continue</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      const input   = document.getElementById('emailModalInput');
+      const errEl   = document.getElementById('emailModalError');
+      const cleanup = (val) => { overlay.remove(); resolve(val); };
+
+      input.focus();
+      document.getElementById('emailModalCancel').addEventListener('click', () => cleanup(null));
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(null); });
+      const submit = () => {
+        const val = (input.value || '').trim();
+        if (!val.includes('@') || !val.includes('.')) { errEl.style.display = 'block'; return; }
+        cleanup(val);
+      };
+      document.getElementById('emailModalContinue').addEventListener('click', submit);
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+    });
+  }
+
+  async function upgradeToPlus(mode) {
     // mode: 'upgrade' = pay difference ₦1,000, keep expiry
     //       'renew'   = pay full ₦3,500, extend from current expiry
-    const email = prompt('Enter your email address to continue:');
-    if (!email?.includes('@')) { if (email !== null) alert('Please enter a valid email address.'); return; }
+    const email = await getEmailViaModal();
+    if (!email) return; // cancelled
 
     const PAYSTACK_KEY = 'pk_live_5d12ee2a90900116dc222107e059a06214c085ff';
 
@@ -1266,7 +1320,7 @@
     }
   }
 
-  function handlePayment(tier, period) {
+  async function handlePayment(tier, period) {
     tier   = tier   || 'student';
     period = period || 'quarterly';
 
@@ -1306,8 +1360,8 @@
 
     if (!amount) return;
 
-    const email = prompt(`Enter your email address to continue:`);
-    if (!email?.includes('@')) { if (email !== null) alert('Please enter a valid email address.'); return; }
+    const email = await getEmailViaModal();
+    if (!email) return; // cancelled
 
     const PAYSTACK_KEY = 'pk_live_5d12ee2a90900116dc222107e059a06214c085ff';
     // 🔑 When Paystack approves your account, replace the line above with:
@@ -2680,6 +2734,15 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
   function saveSafe(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
   function loadSafe(k,d=null){try{const v=localStorage.getItem(k);return v!==null?JSON.parse(v):d;}catch(e){return d;}}
   function todayStr(){return new Date().toISOString().slice(0,10);}
+
+  // Inline onclick="..." attributes (in index.html and in HTML strings built
+  // by this file) can only see truly global functions — anything defined
+  // inside this closure is invisible to them, causing "X is not defined"
+  // errors. Expose every function referenced that way here.
+  window.showPlusUpgradePrompt = showPlusUpgradePrompt;
+  window.handlePayment         = handlePayment;
+  window.showPaywall           = showPaywall;
+  window.upgradeToPlus         = upgradeToPlus;
 
   init();
 })();
