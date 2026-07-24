@@ -79,7 +79,7 @@
     'upgradeBar','upgradeBarBtn','upgradeBarText',
     'resultUpgradTeaser','rutBtn','rutTitle',
     'teaserToast','teaserToastText','teaserToastUpgrade','teaserToastClose',
-    'aiExplainBtn','aiExplainTheoryBtn','meaAiPanel','meaAiClose','meaAiCredits','meaAiLoading','meaAiResponse','meaAiContent',
+    'aiExplainBtn','aiExplainTheoryBtn','aiExplainTeaser','meaAiPanel','meaAiClose','meaAiCredits','meaAiLoading','meaAiResponse','meaAiContent',
     'snapBtn','snapFileInput','snapCreditsBadge','snapActionRow','snapTip',
     'snapResultModal','snapResultClose','snapResultScore','snapResultGrade','snapResultPct',
     'snapHwWarning','snapFeedback','snapBreakdown','snapExaminerNote','snapResultDone',
@@ -244,6 +244,9 @@
     // AI explain
     if (E.aiExplainBtn)       E.aiExplainBtn.addEventListener('click', () => triggerMeaAI('objective'));
     if (E.aiExplainTheoryBtn) E.aiExplainTheoryBtn.addEventListener('click', () => triggerMeaAI('theory'));
+    if (E.aiExplainTeaser)    E.aiExplainTeaser.addEventListener('click', () => {
+      alert('Teach Me is only available in Practice Mode or when reviewing your results — not during a live Exam Mode session.');
+    });
     if (E.meaAiClose)         E.meaAiClose.addEventListener('click', () => E.meaAiPanel?.classList.add('hidden'));
 
     // Snap and mark
@@ -663,9 +666,14 @@
     E.qtypeBanner.textContent = obj ? 'Objective Question' : 'Theory / Essay Question';
     E.qtypeBanner.className   = `qtype-banner ${obj?'obj':'theory'}`;
 
-    // Show Teach Me to all logged-in users — non-Plus see upgrade prompt on click
-    if (E.aiExplainBtn)       E.aiExplainBtn.classList.toggle('hidden', !S.currentUser || !obj);
-    if (E.aiExplainTheoryBtn) E.aiExplainTheoryBtn.classList.toggle('hidden', !S.currentUser || obj);
+    // Teach Me only during Practice Mode or when reviewing results — never
+    // during a live, timed Exam Mode session (would leak the answer to a
+    // question you're being tested on). During exam mode, show a small,
+    // inert teaser instead that just explains when it'll be available.
+    const inPracticeOrReview = S.mode === 'practice' || S.reviewMode;
+    if (E.aiExplainBtn)       E.aiExplainBtn.classList.toggle('hidden', !S.currentUser || !obj || !inPracticeOrReview);
+    if (E.aiExplainTheoryBtn) E.aiExplainTheoryBtn.classList.toggle('hidden', !S.currentUser || obj || !inPracticeOrReview);
+    if (E.aiExplainTeaser)    E.aiExplainTeaser.classList.toggle('hidden', !S.currentUser || inPracticeOrReview);
     if (E.meaAiPanel) E.meaAiPanel.classList.add('hidden');
 
     // Show snap button for all paid subscribers on theory questions
@@ -2046,6 +2054,10 @@
   }
 
   async function triggerMeaAI(qType) {
+    if (!(S.mode === 'practice' || S.reviewMode)) {
+      alert('Teach Me is only available in Practice Mode or when reviewing your results — not during a live Exam Mode session.');
+      return;
+    }
     const isPlus = S.hasAccess && (loadSafe(SK.tier) === 'plus');
     if (!S.hasAccess) {
       showPaywall('upgrade');
