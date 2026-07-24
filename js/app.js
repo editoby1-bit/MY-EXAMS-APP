@@ -1294,23 +1294,25 @@
           { display_name: 'Plan', variable_name: 'plan', value: 'Upgrade to Student Pass Plus (₦1,000)' },
         ]},
         onClose() {},
-        async callback(response) {
-          const res = await fetch(API_BASE + '/api/verify-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reference: response.reference })
-          }).catch(() => null);
-          const data = res ? await res.json().catch(() => ({})) : {};
-          if (!res || !res.ok || !data.verified) {
-            alert('We could not confirm this payment yet. If you were charged, please contact support with reference: ' + response.reference);
-            return;
-          }
-          // Keep existing expiry, just change tier
-          saveSafe(SK.tier, 'plus');
-          S.tier = 'plus';
-          E.paywallOverlay?.classList.add('hidden');
-          alert('✅ Upgraded to Student Pass Plus! Teach Me are now unlocked for your current subscription period.');
-          renderQ(); // re-render to show AI buttons
+        callback(response) {
+          (async () => {
+            const res = await fetch(API_BASE + '/api/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ reference: response.reference })
+            }).catch(() => null);
+            const data = res ? await res.json().catch(() => ({})) : {};
+            if (!res || !res.ok || !data.verified) {
+              alert('We could not confirm this payment yet. If you were charged, please contact support with reference: ' + response.reference);
+              return;
+            }
+            // Keep existing expiry, just change tier
+            saveSafe(SK.tier, 'plus');
+            S.tier = 'plus';
+            E.paywallOverlay?.classList.add('hidden');
+            alert('✅ Upgraded to Student Pass Plus! Teach Me are now unlocked for your current subscription period.');
+            renderQ(); // re-render to show AI buttons
+          })();
         }
       });
       handler.openIframe();
@@ -1381,11 +1383,16 @@
         ]
       },
       onClose() {},
-      async callback(response) {
-        const verified = await verifyAndGrant(response.reference, tier, daysToGrant);
-        if (verified && (tier === 'student' || tier === 'jamb') && isEarlyAdopter && period === 'quarterly') {
-          saveSafe('mea-ea-sold', sold + 1);
-        }
+      callback(response) {
+        // Paystack's SDK rejects an `async` function here during its own
+        // internal validation (it wants a plain function reference), so we
+        // keep this synchronous and run the actual async verification inside.
+        (async () => {
+          const verified = await verifyAndGrant(response.reference, tier, daysToGrant);
+          if (verified && (tier === 'student' || tier === 'jamb') && isEarlyAdopter && period === 'quarterly') {
+            saveSafe('mea-ea-sold', sold + 1);
+          }
+        })();
       }
     });
     handler.openIframe();
