@@ -1865,6 +1865,26 @@ body {
   font-weight: 400;
 }
 
+/* Small, low-key teaser shown only in Exam Mode — same size/spirit as the
+   original floating button, but inline and deliberately unobtrusive since
+   it can't actually do anything until Practice Mode or review. */
+.ai-explain-teaser {
+  display: block;
+  margin: .85rem auto 0;
+  font-family: var(--sans);
+  background: rgba(10,22,40,.6);
+  color: rgba(212,175,55,.75);
+  border: 1px solid rgba(212,175,55,.3);
+  border-radius: 99px;
+  padding: .5rem 1rem;
+  font-size: .8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--t);
+}
+.ai-explain-teaser:hover { background: rgba(212,175,55,.1); }
+.ai-explain-teaser.hidden { display: none; }
+
 .mea-ai-panel {
   position: fixed;
   bottom: 0; left: 0; right: 0;
