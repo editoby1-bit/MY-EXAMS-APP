@@ -940,7 +940,7 @@
 
     // Save challenge score if this was a challenge session
     if (S._challengeCode && total > 0) {
-      window._saveChallengeScore(correct, total);
+      saveChallengeScore(correct, total);
     }
   }
 
@@ -1230,6 +1230,40 @@
   }
 
   /* ════════ EMAIL MODAL (replaces native prompt() for payment email) ════════ */
+  /* ════════ CONFIRM MODAL (replaces native browser confirm()) ════════ */
+  function showConfirmModal(message, confirmLabel = 'Yes', cancelLabel = 'Cancel') {
+    return new Promise((resolve) => {
+      let overlay = document.getElementById('meaConfirmModalOverlay');
+      if (overlay) overlay.remove();
+
+      overlay = document.createElement('div');
+      overlay.id = 'meaConfirmModalOverlay';
+      overlay.style.cssText = `
+        position:fixed; inset:0; background:rgba(5,10,20,.72);
+        display:flex; align-items:center; justify-content:center;
+        z-index:10000; padding:1rem; font-family:var(--sans,sans-serif);
+      `;
+      overlay.innerHTML = `
+        <div style="background:#0a1628; border:1.5px solid var(--gold,#d4af37); border-radius:14px;
+                    padding:1.75rem 1.5rem; max-width:340px; width:100%; box-shadow:0 10px 40px rgba(0,0,0,.5);">
+          <p style="margin:0 0 1.1rem; color:#fff; font-size:.95rem; line-height:1.5;">${safe(message)}</p>
+          <div style="display:flex; gap:.6rem;">
+            <button id="meaConfirmCancel" style="flex:1; padding:.65rem; border-radius:9px; border:1.5px solid #26344a;
+                    background:transparent; color:#fff; font-weight:600; font-size:.85rem;">${safe(cancelLabel)}</button>
+            <button id="meaConfirmOk" style="flex:1; padding:.65rem; border-radius:9px; border:none;
+                    background:var(--gold,#d4af37); color:#0a1628; font-weight:700; font-size:.85rem;">${safe(confirmLabel)}</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+
+      const cleanup = (val) => { overlay.remove(); resolve(val); };
+      document.getElementById('meaConfirmCancel').addEventListener('click', () => cleanup(false));
+      document.getElementById('meaConfirmOk').addEventListener('click', () => cleanup(true));
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(false); });
+    });
+  }
+
   function getEmailViaModal() {
     return new Promise((resolve) => {
       let overlay = document.getElementById('emailModalOverlay');
@@ -1491,7 +1525,7 @@
     return code;
   }
 
-  function generateChallenge() {
+  async function generateChallenge() {
     const subject = document.getElementById('qcSubject').value;
     const count   = parseInt(document.getElementById('qcCount').value);
     const time    = parseInt(document.getElementById('qcTime').value);
@@ -1499,28 +1533,44 @@
     const bank    = EXAM_BANK[subject];
     if (!bank) return;
     const pool    = shuffle([...(bank.objective||[])]).slice(0, count);
-    if (!pool.length) { alert('Not enough questions for this subject.'); return; }
+    if (!pool.length) { showInfoToast('Not enough questions for this subject.'); return; }
 
-    const code    = generateChallengeCode();
-    const expires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+    const code = generateChallengeCode();
+    const genBtn = document.getElementById('qcGenerateBtn');
+    if (genBtn) { genBtn.disabled = true; genBtn.textContent = 'Creating…'; }
 
-    // Store challenge locally
-    const challenges = loadSafe(QC_STORE, {});
-    challenges[code] = {
-      code, subject, count, time,
-      questions: pool.map(q => q.id || pool.indexOf(q)),
-      questionData: pool,
-      expires,
-      creator: S.currentUser,
-      scores: {},
-    };
-    saveSafe(QC_STORE, challenges);
+    try {
+      const res = await fetch(API_BASE + '/api/challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create', code, subject, count, time,
+          questions: pool, creator: S.currentUser,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Could not create challenge');
 
-    document.getElementById('qcCodeDisplay').textContent = code;
-    showQcPanel('qcShare');
+      // Also keep a local copy so the creator's own attempt works instantly.
+      const challenges = loadSafe(QC_STORE, {});
+      challenges[code] = {
+        code, subject, count, time,
+        questions: pool.map(q => q.id || pool.indexOf(q)),
+        questionData: pool,
+        expires: Date.now() + 24 * 60 * 60 * 1000,
+        creator: S.currentUser,
+        scores: {},
+      };
+      saveSafe(QC_STORE, challenges);
 
-    // Store current challenge code for later
-    window._currentChallengeCode = code;
+      document.getElementById('qcCodeDisplay').textContent = code;
+      showQcPanel('qcShare');
+      window._currentChallengeCode = code;
+    } catch (err) {
+      showInfoToast('Could not create challenge — check your connection and try again.');
+    } finally {
+      if (genBtn) { genBtn.disabled = false; genBtn.textContent = 'Generate Code →'; }
+    }
   }
 
   function shareChallengeLink() {
@@ -1535,24 +1585,44 @@
     }
   }
 
-  function joinChallenge() {
+  async function joinChallenge() {
     const code = (document.getElementById('qcJoinCode').value || '').trim().toUpperCase();
     if (!code) return;
 
-    const challenges = loadSafe(QC_STORE, {});
-    const challenge  = challenges[code];
+    const joinBtn = document.getElementById('qcJoinConfirm');
+    if (joinBtn) { joinBtn.disabled = true; joinBtn.textContent = 'Joining…'; }
 
-    if (!challenge) {
-      alert('Challenge not found. Check the code and try again.');
-      return;
-    }
-    if (Date.now() > challenge.expires) {
-      alert('This challenge has expired (challenges last 24 hours).');
-      return;
-    }
+    try {
+      // Local first (covers the creator's own device instantly), then the
+      // shared backend for anyone joining from a different device.
+      const local = loadSafe(QC_STORE, {})[code];
+      if (local) {
+        if (Date.now() > local.expires) { showInfoToast('This challenge has expired (challenges last 24 hours).'); return; }
+        window._currentChallengeCode = code;
+        startChallengeAttempt(local);
+        return;
+      }
 
-    window._currentChallengeCode = code;
-    startChallengeAttempt(challenge);
+      const res = await fetch(API_BASE + '/api/challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'join', code }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        showInfoToast(data.error === 'Challenge not found or expired'
+          ? 'Challenge not found. Check the code and try again.'
+          : 'Could not join challenge — check your connection and try again.');
+        return;
+      }
+      // Backend challenge shape uses `questions`; local shape expects
+      // `questionData` — normalize so startChallengeAttempt works either way.
+      const challenge = { ...data.challenge, questionData: data.challenge.questions };
+      window._currentChallengeCode = code;
+      startChallengeAttempt(challenge);
+    } finally {
+      if (joinBtn) { joinBtn.disabled = false; joinBtn.textContent = 'Join →'; }
+    }
   }
 
   function startOwnAttempt() {
@@ -1603,42 +1673,52 @@
   // Hook into existing finishSession to save challenge score
   const _origFinishSession = window._finishSession;
 
-  function saveChallengeScore(score, total) {
+  async function saveChallengeScore(score, total) {
     const code = S._challengeCode;
     if (!code) return;
+    const pct = Math.round((score / total) * 100);
+
+    // Keep a local copy too (covers the creator's own device offline)
     const challenges = loadSafe(QC_STORE, {});
-    if (!challenges[code]) return;
-    challenges[code].scores[S.currentUser] = {
-      score, total,
-      pct: Math.round((score / total) * 100),
-      time: new Date().toLocaleTimeString(),
-    };
-    saveSafe(QC_STORE, challenges);
+    if (challenges[code]) {
+      challenges[code].scores[S.currentUser] = { score, total, pct, time: new Date().toLocaleTimeString() };
+      saveSafe(QC_STORE, challenges);
+    }
     S._challengeCode = null;
 
-    // Offer to view leaderboard
-    setTimeout(() => {
-      if (confirm('Challenge complete! View the leaderboard?')) {
-        showChallengeLeaderboard(code);
-      }
-    }, 500);
+    let backendScores = null;
+    try {
+      const res = await fetch(API_BASE + '/api/challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'submit', code, student: S.currentUser, score, total, pct }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) backendScores = data.scores;
+    } catch (err) {
+      // Non-fatal — the student's own result screen already showed their
+      // score; the shared leaderboard just won't update this time.
+    }
+
+    const viewNow = await showConfirmModal('Challenge complete! View the leaderboard?', 'View', 'Not now');
+    if (viewNow) showChallengeLeaderboard(code, backendScores);
   }
 
-  function showChallengeLeaderboard(code) {
+  function showChallengeLeaderboard(code, scoresOverride) {
     const challenges = loadSafe(QC_STORE, {});
-    const challenge  = challenges[code];
-    if (!challenge) return;
+    const localChallenge = challenges[code];
+    const scores = scoresOverride || localChallenge?.scores;
+    if (!scores) return;
 
     const list = document.getElementById('qcLeaderboardList');
     if (!list) return;
 
-    const scores = Object.entries(challenge.scores)
-      .sort((a, b) => b[1].pct - a[1].pct);
+    const entries = Object.entries(scores).sort((a, b) => b[1].pct - a[1].pct);
 
-    if (!scores.length) {
+    if (!entries.length) {
       list.innerHTML = '<p class="qc-empty">No scores yet — be the first!</p>';
     } else {
-      list.innerHTML = scores.map(([name, data], i) => `
+      list.innerHTML = entries.map(([name, data], i) => `
         <div class="qc-score-row ${name === S.currentUser ? 'qc-score-me' : ''}">
           <span class="qc-rank">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#' + (i+1)}</span>
           <span class="qc-score-name">${safe(name)}${name === S.currentUser ? ' (you)' : ''}</span>
