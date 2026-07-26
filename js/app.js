@@ -1649,6 +1649,7 @@
     S.questions  = challenge.questionData.map(q => ({...q, _type:'objective'}));
     S.answers    = new Array(S.questions.length).fill(null);
     S.flagged    = new Array(S.questions.length).fill(false);
+    S.qTimings   = new Array(S.questions.length).fill(null);
     S.idx        = 0;
     S.reviewMode = false;
     S.showAnswer = false;
@@ -1657,6 +1658,7 @@
     // Store challenge context so results can save score
     S._challengeCode = challenge.code;
 
+    if (S.timerId) { clearInterval(S.timerId); S.timerId = null; }
     if (challenge.time > 0) {
       S.timerSecs = challenge.time * 60;
       startTimer();
@@ -1669,9 +1671,6 @@
     renderQ();
     showScreen('quiz');
   }
-
-  // Hook into existing finishSession to save challenge score
-  const _origFinishSession = window._finishSession;
 
   async function saveChallengeScore(score, total) {
     const code = S._challengeCode;
