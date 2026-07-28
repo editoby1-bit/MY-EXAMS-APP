@@ -1455,6 +1455,12 @@
   ════════════════════════════════ */
   const SUBJECT_KEYS = Object.keys(EXAM_BANK);
   const QC_STORE = 'mea-challenges-v1';
+  let _pendingChallenge = null;
+  let _waitingRoomTimer = null;
+  let _waitingRoomCountdownTicker = null;
+  let _isWaitingRoomCreator = false;
+  const WAITING_ROOM_TIMEOUT_MS = 2 * 60 * 1000;
+  const MAX_PENDING_CHALLENGES = 3;
 
   function initCommunityQuiz() {
     const btn = document.getElementById('quizChallengeBtn');
@@ -1479,6 +1485,14 @@
     document.getElementById('qcStartOwnBtn').addEventListener('click', startOwnAttempt);
     document.getElementById('qcNewChallengeBtn').addEventListener('click', () => showQcPanel('qcCreate'));
     document.getElementById('qcDoneBtn').addEventListener('click', closeQuizChallenge);
+    document.getElementById('qcReadyBtn')?.addEventListener('click', markReady);
+    document.getElementById('qcForceStartBtn')?.addEventListener('click', forceStartChallenge);
+    document.getElementById('qcEndChallengeBtn')?.addEventListener('click', endChallengeFromWaitingRoom);
+    document.querySelectorAll('input[name="qcSyncMode"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById('qcScheduledTimeWrap')?.classList.toggle('hidden', radio.value !== 'scheduled' || !radio.checked);
+      });
+    });
 
     // Populate subject dropdown
     const sel = document.getElementById('qcSubject');
@@ -1505,14 +1519,17 @@
     if (!S.currentUser) { alert('Please log in first to use Community Quiz.'); return; }
     showQcPanel('qcHome');
     document.getElementById('quizChallengeModal').classList.remove('hidden');
+    renderPendingChallenges();
   }
 
   function closeQuizChallenge() {
+    clearInterval(_waitingRoomTimer);
+    clearInterval(_waitingRoomCountdownTicker);
     document.getElementById('quizChallengeModal').classList.add('hidden');
   }
 
   function showQcPanel(id) {
-    ['qcHome','qcCreate','qcShare','qcLeaderboard'].forEach(p => {
+    ['qcHome','qcCreate','qcShare','qcLeaderboard','qcWaitingRoom'].forEach(p => {
       const el = document.getElementById(p);
       if (el) el.classList.toggle('hidden', p !== id);
     });
@@ -1525,10 +1542,96 @@
     return code;
   }
 
+  function getMyPendingChallenges() {
+    const all = loadSafe(QC_STORE, {});
+    return Object.values(all)
+      .filter(c => c.creator === S.currentUser && !c.ended)
+      .sort((a, b) => (b.createdAt||0) - (a.createdAt||0));
+  }
+
+  function renderPendingChallenges() {
+    const wrap = document.getElementById('qcPendingWrap');
+    const list = document.getElementById('qcPendingList');
+    const countEl = document.getElementById('qcPendingCount');
+    if (!wrap || !list) return;
+
+    const mine = getMyPendingChallenges();
+    countEl && (countEl.textContent = mine.length);
+    wrap.classList.toggle('hidden', mine.length === 0);
+
+    list.innerHTML = mine.map(c => {
+      const statusLabel = c.syncMode === 'scheduled' ? '📅 Scheduled'
+        : c.syncMode === 'ready' && !c.startedAt ? '⏱ Waiting room'
+        : '▶ In progress';
+      return `
+        <div class="qc-pending-row">
+          <div class="qc-pending-info">
+            <div class="qc-pending-code">${safe(c.code)}</div>
+            <div class="qc-pending-sub">${safe(c.subject||'')} · ${statusLabel}</div>
+          </div>
+          <button class="qc-pending-btn" data-code="${safe(c.code)}" data-action="continue">Continue</button>
+          <button class="qc-pending-delete" data-code="${safe(c.code)}" data-action="delete">Delete</button>
+        </div>
+      `;
+    }).join('');
+
+    list.querySelectorAll('[data-action="continue"]').forEach(btn => {
+      btn.addEventListener('click', () => continueChallenge(btn.dataset.code));
+    });
+    list.querySelectorAll('[data-action="delete"]').forEach(btn => {
+      btn.addEventListener('click', () => deleteChallenge(btn.dataset.code));
+    });
+  }
+
+  function continueChallenge(code) {
+    const challenges = loadSafe(QC_STORE, {});
+    const challenge = challenges[code];
+    if (!challenge) return;
+    window._currentChallengeCode = code;
+    if (challenge.syncMode && challenge.syncMode !== 'anytime' && !challenge.startedAt) {
+      _pendingChallenge = challenge;
+      openWaitingRoom(code, true);
+    } else {
+      document.getElementById('qcCodeDisplay').textContent = code;
+      showQcPanel('qcShare');
+    }
+  }
+
+  async function deleteChallenge(code) {
+    const ok = await showConfirmModal(`Delete challenge ${code}? Anyone with the code will no longer be able to join.`, 'Delete', 'Cancel');
+    if (!ok) return;
+    try {
+      await fetch(API_BASE + '/api/challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'end_challenge', code }),
+      });
+    } catch (err) { /* still remove locally even if the network call fails */ }
+    const challenges = loadSafe(QC_STORE, {});
+    if (challenges[code]) { challenges[code].ended = true; saveSafe(QC_STORE, challenges); }
+    renderPendingChallenges();
+  }
+
   async function generateChallenge() {
+    if (getMyPendingChallenges().length >= MAX_PENDING_CHALLENGES) {
+      showInfoToast(`You can have up to ${MAX_PENDING_CHALLENGES} active challenges at a time — delete one first to create another.`);
+      return;
+    }
+
     const subject = document.getElementById('qcSubject').value;
     const count   = parseInt(document.getElementById('qcCount').value);
     const time    = parseInt(document.getElementById('qcTime').value);
+    const syncMode = document.querySelector('input[name="qcSyncMode"]:checked')?.value || 'anytime';
+    let scheduledStartAt = null;
+    if (syncMode === 'scheduled') {
+      const raw = document.getElementById('qcScheduledTime')?.value;
+      if (!raw) { showInfoToast('Pick a date and time for the challenge to start.'); return; }
+      scheduledStartAt = new Date(raw).getTime();
+      if (!Number.isFinite(scheduledStartAt) || scheduledStartAt <= Date.now()) {
+        showInfoToast('Pick a start time in the future.');
+        return;
+      }
+    }
 
     const bank    = EXAM_BANK[subject];
     if (!bank) return;
@@ -1545,7 +1648,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'create', code, subject, count, time,
-          questions: pool, creator: S.currentUser,
+          questions: pool, creator: S.currentUser, syncMode, scheduledStartAt,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -1553,19 +1656,29 @@
 
       // Also keep a local copy so the creator's own attempt works instantly.
       const challenges = loadSafe(QC_STORE, {});
-      challenges[code] = {
+      const challengeObj = {
         code, subject, count, time,
         questions: pool.map(q => q.id || pool.indexOf(q)),
         questionData: pool,
         expires: Date.now() + 24 * 60 * 60 * 1000,
         creator: S.currentUser,
+        syncMode, scheduledStartAt,
+        startedAt: syncMode === 'anytime' ? Date.now() : null,
+        createdAt: Date.now(), ended: false,
         scores: {},
       };
+      challenges[code] = challengeObj;
       saveSafe(QC_STORE, challenges);
 
       document.getElementById('qcCodeDisplay').textContent = code;
-      showQcPanel('qcShare');
       window._currentChallengeCode = code;
+
+      if (syncMode !== 'anytime') {
+        _pendingChallenge = challengeObj;
+        openWaitingRoom(code, true);
+      } else {
+        showQcPanel('qcShare');
+      }
     } catch (err) {
       showInfoToast('Could not create challenge — check your connection and try again.');
     } finally {
@@ -1597,20 +1710,38 @@
       // shared backend for anyone joining from a different device.
       const local = loadSafe(QC_STORE, {})[code];
       if (local) {
+        if (local.ended) { showInfoToast('This challenge has ended.'); return; }
         if (Date.now() > local.expires) { showInfoToast('This challenge has expired (challenges last 24 hours).'); return; }
         window._currentChallengeCode = code;
-        startChallengeAttempt(local);
+        if (local.syncMode && local.syncMode !== 'anytime' && !local.startedAt) {
+          _pendingChallenge = local;
+          openWaitingRoom(code, local.creator === S.currentUser);
+        } else {
+          startChallengeAttempt(local);
+        }
         return;
       }
 
       const res = await fetch(API_BASE + '/api/challenge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'join', code }),
+        body: JSON.stringify({ action: 'join', code, student: S.currentUser }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
-        showInfoToast(data.error === 'Challenge not found or expired'
+        if (res.status === 409 && data.alreadyCompleted) {
+          showInfoToast("You've already completed this challenge — check the leaderboard for your result.");
+          const lbRes = await fetch(API_BASE + '/api/challenge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'leaderboard', code }),
+          });
+          const lbData = await lbRes.json().catch(() => ({}));
+          if (lbRes.ok && lbData.ok) showChallengeLeaderboard(code, lbData.scores);
+          return;
+        }
+        showInfoToast(res.status === 410 ? 'This challenge has ended.'
+          : data.error === 'Challenge not found or expired'
           ? 'Challenge not found. Check the code and try again.'
           : 'Could not join challenge — check your connection and try again.');
         return;
@@ -1619,7 +1750,12 @@
       // `questionData` — normalize so startChallengeAttempt works either way.
       const challenge = { ...data.challenge, questionData: data.challenge.questions };
       window._currentChallengeCode = code;
-      startChallengeAttempt(challenge);
+      if (challenge.syncMode && challenge.syncMode !== 'anytime' && !challenge.startedAt) {
+        _pendingChallenge = challenge;
+        openWaitingRoom(code, challenge.creator === S.currentUser);
+      } else {
+        startChallengeAttempt(challenge);
+      }
     } finally {
       if (joinBtn) { joinBtn.disabled = false; joinBtn.textContent = 'Join →'; }
     }
@@ -1634,7 +1770,171 @@
     startChallengeAttempt(challenge);
   }
 
-  function startChallengeAttempt(challenge) {
+  function openWaitingRoom(code, isCreator) {
+    _isWaitingRoomCreator = isCreator;
+    document.getElementById('qcWaitingCodeDisplay').textContent = code;
+    document.getElementById('qcForceStartBtn')?.classList.toggle('hidden', !isCreator);
+    document.getElementById('qcEndChallengeBtn')?.classList.toggle('hidden', !isCreator);
+    const readyBtn = document.getElementById('qcReadyBtn');
+    if (readyBtn) { readyBtn.disabled = false; readyBtn.textContent = "✅ I'm Ready"; }
+    showQcPanel('qcWaitingRoom');
+    document.getElementById('quizChallengeModal').classList.remove('hidden');
+    pollWaitingRoom(code);
+  }
+
+  function renderWaitingList(participants) {
+    const list = document.getElementById('qcWaitingList');
+    if (!list) return;
+    const entries = Object.entries(participants || {});
+    list.innerHTML = entries.map(([name, p]) => `
+      <div class="qc-score-row">
+        <span class="qc-rank">${p.ready ? '✅' : '⏳'}</span>
+        <span class="qc-score-name">${safe(name)}${name === S.currentUser ? ' (you)' : ''}</span>
+        <span class="qc-score-val">${p.ready ? 'Ready' : 'Waiting'}</span>
+        ${_isWaitingRoomCreator && name !== S.currentUser
+          ? `<button class="qc-pending-delete" data-name="${safe(name)}" style="margin-left:.4rem">Remove</button>` : ''}
+      </div>
+    `).join('') || '<p class="qc-sub">Waiting for people to join…</p>';
+
+    list.querySelectorAll('button[data-name]').forEach(btn => {
+      btn.addEventListener('click', () => removeParticipant(btn.dataset.name));
+    });
+  }
+
+  function updateCountdownDisplay(msRemaining) {
+    const el2 = document.getElementById('qcWaitingCountdown');
+    if (!el2) return;
+    if (msRemaining == null || msRemaining <= 0) { el2.classList.add('hidden'); return; }
+    const totalSec = Math.ceil(msRemaining / 1000);
+    const m = Math.floor(totalSec / 60), s = totalSec % 60;
+    el2.textContent = `Auto-starts in ${m}:${String(s).padStart(2,'0')}`;
+    el2.classList.remove('hidden');
+  }
+
+  async function pollWaitingRoom(code) {
+    clearInterval(_waitingRoomTimer);
+    clearInterval(_waitingRoomCountdownTicker);
+    let localFirstReadyAt = null;
+    let localScheduledAt = null;
+
+    _waitingRoomCountdownTicker = setInterval(() => {
+      if (localScheduledAt) updateCountdownDisplay(localScheduledAt - Date.now());
+      else if (localFirstReadyAt) updateCountdownDisplay((localFirstReadyAt + WAITING_ROOM_TIMEOUT_MS) - Date.now());
+    }, 1000);
+
+    const tick = async () => {
+      try {
+        const res = await fetch(API_BASE + '/api/challenge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'status', code }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) return;
+
+        if (data.ended) {
+          clearInterval(_waitingRoomTimer);
+          clearInterval(_waitingRoomCountdownTicker);
+          document.getElementById('qcWaitingStatus').textContent = 'This challenge has ended.';
+          document.getElementById('qcReadyBtn')?.classList.add('hidden');
+          document.getElementById('qcForceStartBtn')?.classList.add('hidden');
+          return;
+        }
+
+        renderWaitingList(data.participants);
+        localFirstReadyAt = data.firstReadyAt || null;
+        localScheduledAt  = data.scheduledStartAt || null;
+        if (localScheduledAt) {
+          document.getElementById('qcWaitingStatus').textContent = 'Challenge starts automatically at the scheduled time.';
+        }
+
+        if (data.startedAt) {
+          clearInterval(_waitingRoomTimer);
+          clearInterval(_waitingRoomCountdownTicker);
+          document.getElementById('quizChallengeModal').classList.add('hidden');
+          startChallengeAttempt(_pendingChallenge, data.startedAt);
+          return;
+        }
+
+        if (data.firstReadyAt && (Date.now() - data.firstReadyAt) > WAITING_ROOM_TIMEOUT_MS) {
+          await fetch(API_BASE + '/api/challenge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'force_start', code }),
+          });
+        }
+      } catch (err) { /* try again next tick */ }
+    };
+
+    tick();
+    _waitingRoomTimer = setInterval(tick, 3000);
+  }
+
+  async function markReady() {
+    const code = window._currentChallengeCode;
+    if (!code) return;
+    const btn = document.getElementById('qcReadyBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '✅ Waiting for others…'; }
+    try {
+      await fetch(API_BASE + '/api/challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'mark_ready', code, student: S.currentUser }),
+      });
+    } catch (err) {
+      showInfoToast('Could not mark ready — check your connection.');
+      if (btn) { btn.disabled = false; btn.textContent = "✅ I'm Ready"; }
+    }
+  }
+
+  async function forceStartChallenge() {
+    const code = window._currentChallengeCode;
+    if (!code) return;
+    try {
+      await fetch(API_BASE + '/api/challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'force_start', code }),
+      });
+    } catch (err) {
+      showInfoToast('Could not start — check your connection.');
+    }
+  }
+
+  async function removeParticipant(name) {
+    const code = window._currentChallengeCode;
+    if (!code) return;
+    try {
+      await fetch(API_BASE + '/api/challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove_participant', code, student: name }),
+      });
+    } catch (err) {
+      showInfoToast('Could not remove participant — check your connection.');
+    }
+  }
+
+  async function endChallengeFromWaitingRoom() {
+    const code = window._currentChallengeCode;
+    if (!code) return;
+    const ok = await showConfirmModal('End this challenge for everyone? Nobody will be able to join or continue it.', 'End Challenge', 'Cancel');
+    if (!ok) return;
+    await deleteChallenge(code);
+    clearInterval(_waitingRoomTimer);
+    clearInterval(_waitingRoomCountdownTicker);
+    document.getElementById('quizChallengeModal').classList.add('hidden');
+  }
+
+  function startChallengeAttempt(challenge, startedAtOverride) {
+    // A challenge is a one-shot comparison, not a retakeable practice set —
+    // if this student already has a recorded score, show results instead.
+    if (challenge.scores && challenge.scores[S.currentUser]) {
+      showInfoToast("You've already completed this challenge — check the leaderboard for your result.");
+      showChallengeLeaderboard(challenge.code, challenge.scores);
+      return;
+    }
+
     closeQuizChallenge();
 
     // Set up session using challenge questions
@@ -1658,9 +1958,14 @@
     // Store challenge context so results can save score
     S._challengeCode = challenge.code;
 
+    // Timer: for a challenge with a shared clock (ready/scheduled modes), a
+    // late joiner resumes the already-ticking timer rather than getting a
+    // fresh one.
+    const startedAt = startedAtOverride || challenge.startedAt || Date.now();
     if (S.timerId) { clearInterval(S.timerId); S.timerId = null; }
     if (challenge.time > 0) {
-      S.timerSecs = challenge.time * 60;
+      const elapsedSec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+      S.timerSecs = Math.max(0, challenge.time * 60 - elapsedSec);
       startTimer();
     } else {
       S.timerSecs = 0;
