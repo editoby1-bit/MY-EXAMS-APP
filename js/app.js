@@ -350,6 +350,7 @@
     refreshStats();
     renderHistory();
     refreshStartBtn();
+    refreshUpgradeBar();
   }
 
   function restoreUser() {
@@ -1966,10 +1967,11 @@
     if (challenge.time > 0) {
       const elapsedSec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
       S.timerSecs = Math.max(0, challenge.time * 60 - elapsedSec);
-      startTimer();
+      if (E.timerCard) E.timerCard.style.display = 'block';
+      runTimer();
     } else {
       S.timerSecs = 0;
-      if (E.timerCard) E.timerCard.classList.add('hidden');
+      if (E.timerCard) E.timerCard.style.display = 'none';
     }
 
     buildPills();
