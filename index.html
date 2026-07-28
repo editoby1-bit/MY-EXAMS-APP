@@ -689,6 +689,10 @@
           <input id="qcJoinCode" class="qc-code-input" placeholder="Enter challenge code" maxlength="10"/>
           <button class="qc-btn qc-btn-primary" id="qcJoinConfirm">Join →</button>
         </div>
+        <div id="qcPendingWrap" class="hidden">
+          <h4 class="qc-pending-title">Your Challenges (<span id="qcPendingCount">0</span>/3)</h4>
+          <div id="qcPendingList" class="qc-pending-list"></div>
+        </div>
       </div>
 
       <div id="qcCreate" class="hidden">
@@ -716,6 +720,17 @@
               <option value="20">20 minutes</option>
             </select>
           </div>
+          <div class="qc-field">
+            <label class="qc-label">Start mode</label>
+            <div class="qc-radio-group">
+              <label class="qc-radio"><input type="radio" name="qcSyncMode" value="anytime" checked/> <span>Anytime — everyone takes it at their own pace</span></label>
+              <label class="qc-radio"><input type="radio" name="qcSyncMode" value="ready"/> <span>Wait until everyone's ready, then start together</span></label>
+              <label class="qc-radio"><input type="radio" name="qcSyncMode" value="scheduled"/> <span>Start at a specific time — late joiners jump into the already-running timer</span></label>
+            </div>
+            <div id="qcScheduledTimeWrap" class="hidden" style="margin-top:.5rem">
+              <input type="datetime-local" id="qcScheduledTime" class="qc-select" style="width:100%"/>
+            </div>
+          </div>
         </div>
         <button class="qc-btn qc-btn-primary" id="qcGenerateBtn" style="width:100%">Generate Challenge Code →</button>
         <button class="qc-btn qc-btn-ghost" id="qcBackBtn">← Back</button>
@@ -737,6 +752,18 @@
         <div id="qcLeaderboardList" class="qc-leaderboard-list"></div>
         <button class="qc-btn qc-btn-primary" id="qcNewChallengeBtn" style="width:100%;margin-top:.75rem">New Challenge →</button>
         <button class="qc-btn qc-btn-ghost" id="qcDoneBtn">Done</button>
+      </div>
+
+      <div id="qcWaitingRoom" class="hidden">
+        <div class="qc-icon">⏱️</div>
+        <h3 class="qc-section-title">Waiting Room</h3>
+        <div class="qc-code-display" id="qcWaitingCodeDisplay">MEA-000</div>
+        <p class="qc-sub" id="qcWaitingStatus">Waiting for everyone to be ready…</p>
+        <p class="qc-countdown hidden" id="qcWaitingCountdown"></p>
+        <div id="qcWaitingList" class="qc-leaderboard-list" style="margin-bottom:1rem"></div>
+        <button class="qc-btn qc-btn-primary" id="qcReadyBtn" style="width:100%;margin-bottom:.5rem">✅ I'm Ready</button>
+        <button class="qc-btn qc-btn-secondary hidden" id="qcForceStartBtn" style="width:100%;margin-bottom:.5rem">▶ Start Now (everyone else joins mid-way)</button>
+        <button class="qc-btn qc-btn-ghost hidden" id="qcEndChallengeBtn" style="width:100%">🗑 End This Challenge</button>
       </div>
 
     </div>
