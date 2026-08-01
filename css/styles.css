@@ -1070,7 +1070,18 @@ body {
   .q-panel { padding:1.25rem 1.1rem; }
   .question-header { padding:.75rem 1.1rem; }
   .nav-footer { padding:1rem 1.1rem; padding-right: 9rem; }
+  .qh-mobile-timer.hidden { display:none; }
+  .qh-mobile-timer {
+    display:inline-flex; align-items:center; gap:.3rem;
+    font-weight:800; font-size:.85rem; color: var(--gold-dk, #a8791f);
+    background: rgba(212,175,55,.12); border:1px solid rgba(212,175,55,.4);
+    border-radius:99px; padding:.2rem .6rem;
+  }
+  .qh-mobile-timer.urgent { color:#c0392b; background:rgba(220,60,60,.12); border-color:rgba(220,60,60,.4); }
 }
+
+@media (min-width:961px) {
+  .qh-mobile-timer { display:none !important; }
 
 @media (max-width:640px) {
   .home-hero { padding:1.75rem 1.1rem 1.4rem; }
@@ -1402,6 +1413,17 @@ body {
 }
 .qc-trigger-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(212,175,55,.5); }
 .qc-trigger-btn.hidden { display: none; }
+.qc-challenge-badge {
+  position: absolute; top: -4px; right: -4px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: #c0392b; border: 2px solid var(--white,#fff);
+  animation: qcBadgePulse 1.6s infinite;
+}
+.qc-challenge-badge.hidden { display: none; }
+@keyframes qcBadgePulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.25); opacity: .7; }
+}
 
 .qc-overlay {
   position: fixed; inset: 0;
