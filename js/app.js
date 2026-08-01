@@ -67,7 +67,7 @@
     'paywallIndividual','paywallJamb','paywallSchool',
     'sidebarToggle','sidebarBackdrop','quizSidebar','exitBtn',
     'sbStudent','sbSubject','sbMode','sbExam',
-    'timerCard','timerDisplay',
+    'timerCard','timerDisplay','qhMobileTimer',
     'progressBar','progressFraction','progressSub',
     'qPills','submitQuizBtn',
     'qtypeBanner','qNumBadge','qSubjectTag','qYearTag','qPosIndicator','flagBtn',
@@ -351,6 +351,7 @@
     renderHistory();
     refreshStartBtn();
     refreshUpgradeBar();
+    checkForStartedChallenges();
   }
 
   function restoreUser() {
@@ -361,6 +362,7 @@
     }
     refreshStats();
     refreshUpgradeBar();
+    checkForStartedChallenges();
   }
 
   function renderUser() {
@@ -537,10 +539,12 @@
       const mins = raw === 'auto' ? n : (parseInt(raw) || n);
       S.timerSecs = mins * 60;
       E.timerCard.style.display = 'block';
+      if (E.qhMobileTimer) E.qhMobileTimer.classList.remove('hidden');
       runTimer();
     } else {
       S.timerSecs = 0;
       E.timerCard.style.display = 'none';
+      if (E.qhMobileTimer) E.qhMobileTimer.classList.add('hidden');
     }
 
     // Count free usage — lifetime, per session start
@@ -574,8 +578,14 @@
 
   function tickClock() {
     const t = Math.max(S.timerSecs, 0);
-    E.timerDisplay.textContent = `${pad(Math.floor(t/60))}:${pad(t%60)}`;
-    E.timerDisplay.classList.toggle('urgent', S.mode==='exam' && S.timerSecs>0 && S.timerSecs<300);
+    const display = `${pad(Math.floor(t/60))}:${pad(t%60)}`;
+    const urgent = S.mode==='exam' && S.timerSecs>0 && S.timerSecs<300;
+    E.timerDisplay.textContent = display;
+    E.timerDisplay.classList.toggle('urgent', urgent);
+    if (E.qhMobileTimer) {
+      E.qhMobileTimer.textContent = '⏱ ' + display;
+      E.qhMobileTimer.classList.toggle('urgent', urgent);
+    }
   }
 
   function pad(n) { return String(n).padStart(2,'0'); }
@@ -1461,7 +1471,7 @@
   let _waitingRoomCountdownTicker = null;
   let _isWaitingRoomCreator = false;
   const WAITING_ROOM_TIMEOUT_MS = 2 * 60 * 1000;
-  const MAX_PENDING_CHALLENGES = 3;
+  const MAX_PENDING_CHALLENGES = 5;
 
   function initCommunityQuiz() {
     const btn = document.getElementById('quizChallengeBtn');
@@ -1520,7 +1530,9 @@
     if (!S.currentUser) { alert('Please log in first to use Community Quiz.'); return; }
     showQcPanel('qcHome');
     document.getElementById('quizChallengeModal').classList.remove('hidden');
+    setChallengeBadge(false);
     renderPendingChallenges();
+    checkForStartedChallenges().then(renderPendingChallenges);
   }
 
   function closeQuizChallenge() {
@@ -1536,6 +1548,81 @@
     });
   }
 
+  // Instead of yanking the student straight into the quiz the moment a
+  // scheduled/ready challenge starts (jarring if they're doing something
+  // else), show a small dismissible notice with the choice to join now or
+  // later. "Later" leaves a badge on the Challenge button as a reminder.
+  function showChallengeStartedNotice(code, challenge, startedAt) {
+    let card = document.getElementById('meaStartedNotice');
+    if (card) card.remove();
+
+    card = document.createElement('div');
+    card.id = 'meaStartedNotice';
+    card.style.cssText = `
+      position:fixed; bottom:1.25rem; left:50%; transform:translateX(-50%);
+      background:#0a1628; border:1.5px solid var(--gold,#d4af37); border-radius:14px;
+      padding:1.1rem 1.25rem; max-width:340px; width:calc(100% - 2rem);
+      box-shadow:0 10px 40px rgba(0,0,0,.5); z-index:10001; font-family:var(--sans,sans-serif);
+      text-align:center;
+    `;
+    card.innerHTML = `
+      <p style="margin:0 0 .9rem; color:#fff; font-size:.9rem; font-weight:600;">🎉 Your challenge has started!</p>
+      <div style="display:flex; gap:.6rem;">
+        <button id="meaStartedLater" style="flex:1; padding:.6rem; border-radius:9px; border:1.5px solid #26344a;
+                background:transparent; color:#fff; font-weight:600; font-size:.82rem;">Join Later</button>
+        <button id="meaStartedNow" style="flex:1; padding:.6rem; border-radius:9px; border:none;
+                background:var(--gold,#d4af37); color:#0a1628; font-weight:700; font-size:.82rem;">Join Now</button>
+      </div>
+    `;
+    document.body.appendChild(card);
+
+    document.getElementById('meaStartedNow').addEventListener('click', () => {
+      card.remove();
+      document.getElementById('quizChallengeModal')?.classList.add('hidden');
+      startChallengeAttempt(challenge, startedAt);
+    });
+    document.getElementById('meaStartedLater').addEventListener('click', () => {
+      card.remove();
+      const challenges = loadSafe(QC_STORE, {});
+      if (challenges[code]) { challenges[code].startedAt = startedAt; saveSafe(QC_STORE, challenges); }
+      setChallengeBadge(true);
+    });
+  }
+
+  function setChallengeBadge(show) {
+    document.getElementById('qcChallengeBadge')?.classList.toggle('hidden', !show);
+  }
+
+  // Checked on login and whenever the Challenge modal opens — quietly (no
+  // interrupting popup) flags the button if something the student owns or
+  // joined has started without them actively watching for it.
+  async function checkForStartedChallenges() {
+    if (!S.currentUser) return;
+    const all = loadSafe(QC_STORE, {});
+    const candidates = Object.values(all).filter(c =>
+      c.syncMode && c.syncMode !== 'anytime' && !c.ended && !c.startedAt
+      && (c.creator === S.currentUser || c.joinedAsParticipant)
+    );
+    if (!candidates.length) return;
+
+    let anyStarted = false;
+    for (const c of candidates) {
+      try {
+        const res = await fetch(API_BASE + '/api/challenge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'status', code: c.code }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok && data.startedAt) {
+          all[c.code].startedAt = data.startedAt;
+          anyStarted = true;
+        }
+      } catch (err) { /* skip — try again next time */ }
+    }
+    if (anyStarted) { saveSafe(QC_STORE, all); setChallengeBadge(true); }
+  }
+
   function generateChallengeCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = 'MEA-';
@@ -1543,10 +1630,10 @@
     return code;
   }
 
-  function getMyPendingChallenges() {
+  function getMyChallenges() {
     const all = loadSafe(QC_STORE, {});
     return Object.values(all)
-      .filter(c => c.creator === S.currentUser && !c.ended)
+      .filter(c => c.creator === S.currentUser)
       .sort((a, b) => (b.createdAt||0) - (a.createdAt||0));
   }
 
@@ -1556,12 +1643,15 @@
     const countEl = document.getElementById('qcPendingCount');
     if (!wrap || !list) return;
 
-    const mine = getMyPendingChallenges();
+    const mine = getMyChallenges().slice(0, MAX_PENDING_CHALLENGES);
     countEl && (countEl.textContent = mine.length);
     wrap.classList.toggle('hidden', mine.length === 0);
 
     list.innerHTML = mine.map(c => {
-      const statusLabel = c.syncMode === 'scheduled' ? '📅 Scheduled'
+      const completed = c.scores && c.scores[c.creator];
+      const statusLabel = c.ended ? '⏹ Ended'
+        : completed ? '✅ Completed'
+        : c.syncMode === 'scheduled' ? '📅 Scheduled'
         : c.syncMode === 'ready' && !c.startedAt ? '⏱ Waiting room'
         : '▶ In progress';
       return `
@@ -1570,7 +1660,7 @@
             <div class="qc-pending-code">${safe(c.code)}</div>
             <div class="qc-pending-sub">${safe(c.subject||'')} · ${statusLabel}</div>
           </div>
-          <button class="qc-pending-btn" data-code="${safe(c.code)}" data-action="continue">Continue</button>
+          <button class="qc-pending-btn" data-code="${safe(c.code)}" data-action="continue">${c.ended ? 'View' : 'Continue'}</button>
           <button class="qc-pending-delete" data-code="${safe(c.code)}" data-action="delete">Delete</button>
         </div>
       `;
@@ -1598,9 +1688,11 @@
     }
   }
 
-  async function deleteChallenge(code) {
-    const ok = await showConfirmModal(`Delete challenge ${code}? Anyone with the code will no longer be able to join.`, 'Delete', 'Cancel');
-    if (!ok) return;
+  async function deleteChallenge(code, silent = false) {
+    if (!silent) {
+      const ok = await showConfirmModal(`Delete challenge ${code}? Anyone with the code will no longer be able to join.`, 'Delete', 'Cancel');
+      if (!ok) return;
+    }
     try {
       await fetch(API_BASE + '/api/challenge', {
         method: 'POST',
@@ -1614,9 +1706,14 @@
   }
 
   async function generateChallenge() {
-    if (getMyPendingChallenges().length >= MAX_PENDING_CHALLENGES) {
-      showInfoToast(`You can have up to ${MAX_PENDING_CHALLENGES} active challenges at a time — delete one first to create another.`);
-      return;
+    // Keep at most MAX_PENDING_CHALLENGES total — auto-retire the oldest
+    // one rather than blocking creation. Since we're building this on a
+    // free-tier backend, there's no real reason to make someone manually
+    // clean up before they can make a new challenge.
+    const mine = getMyChallenges();
+    if (mine.length >= MAX_PENDING_CHALLENGES) {
+      const oldest = mine[mine.length - 1];
+      await deleteChallenge(oldest.code, true); // silent — no confirm prompt for auto-eviction
     }
 
     const subject = document.getElementById('qcSubject').value;
@@ -1852,8 +1949,7 @@
         if (data.startedAt) {
           clearInterval(_waitingRoomTimer);
           clearInterval(_waitingRoomCountdownTicker);
-          document.getElementById('quizChallengeModal').classList.add('hidden');
-          startChallengeAttempt(_pendingChallenge, data.startedAt);
+          showChallengeStartedNotice(code, _pendingChallenge, data.startedAt);
           return;
         }
 
@@ -1956,6 +2052,11 @@
     S.showAnswer = false;
     S.inSession  = true;
 
+    E.sbStudent.textContent = S.currentUser;
+    E.sbSubject.textContent = SUBJECTS[S.subject]?.name || S.subject;
+    E.sbMode.textContent    = 'Challenge';
+    E.sbExam.textContent    = S.exam;
+
     // Store challenge context so results can save score
     S._challengeCode = challenge.code;
 
@@ -1968,10 +2069,12 @@
       const elapsedSec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
       S.timerSecs = Math.max(0, challenge.time * 60 - elapsedSec);
       if (E.timerCard) E.timerCard.style.display = 'block';
+      if (E.qhMobileTimer) E.qhMobileTimer.classList.remove('hidden');
       runTimer();
     } else {
       S.timerSecs = 0;
       if (E.timerCard) E.timerCard.style.display = 'none';
+      if (E.qhMobileTimer) E.qhMobileTimer.classList.add('hidden');
     }
 
     buildPills();
