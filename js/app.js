@@ -352,6 +352,7 @@
     refreshStartBtn();
     refreshUpgradeBar();
     checkForStartedChallenges();
+    checkScheduledChallengeReminders();
   }
 
   function restoreUser() {
@@ -363,6 +364,7 @@
     refreshStats();
     refreshUpgradeBar();
     checkForStartedChallenges();
+    checkScheduledChallengeReminders();
   }
 
   function renderUser() {
@@ -1555,6 +1557,7 @@
   function showChallengeStartedNotice(code, challenge, startedAt) {
     let card = document.getElementById('meaStartedNotice');
     if (card) card.remove();
+    playChallengeBeep();
 
     card = document.createElement('div');
     card.id = 'meaStartedNotice';
@@ -1589,6 +1592,19 @@
     });
   }
 
+  function playChallengeBeep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine'; osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.start(); osc.stop(ctx.currentTime + 0.35);
+    } catch (err) { /* audio not available — badge/card still show visually */ }
+  }
+
   function setChallengeBadge(show) {
     document.getElementById('qcChallengeBadge')?.classList.toggle('hidden', !show);
   }
@@ -1596,6 +1612,30 @@
   // Checked on login and whenever the Challenge modal opens — quietly (no
   // interrupting popup) flags the button if something the student owns or
   // joined has started without them actively watching for it.
+  // Shows a one-time-per-day reminder toast for a scheduled challenge
+  // that's coming up within the next 2 days.
+  const MEA_REMINDED_STORE = 'mea-challenge-reminded-v1';
+  function checkScheduledChallengeReminders() {
+    if (!S.currentUser) return;
+    const all = loadSafe(QC_STORE, {});
+    const reminded = loadSafe(MEA_REMINDED_STORE, {});
+    const todayKey = new Date().toDateString();
+    const mine = Object.values(all).filter(c =>
+      c.creator === S.currentUser && c.syncMode === 'scheduled'
+      && c.scheduledStartAt && !c.startedAt && !c.ended
+    );
+    for (const c of mine) {
+      if (reminded[c.code] === todayKey) continue;
+      const daysUntil = Math.ceil((c.scheduledStartAt - Date.now()) / 86400000);
+      if (daysUntil < 0 || daysUntil > 2) continue;
+      const when = daysUntil === 0 ? 'today' : daysUntil === 1 ? 'in 1 day' : 'in 2 days';
+      showInfoToast(`📅 You have a scheduled challenge (${c.code}) starting ${when}.`);
+      reminded[c.code] = todayKey;
+      saveSafe(MEA_REMINDED_STORE, reminded);
+      break;
+    }
+  }
+
   async function checkForStartedChallenges() {
     if (!S.currentUser) return;
     const all = loadSafe(QC_STORE, {});
@@ -1620,7 +1660,7 @@
         }
       } catch (err) { /* skip — try again next time */ }
     }
-    if (anyStarted) { saveSafe(QC_STORE, all); setChallengeBadge(true); }
+    if (anyStarted) { saveSafe(QC_STORE, all); setChallengeBadge(true); playChallengeBeep(); }
   }
 
   function generateChallengeCode() {
@@ -1705,6 +1745,35 @@
     renderPendingChallenges();
   }
 
+  const RECENT_QS_STORE = 'mea-challenge-recent-qs-v1';
+  const RECENT_QS_CAP = 80; // roughly several challenges' worth of history
+
+  // Picks `count` questions from `pool`, preferring ones this student hasn't
+  // used in their recent challenges — so repeated challenges with the same
+  // friends don't keep surfacing the same questions. Falls back to allowing
+  // repeats (oldest-used first) only if the pool genuinely isn't big enough
+  // to avoid it.
+  function pickChallengeQuestions(pool, count) {
+    if (!pool.length) return [];
+    const recentIds = loadSafe(RECENT_QS_STORE, []);
+    const recentSet = new Set(recentIds);
+    const fresh = shuffle(pool.filter(q => q.id && !recentSet.has(q.id)));
+    const stale = pool.filter(q => q.id && recentSet.has(q.id))
+      .sort((a, b) => recentIds.indexOf(a.id) - recentIds.indexOf(b.id)); // oldest-used first
+
+    const selected = fresh.slice(0, count);
+    if (selected.length < count) {
+      selected.push(...stale.slice(0, count - selected.length));
+    }
+
+    // Remember these as recently used (most-recent at the end), capped.
+    const usedIds = selected.map(q => q.id).filter(Boolean);
+    const updated = [...recentIds.filter(id => !usedIds.includes(id)), ...usedIds].slice(-RECENT_QS_CAP);
+    saveSafe(RECENT_QS_STORE, updated);
+
+    return selected;
+  }
+
   async function generateChallenge() {
     // Keep at most MAX_PENDING_CHALLENGES total — auto-retire the oldest
     // one rather than blocking creation. Since we're building this on a
@@ -1717,6 +1786,8 @@
     }
 
     const subject = document.getElementById('qcSubject').value;
+    const examBoard = document.getElementById('qcExamBoard')?.value || '';
+    const yearRange = document.getElementById('qcYearRange')?.value || '';
     const count   = parseInt(document.getElementById('qcCount').value);
     const time    = parseInt(document.getElementById('qcTime').value);
     const syncMode = document.querySelector('input[name="qcSyncMode"]:checked')?.value || 'anytime';
@@ -1733,8 +1804,14 @@
 
     const bank    = EXAM_BANK[subject];
     if (!bank) return;
-    const pool    = shuffle([...(bank.objective||[])]).slice(0, count);
-    if (!pool.length) { showInfoToast('Not enough questions for this subject.'); return; }
+    let sourcePool = bank.objective || [];
+    if (examBoard) sourcePool = sourcePool.filter(q => q.exam === examBoard);
+    if (yearRange) {
+      const [from, to] = yearRange.split('-').map(Number);
+      sourcePool = sourcePool.filter(q => q.year >= from && q.year <= to);
+    }
+    const pool = pickChallengeQuestions(sourcePool, count);
+    if (!pool.length) { showInfoToast('Not enough questions match those filters — try widening the exam board or year range.'); return; }
 
     const code = generateChallengeCode();
     const genBtn = document.getElementById('qcGenerateBtn');
