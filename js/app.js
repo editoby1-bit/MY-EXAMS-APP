@@ -1527,14 +1527,23 @@
     }
   }
 
+  function refreshChallengeBadgeState() {
+    const all = loadSafe(QC_STORE, {});
+    const needsAttention = Object.values(all).some(c => {
+      if (c.ended) return false;
+      const completed = c.scores && c.scores[c.creator || S.currentUser];
+      return c.startedAt && !completed;
+    });
+    setChallengeBadge(needsAttention);
+  }
+
   function openQuizChallenge() {
     if (!S.hasAccess) { showPaywall('upgrade'); return; }
     if (!S.currentUser) { alert('Please log in first to use Community Quiz.'); return; }
     showQcPanel('qcHome');
     document.getElementById('quizChallengeModal').classList.remove('hidden');
-    setChallengeBadge(false);
     renderPendingChallenges();
-    checkForStartedChallenges().then(renderPendingChallenges);
+    checkForStartedChallenges().then(() => { renderPendingChallenges(); refreshChallengeBadgeState(); });
   }
 
   function closeQuizChallenge() {
@@ -1569,12 +1578,14 @@
       text-align:center;
     `;
     card.innerHTML = `
-      <p style="margin:0 0 .9rem; color:#fff; font-size:.9rem; font-weight:600;">🎉 Your challenge has started!</p>
-      <div style="display:flex; gap:.6rem;">
-        <button id="meaStartedLater" style="flex:1; padding:.6rem; border-radius:9px; border:1.5px solid #26344a;
-                background:transparent; color:#fff; font-weight:600; font-size:.82rem;">Join Later</button>
-        <button id="meaStartedNow" style="flex:1; padding:.6rem; border-radius:9px; border:none;
-                background:var(--gold,#d4af37); color:#0a1628; font-weight:700; font-size:.82rem;">Join Now</button>
+      <p style="margin:0 0 .7rem; color:#fff; font-size:.9rem; font-weight:600;">🎉 Your challenge has started!</p>
+      <button id="meaStartedNow" style="width:100%; padding:.65rem; border-radius:9px; border:none; margin-bottom:.6rem;
+              background:var(--gold,#d4af37); color:#0a1628; font-weight:700; font-size:.85rem;">Join Now</button>
+      <p style="margin:0 0 .4rem; color:rgba(255,255,255,.5); font-size:.72rem;">Or remind me again in:</p>
+      <div style="display:flex; gap:.4rem;">
+        <button class="mea-snooze-opt" data-min="5" style="flex:1; padding:.5rem; border-radius:8px; border:1px solid #26344a; background:transparent; color:#fff; font-size:.75rem;">5 min</button>
+        <button class="mea-snooze-opt" data-min="15" style="flex:1; padding:.5rem; border-radius:8px; border:1px solid #26344a; background:transparent; color:#fff; font-size:.75rem;">15 min</button>
+        <button class="mea-snooze-opt" data-min="30" style="flex:1; padding:.5rem; border-radius:8px; border:1px solid #26344a; background:transparent; color:#fff; font-size:.75rem;">30 min</button>
       </div>
     `;
     document.body.appendChild(card);
@@ -1584,11 +1595,22 @@
       document.getElementById('quizChallengeModal')?.classList.add('hidden');
       startChallengeAttempt(challenge, startedAt);
     });
-    document.getElementById('meaStartedLater').addEventListener('click', () => {
-      card.remove();
-      const challenges = loadSafe(QC_STORE, {});
-      if (challenges[code]) { challenges[code].startedAt = startedAt; saveSafe(QC_STORE, challenges); }
-      setChallengeBadge(true);
+    card.querySelectorAll('.mea-snooze-opt').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const minutes = parseInt(btn.dataset.min, 10);
+        card.remove();
+        const challenges = loadSafe(QC_STORE, {});
+        if (challenges[code]) { challenges[code].startedAt = startedAt; saveSafe(QC_STORE, challenges); }
+        setChallengeBadge(true);
+        // Re-show the notice after the snooze period, unless the student
+        // has since joined or the challenge ended in the meantime.
+        setTimeout(() => {
+          const latest = loadSafe(QC_STORE, {})[code];
+          if (latest && !latest.ended && !(latest.scores && latest.scores[S.currentUser])) {
+            showChallengeStartedNotice(code, challenge, startedAt);
+          }
+        }, minutes * 60000);
+      });
     });
   }
 
@@ -1688,19 +1710,31 @@
     wrap.classList.toggle('hidden', mine.length === 0);
 
     list.innerHTML = mine.map(c => {
-      const completed = c.scores && c.scores[c.creator];
-      const statusLabel = c.ended ? '⏹ Ended'
-        : completed ? '✅ Completed'
-        : c.syncMode === 'scheduled' ? '📅 Scheduled'
-        : c.syncMode === 'ready' && !c.startedAt ? '⏱ Waiting room'
-        : '▶ In progress';
+      const completed = !!(c.scores && c.scores[c.creator]);
+      const isDone = c.ended || completed;
+      let statusLabel;
+      if (c.ended)      statusLabel = '⏹ Ended';
+      else if (completed) statusLabel = '✅ Completed';
+      else if (c.syncMode === 'scheduled' && !c.startedAt) statusLabel = '📅 Scheduled';
+      else if (c.syncMode === 'ready' && !c.startedAt)     statusLabel = '⏱ Waiting room';
+      else if (c.startedAt && c.syncMode && c.syncMode !== 'anytime') {
+        const endTxt = c.time > 0
+          ? ' · ends ' + new Date(c.startedAt + c.time * 60000).toLocaleTimeString(undefined, { hour:'numeric', minute:'2-digit' })
+          : '';
+        statusLabel = '▶ Ongoing' + endTxt;
+      } else statusLabel = '▶ Not yet taken';
+
+      const actionBtn = isDone
+        ? `<button class="qc-pending-btn" data-code="${safe(c.code)}" data-action="results">View Results</button>`
+        : `<button class="qc-pending-btn" data-code="${safe(c.code)}" data-action="continue">Continue</button>`;
+
       return `
         <div class="qc-pending-row">
           <div class="qc-pending-info">
             <div class="qc-pending-code">${safe(c.code)}</div>
             <div class="qc-pending-sub">${safe(c.subject||'')} · ${statusLabel}</div>
           </div>
-          <button class="qc-pending-btn" data-code="${safe(c.code)}" data-action="continue">${c.ended ? 'View' : 'Continue'}</button>
+          ${actionBtn}
           <button class="qc-pending-delete" data-code="${safe(c.code)}" data-action="delete">Delete</button>
         </div>
       `;
@@ -1709,9 +1743,26 @@
     list.querySelectorAll('[data-action="continue"]').forEach(btn => {
       btn.addEventListener('click', () => continueChallenge(btn.dataset.code));
     });
+    list.querySelectorAll('[data-action="results"]').forEach(btn => {
+      btn.addEventListener('click', () => viewChallengeResults(btn.dataset.code));
+    });
     list.querySelectorAll('[data-action="delete"]').forEach(btn => {
       btn.addEventListener('click', () => deleteChallenge(btn.dataset.code));
     });
+  }
+
+  async function viewChallengeResults(code) {
+    const local = loadSafe(QC_STORE, {})[code];
+    if (local && local.scores) showChallengeLeaderboard(code, local.scores);
+    try {
+      const res = await fetch(API_BASE + '/api/challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'leaderboard', code }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) showChallengeLeaderboard(code, data.scores);
+    } catch (err) { /* local scores already shown as a fallback */ }
   }
 
   function continueChallenge(code) {
@@ -1743,6 +1794,7 @@
     const challenges = loadSafe(QC_STORE, {});
     if (challenges[code]) { challenges[code].ended = true; saveSafe(QC_STORE, challenges); }
     renderPendingChallenges();
+    refreshChallengeBadgeState();
   }
 
   const RECENT_QS_STORE = 'mea-challenge-recent-qs-v1';
@@ -2171,6 +2223,7 @@
       saveSafe(QC_STORE, challenges);
     }
     S._challengeCode = null;
+    refreshChallengeBadgeState();
 
     let backendScores = null;
     try {
