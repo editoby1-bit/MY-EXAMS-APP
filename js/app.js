@@ -1489,6 +1489,14 @@
 
     document.getElementById('qcCreateBtn').addEventListener('click', () => showQcPanel('qcCreate'));
     document.getElementById('qcBackBtn').addEventListener('click',   () => showQcPanel('qcHome'));
+    document.getElementById('qcShareBackBtn')?.addEventListener('click', () => { showQcPanel('qcHome'); renderPendingChallenges(); });
+    document.getElementById('qcWaitingBackBtn')?.addEventListener('click', () => {
+      clearInterval(_waitingRoomTimer);
+      clearInterval(_waitingRoomCountdownTicker);
+      showQcPanel('qcHome');
+      renderPendingChallenges();
+      refreshChallengeBadgeState();
+    });
     document.getElementById('qcJoinBtn').addEventListener('click',   () => {
       document.getElementById('qcJoinRow').classList.toggle('hidden');
     });
@@ -1578,6 +1586,8 @@
       text-align:center;
     `;
     card.innerHTML = `
+      <button id="meaStartedClose" style="position:absolute; top:.6rem; right:.7rem; background:none; border:none;
+              color:rgba(255,255,255,.5); font-size:1.1rem; cursor:pointer; line-height:1;">✕</button>
       <p style="margin:0 0 .7rem; color:#fff; font-size:.9rem; font-weight:600;">🎉 Your challenge has started!</p>
       <button id="meaStartedNow" style="width:100%; padding:.65rem; border-radius:9px; border:none; margin-bottom:.6rem;
               background:var(--gold,#d4af37); color:#0a1628; font-weight:700; font-size:.85rem;">Join Now</button>
@@ -1590,6 +1600,12 @@
     `;
     document.body.appendChild(card);
 
+    document.getElementById('meaStartedClose').addEventListener('click', () => {
+      card.remove();
+      const challenges = loadSafe(QC_STORE, {});
+      if (challenges[code]) { challenges[code].startedAt = startedAt; saveSafe(QC_STORE, challenges); }
+      setChallengeBadge(true);
+    });
     document.getElementById('meaStartedNow').addEventListener('click', () => {
       card.remove();
       document.getElementById('quizChallengeModal')?.classList.add('hidden');
@@ -1707,6 +1723,8 @@
 
     const mine = getMyChallenges().slice(0, MAX_PENDING_CHALLENGES);
     countEl && (countEl.textContent = mine.length);
+    const maxEl = document.getElementById('qcPendingMax');
+    if (maxEl) maxEl.textContent = MAX_PENDING_CHALLENGES;
     wrap.classList.toggle('hidden', mine.length === 0);
 
     list.innerHTML = mine.map(c => {
@@ -1715,7 +1733,12 @@
       let statusLabel;
       if (c.ended)      statusLabel = '⏹ Ended';
       else if (completed) statusLabel = '✅ Completed';
-      else if (c.syncMode === 'scheduled' && !c.startedAt) statusLabel = '📅 Scheduled';
+      else if (c.syncMode === 'scheduled' && !c.startedAt) {
+        const when = c.scheduledStartAt
+          ? new Date(c.scheduledStartAt).toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })
+          : '';
+        statusLabel = '📅 Scheduled' + (when ? ' for ' + when : '');
+      }
       else if (c.syncMode === 'ready' && !c.startedAt)     statusLabel = '⏱ Waiting room';
       else if (c.startedAt && c.syncMode && c.syncMode !== 'anytime') {
         const endTxt = c.time > 0
@@ -1943,6 +1966,8 @@
         if (local.syncMode && local.syncMode !== 'anytime' && !local.startedAt) {
           _pendingChallenge = local;
           openWaitingRoom(code, local.creator === S.currentUser);
+        } else if (local.syncMode && local.syncMode !== 'anytime' && local.startedAt) {
+          showChallengeStartedNotice(code, local, local.startedAt);
         } else {
           startChallengeAttempt(local);
         }
@@ -1980,6 +2005,8 @@
       if (challenge.syncMode && challenge.syncMode !== 'anytime' && !challenge.startedAt) {
         _pendingChallenge = challenge;
         openWaitingRoom(code, challenge.creator === S.currentUser);
+      } else if (challenge.syncMode && challenge.syncMode !== 'anytime' && challenge.startedAt) {
+        showChallengeStartedNotice(code, challenge, challenge.startedAt);
       } else {
         startChallengeAttempt(challenge);
       }
