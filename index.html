@@ -691,7 +691,7 @@
           <button class="qc-btn qc-btn-primary" id="qcJoinConfirm">Join →</button>
         </div>
         <div id="qcPendingWrap" class="hidden">
-          <h4 class="qc-pending-title">Your Challenges (<span id="qcPendingCount">0</span>/3)</h4>
+          <h4 class="qc-pending-title">Your Challenges (<span id="qcPendingCount">0</span>/<span id="qcPendingMax">5</span>)</h4>
           <div id="qcPendingList" class="qc-pending-list"></div>
         </div>
       </div>
@@ -704,6 +704,25 @@
             <select id="qcSubject" class="qc-select"></select>
           </div>
           <div class="qc-field">
+            <label class="qc-label">Exam board <span class="qc-optional-tag">(optional — defaults to all, for the widest variety)</span></label>
+            <select id="qcExamBoard" class="qc-select">
+              <option value="" selected>All boards</option>
+              <option value="WAEC">WAEC only</option>
+              <option value="NECO">NECO only</option>
+              <option value="GCE">GCE only</option>
+              <option value="NABTEB">NABTEB only</option>
+            </select>
+          </div>
+          <div class="qc-field">
+            <label class="qc-label">Year range <span class="qc-optional-tag">(optional)</span></label>
+            <select id="qcYearRange" class="qc-select">
+              <option value="" selected>All years</option>
+              <option value="2023-2023">2023 only</option>
+              <option value="2021-2023">2021 – 2023</option>
+              <option value="2019-2020">2019 – 2020</option>
+            </select>
+          </div>
+          <div class="qc-field">
             <label class="qc-label">Questions</label>
             <select id="qcCount" class="qc-select">
               <option value="5">5 Questions</option>
@@ -711,6 +730,7 @@
               <option value="20">20 Questions</option>
             </select>
           </div>
+          <p class="qc-note" style="margin-top:0">💡 By default each challenge avoids questions you've used in your last few challenges, so repeated matches with the same friends stay fresh.</p>
           <div class="qc-field">
             <label class="qc-label">Time limit</label>
             <select id="qcTime" class="qc-select">
@@ -743,8 +763,9 @@
         <p class="qc-sub">Share this code with friends. It expires in 24 hours.</p>
         <div class="qc-code-display" id="qcCodeDisplay">MEA-000</div>
         <button class="qc-btn qc-btn-primary" id="qcShareLinkBtn" style="width:100%;margin-bottom:.5rem">📤 Share Challenge Link</button>
-        <button class="qc-btn qc-btn-primary" id="qcStartOwnBtn" style="width:100%">Start My Attempt →</button>
+        <button class="qc-btn qc-btn-primary" id="qcStartOwnBtn" style="width:100%;margin-bottom:.5rem">Start My Attempt →</button>
         <p class="qc-note">You and your friends take the same questions. Scores are compared on the leaderboard.</p>
+        <button class="qc-btn qc-btn-ghost" id="qcShareBackBtn">← Back</button>
       </div>
 
       <div id="qcLeaderboard" class="hidden">
@@ -765,6 +786,7 @@
         <button class="qc-btn qc-btn-primary" id="qcReadyBtn" style="width:100%;margin-bottom:.5rem">✅ I'm Ready</button>
         <button class="qc-btn qc-btn-secondary hidden" id="qcForceStartBtn" style="width:100%;margin-bottom:.5rem">▶ Start Now (everyone else joins mid-way)</button>
         <button class="qc-btn qc-btn-ghost hidden" id="qcEndChallengeBtn" style="width:100%">🗑 End This Challenge</button>
+        <button class="qc-btn qc-btn-ghost" id="qcWaitingBackBtn" style="margin-top:.4rem">← Back</button>
       </div>
 
     </div>
