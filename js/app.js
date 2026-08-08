@@ -108,6 +108,16 @@
     if (window.location.hash) {
       history.replaceState(null, '', window.location.pathname);
     }
+
+    // Without this, a student who creates or joins a scheduled/ready
+    // challenge and then just sits on some other screen would never find
+    // out it started until they happened to reopen the modal or log in
+    // again. This catches that regardless of which screen they're on.
+    setInterval(() => {
+      if (!S.currentUser) return;
+      checkForStartedChallenges();
+      checkScheduledChallengeReminders();
+    }, 45000);
   }
 
   function countQuestions() {
@@ -1592,11 +1602,13 @@
       <button id="meaStartedNow" style="width:100%; padding:.65rem; border-radius:9px; border:none; margin-bottom:.6rem;
               background:var(--gold,#d4af37); color:#0a1628; font-weight:700; font-size:.85rem;">Join Now</button>
       <p style="margin:0 0 .4rem; color:rgba(255,255,255,.5); font-size:.72rem;">Or remind me again in:</p>
-      <div style="display:flex; gap:.4rem;">
+      <div style="display:flex; gap:.4rem; margin-bottom:.6rem;">
         <button class="mea-snooze-opt" data-min="5" style="flex:1; padding:.5rem; border-radius:8px; border:1px solid #26344a; background:transparent; color:#fff; font-size:.75rem;">5 min</button>
         <button class="mea-snooze-opt" data-min="15" style="flex:1; padding:.5rem; border-radius:8px; border:1px solid #26344a; background:transparent; color:#fff; font-size:.75rem;">15 min</button>
         <button class="mea-snooze-opt" data-min="30" style="flex:1; padding:.5rem; border-radius:8px; border:1px solid #26344a; background:transparent; color:#fff; font-size:.75rem;">30 min</button>
       </div>
+      <button id="meaStartedDecline" style="width:100%; padding:.4rem; border-radius:8px; border:none;
+              background:transparent; color:rgba(255,255,255,.4); font-size:.72rem; text-decoration:underline; cursor:pointer;">Decline — I won't be joining this one</button>
     `;
     document.body.appendChild(card);
 
@@ -1605,6 +1617,21 @@
       const challenges = loadSafe(QC_STORE, {});
       if (challenges[code]) { challenges[code].startedAt = startedAt; saveSafe(QC_STORE, challenges); }
       setChallengeBadge(true);
+    });
+    document.getElementById('meaStartedDecline').addEventListener('click', async () => {
+      card.remove();
+      try {
+        await fetch(API_BASE + '/api/challenge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'remove_participant', code, student: S.currentUser }),
+        });
+      } catch (err) { /* still remove locally even if this fails */ }
+      const challenges = loadSafe(QC_STORE, {});
+      delete challenges[code];
+      saveSafe(QC_STORE, challenges);
+      refreshChallengeBadgeState();
+      renderPendingChallenges();
     });
     document.getElementById('meaStartedNow').addEventListener('click', () => {
       card.remove();
@@ -1715,20 +1742,28 @@
       .sort((a, b) => (b.createdAt||0) - (a.createdAt||0));
   }
 
+  function getJoinedChallenges() {
+    const all = loadSafe(QC_STORE, {});
+    return Object.values(all)
+      .filter(c => c.joinedAsParticipant && c.creator !== S.currentUser)
+      .sort((a, b) => (b.createdAt||0) - (a.createdAt||0));
+  }
+
   function renderPendingChallenges() {
     const wrap = document.getElementById('qcPendingWrap');
     const list = document.getElementById('qcPendingList');
     const countEl = document.getElementById('qcPendingCount');
     if (!wrap || !list) return;
 
-    const mine = getMyChallenges().slice(0, MAX_PENDING_CHALLENGES);
+    const mine   = getMyChallenges().slice(0, MAX_PENDING_CHALLENGES);
+    const joined = getJoinedChallenges().slice(0, MAX_PENDING_CHALLENGES);
     countEl && (countEl.textContent = mine.length);
     const maxEl = document.getElementById('qcPendingMax');
     if (maxEl) maxEl.textContent = MAX_PENDING_CHALLENGES;
-    wrap.classList.toggle('hidden', mine.length === 0);
+    wrap.classList.toggle('hidden', mine.length === 0 && joined.length === 0);
 
-    list.innerHTML = mine.map(c => {
-      const completed = !!(c.scores && c.scores[c.creator]);
+    const renderRow = (c, isOwner) => {
+      const completed = !!(c.scores && c.scores[S.currentUser]);
       const isDone = c.ended || completed;
       let statusLabel;
       if (c.ended)      statusLabel = '⏹ Ended';
@@ -1750,18 +1785,24 @@
       const actionBtn = isDone
         ? `<button class="qc-pending-btn" data-code="${safe(c.code)}" data-action="results">View Results</button>`
         : `<button class="qc-pending-btn" data-code="${safe(c.code)}" data-action="continue">Continue</button>`;
+      const deleteBtn = isOwner
+        ? `<button class="qc-pending-delete" data-code="${safe(c.code)}" data-action="delete">Delete</button>`
+        : '';
 
       return `
         <div class="qc-pending-row">
           <div class="qc-pending-info">
-            <div class="qc-pending-code">${safe(c.code)}</div>
+            <div class="qc-pending-code">${safe(c.code)}${isOwner ? '' : ' <span class="qc-pending-tag">Joined</span>'}</div>
             <div class="qc-pending-sub">${safe(c.subject||'')} · ${statusLabel}</div>
           </div>
           ${actionBtn}
-          <button class="qc-pending-delete" data-code="${safe(c.code)}" data-action="delete">Delete</button>
+          ${deleteBtn}
         </div>
       `;
-    }).join('');
+    };
+
+    list.innerHTML = mine.map(c => renderRow(c, true)).join('')
+      + joined.map(c => renderRow(c, false)).join('');
 
     list.querySelectorAll('[data-action="continue"]').forEach(btn => {
       btn.addEventListener('click', () => continueChallenge(btn.dataset.code));
@@ -1793,9 +1834,12 @@
     const challenge = challenges[code];
     if (!challenge) return;
     window._currentChallengeCode = code;
+    const isOwner = challenge.creator === S.currentUser;
     if (challenge.syncMode && challenge.syncMode !== 'anytime' && !challenge.startedAt) {
       _pendingChallenge = challenge;
-      openWaitingRoom(code, true);
+      openWaitingRoom(code, isOwner);
+    } else if (challenge.syncMode && challenge.syncMode !== 'anytime' && challenge.startedAt) {
+      showChallengeStartedNotice(code, challenge, challenge.startedAt);
     } else {
       document.getElementById('qcCodeDisplay').textContent = code;
       showQcPanel('qcShare');
@@ -2002,6 +2046,13 @@
       // `questionData` — normalize so startChallengeAttempt works either way.
       const challenge = { ...data.challenge, questionData: data.challenge.questions };
       window._currentChallengeCode = code;
+      // Persist locally so this device has its own record of challenges it
+      // joined, not just ones it created.
+      {
+        const challenges = loadSafe(QC_STORE, {});
+        challenges[code] = { ...challenge, joinedAsParticipant: true };
+        saveSafe(QC_STORE, challenges);
+      }
       if (challenge.syncMode && challenge.syncMode !== 'anytime' && !challenge.startedAt) {
         _pendingChallenge = challenge;
         openWaitingRoom(code, challenge.creator === S.currentUser);
