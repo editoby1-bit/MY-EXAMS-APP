@@ -1576,6 +1576,7 @@ body {
 .qc-pending-info { flex:1; min-width:0; }
 .qc-pending-code { font-weight:700; color:var(--gold-dk, #a8791f); font-size:.85rem; }
 .qc-pending-sub { font-size:.72rem; color:var(--text-dim); }
+.qc-pending-tag { font-size:.65rem; font-weight:700; color:var(--text-dim); background:rgba(0,0,0,.06); border-radius:6px; padding:.1rem .4rem; margin-left:.3rem; vertical-align:middle; }
 .qc-pending-btn { background:rgba(212,175,55,.15); border:1px solid rgba(212,175,55,.5); color:var(--gold-dk, #a8791f); border-radius:8px; padding:.35rem .6rem; font-size:.72rem; font-weight:700; cursor:pointer; }
 .qc-pending-delete { background:rgba(220,60,60,.1); border:1px solid rgba(220,60,60,.4); color:#c0392b; border-radius:8px; padding:.35rem .5rem; font-size:.72rem; cursor:pointer; }
 
