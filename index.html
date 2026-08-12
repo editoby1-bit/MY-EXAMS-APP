@@ -460,6 +460,11 @@
           </button>
         </div>
 
+        <!-- Subject switcher — multi-subject challenges only -->
+        <div class="section-tabs hidden" id="subjectSwitcher">
+          <div id="subjectTabs" style="display:contents"></div>
+        </div>
+
         <div class="qtype-banner" id="qtypeBanner">Objective</div>
 
         <div class="question-header">
@@ -700,8 +705,8 @@
         <h3 class="qc-section-title">Set Up Your Challenge</h3>
         <div class="qc-form">
           <div class="qc-field">
-            <label class="qc-label">Subject</label>
-            <select id="qcSubject" class="qc-select"></select>
+            <label class="qc-label">Subjects (pick one or more)</label>
+            <div id="qcSubjects" class="qc-subject-checks"></div>
           </div>
           <div class="qc-field">
             <label class="qc-label">Exam board <span class="qc-optional-tag">(optional — defaults to all, for the widest variety)</span></label>
