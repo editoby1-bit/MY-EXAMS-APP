@@ -56,6 +56,7 @@
     'subjectGrid','modeToggle','typeToggle','qCountSelect','durationSelect',
     'bothModeGroup','bothModeToggle',
     'sectionTabs','sectionTabA','sectionTabB','sectionACount','sectionBCount',
+    'subjectSwitcher','subjectTabs',
     'startBtn','startBtnText',
     'historyList','clearHistoryBtn',
     'hStatSessions','hStatAvg','hStatBest','hStatQs',
@@ -602,6 +603,38 @@
 
   function pad(n) { return String(n).padStart(2,'0'); }
 
+  /* ════════ SUBJECT SWITCHER (multi-subject challenges) ════════ */
+  function buildSubjectSwitcher() {
+    if (!E.subjectTabs) return;
+    E.subjectTabs.innerHTML = '';
+    (S.subjects || []).forEach((subject, i) => {
+      const range = (S.subjectRanges || {})[subject];
+      if (!range) return;
+      const btn = document.createElement('button');
+      btn.className = 'section-tab' + (i === 0 ? ' active' : '');
+      btn.dataset.subject = subject;
+      btn.innerHTML = `<span class="section-tab-label">${safe(SUBJECTS[subject]?.name || subject)}</span>`;
+      btn.addEventListener('click', () => jumpToSubject(subject));
+      E.subjectTabs.appendChild(btn);
+    });
+  }
+
+  function jumpToSubject(subject) {
+    const range = (S.subjectRanges || {})[subject];
+    if (!range) return;
+    S.idx = range.start;
+    renderQ();
+  }
+
+  function syncSubjectTabs() {
+    if (!E.subjectTabs || E.subjectSwitcher?.classList.contains('hidden')) return;
+    const q = S.questions[S.idx];
+    const activeSubject = q?.sourceSubject;
+    E.subjectTabs.querySelectorAll('.section-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.subject === activeSubject);
+    });
+  }
+
   /* ════════ FLAG ════════ */
   function toggleFlag() {
     if (S.reviewMode) return;
@@ -671,6 +704,8 @@
     } else {
       if (E.sectionTabs) E.sectionTabs.classList.add('hidden');
     }
+
+    syncSubjectTabs();
 
     // Section jump button — always visible in sections mode
     if (E.sectionJumpBtn) {
@@ -1525,13 +1560,15 @@
       });
     });
 
-    // Populate subject dropdown
-    const sel = document.getElementById('qcSubject');
-    SUBJECT_KEYS.forEach(s => {
-      const opt = document.createElement('option');
-      opt.value = s;
-      opt.textContent = s;
-      sel.appendChild(opt);
+    // Populate subject checkboxes (multi-select)
+    const subjectsWrap = document.getElementById('qcSubjects');
+    if (subjectsWrap) SUBJECT_KEYS.forEach(s => {
+      const label = document.createElement('label');
+      label.className = 'qc-subject-check';
+      label.innerHTML = `<input type="checkbox" value="${s}"/> <span>${safe(SUBJECTS[s]?.name || s)}</span>`;
+      const input = label.querySelector('input');
+      input.addEventListener('change', () => label.classList.toggle('checked', input.checked));
+      subjectsWrap.appendChild(label);
     });
 
     // Check if arriving via challenge link
@@ -1904,7 +1941,8 @@
       await deleteChallenge(oldest.code, true); // silent — no confirm prompt for auto-eviction
     }
 
-    const subject = document.getElementById('qcSubject').value;
+    const subjectBoxes = [...document.querySelectorAll('#qcSubjects input:checked')].map(i => i.value);
+    if (!subjectBoxes.length) { showInfoToast('Pick at least one subject.'); return; }
     const examBoard = document.getElementById('qcExamBoard')?.value || '';
     const yearRange = document.getElementById('qcYearRange')?.value || '';
     const count   = parseInt(document.getElementById('qcCount').value);
@@ -1921,17 +1959,31 @@
       }
     }
 
-    const bank    = EXAM_BANK[subject];
-    if (!bank) return;
-    let sourcePool = bank.objective || [];
-    if (examBoard) sourcePool = sourcePool.filter(q => q.exam === examBoard);
-    if (yearRange) {
-      const [from, to] = yearRange.split('-').map(Number);
-      sourcePool = sourcePool.filter(q => q.year >= from && q.year <= to);
+    // Split the requested count evenly across subjects, but keep each
+    // subject's questions grouped together (not interleaved) so students
+    // can switch between subjects the same way they do in a normal exam.
+    const perSubject = Math.max(1, Math.floor(count / subjectBoxes.length));
+    let pool = [];
+    const subjectRanges = {};
+    let offset = 0;
+    for (const subject of subjectBoxes) {
+      const bank = EXAM_BANK[subject];
+      if (!bank) continue;
+      let sourcePool = bank.objective || [];
+      if (examBoard) sourcePool = sourcePool.filter(q => q.exam === examBoard);
+      if (yearRange) {
+        const [from, to] = yearRange.split('-').map(Number);
+        sourcePool = sourcePool.filter(q => q.year >= from && q.year <= to);
+      }
+      const picked = pickChallengeQuestions(sourcePool, perSubject).map(q => ({ ...q, sourceSubject: subject }));
+      if (!picked.length) continue;
+      subjectRanges[subject] = { start: offset, end: offset + picked.length - 1 };
+      offset += picked.length;
+      pool = pool.concat(picked);
     }
-    const pool = pickChallengeQuestions(sourcePool, count);
     if (!pool.length) { showInfoToast('Not enough questions match those filters — try widening the exam board or year range.'); return; }
 
+    const subjectLabel = subjectBoxes.map(s => SUBJECTS[s]?.name || s).join(' + ');
     const code = generateChallengeCode();
     const genBtn = document.getElementById('qcGenerateBtn');
     if (genBtn) { genBtn.disabled = true; genBtn.textContent = 'Creating…'; }
@@ -1941,8 +1993,8 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'create', code, subject, count, time,
-          questions: pool, creator: S.currentUser, syncMode, scheduledStartAt,
+          action: 'create', code, subject: subjectLabel, subjects: subjectBoxes, subjectRanges,
+          count: pool.length, time, questions: pool, creator: S.currentUser, syncMode, scheduledStartAt,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -1951,7 +2003,7 @@
       // Also keep a local copy so the creator's own attempt works instantly.
       const challenges = loadSafe(QC_STORE, {});
       const challengeObj = {
-        code, subject, count, time,
+        code, subject: subjectLabel, subjects: subjectBoxes, subjectRanges, count: pool.length, time,
         questions: pool.map(q => q.id || pool.indexOf(q)),
         questionData: pool,
         expires: Date.now() + 24 * 60 * 60 * 1000,
@@ -1984,7 +2036,8 @@
     const code = window._currentChallengeCode;
     if (!code) return;
     const url  = window.location.origin + window.location.pathname + '?challenge=' + code;
-    const text = `🏆 I challenge you! Take this ${document.getElementById('qcSubject')?.value || ''} quiz on My Exams App.\n\nCode: ${code}\nLink: ${url}`;
+    const subj = loadSafe(QC_STORE, {})[code]?.subject || '';
+    const text = `🏆 I challenge you! Take this ${subj} quiz on My Exams App.\n\nCode: ${code}\nLink: ${url}`;
     if (navigator.share) {
       navigator.share({ title: 'My Exams App Challenge', text, url }).catch(() => {});
     } else {
@@ -2241,11 +2294,14 @@
 
     closeQuizChallenge();
 
-    // Set up session using challenge questions
-    const bank = EXAM_BANK[challenge.subject];
-    if (!bank) return;
-
+    // Questions come directly from challenge.questionData (already fetched
+    // at creation/join time) — no need to re-look-up EXAM_BANK[subject]
+    // here, which matters now that a multi-subject challenge's `subject`
+    // is a combined label like "Mathematics + Physics" that wouldn't match
+    // any single EXAM_BANK key anyway.
     S.subject    = challenge.subject;
+    S.subjects   = challenge.subjects || [challenge.subject];
+    S.subjectRanges = challenge.subjectRanges || {};
     S.exam       = 'WAEC';
     S.mode       = 'exam';
     S.type       = 'objective';
@@ -2260,9 +2316,14 @@
     S.inSession  = true;
 
     E.sbStudent.textContent = S.currentUser;
-    E.sbSubject.textContent = SUBJECTS[S.subject]?.name || S.subject;
+    E.sbSubject.textContent = S.subjects.length > 1 ? S.subject : (SUBJECTS[S.subject]?.name || S.subject);
     E.sbMode.textContent    = 'Challenge';
     E.sbExam.textContent    = S.exam;
+
+    // Subject switcher — only for multi-subject challenges.
+    const isMulti = S.subjects.length > 1;
+    if (E.subjectSwitcher) E.subjectSwitcher.classList.toggle('hidden', !isMulti);
+    if (isMulti) buildSubjectSwitcher();
 
     // Store challenge context so results can save score
     S._challengeCode = challenge.code;
