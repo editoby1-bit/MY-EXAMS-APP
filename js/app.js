@@ -294,6 +294,23 @@
     let _backLastPress = 0;
 
     window.addEventListener('hashchange', () => {
+      // Challenge modal open — back button navigates its panels instead of
+      // whatever the quiz-exit logic below would otherwise do.
+      const modalEl = document.getElementById('quizChallengeModal');
+      if (modalEl && !modalEl.classList.contains('hidden')) {
+        if (_qcModalPanelHistory.length > 0) {
+          window.location.hash = 'mea-challenge'; // stay armed for another back press
+          const prev = _qcModalPanelHistory.pop();
+          showQcPanel(prev, true);
+        } else {
+          clearInterval(_waitingRoomTimer);
+          clearInterval(_waitingRoomCountdownTicker);
+          modalEl.classList.add('hidden');
+          history.replaceState(null, '', window.location.pathname);
+        }
+        return;
+      }
+
       const quizActive   = document.getElementById('quizScreen')?.classList.contains('active');
       const resultActive = document.getElementById('resultScreen')?.classList.contains('active');
 
@@ -1586,17 +1603,26 @@
     const all = loadSafe(QC_STORE, {});
     const needsAttention = Object.values(all).some(c => {
       if (c.ended) return false;
-      const completed = c.scores && c.scores[c.creator || S.currentUser];
+      if (!c.syncMode || c.syncMode === 'anytime') return false; // no "started" moment to alert about
+      const completed = c.scores && c.scores[S.currentUser];
       return c.startedAt && !completed;
     });
     setChallengeBadge(needsAttention);
   }
 
+  const _qcPanelOrder = ['qcHome','qcCreate','qcShare','qcLeaderboard','qcWaitingRoom'];
+  let _qcCurrentPanel = 'qcHome';
+  let _qcModalPanelHistory = [];
+
   function openQuizChallenge() {
     if (!S.hasAccess) { showPaywall('upgrade'); return; }
     if (!S.currentUser) { alert('Please log in first to use Community Quiz.'); return; }
+    _qcModalPanelHistory = [];
     showQcPanel('qcHome');
     document.getElementById('quizChallengeModal').classList.remove('hidden');
+    // Push a hash entry so the hardware/gesture back button can be caught
+    // and used to navigate panels within the modal.
+    history.pushState(null, '', window.location.pathname + '#mea-challenge');
     renderPendingChallenges();
     checkForStartedChallenges().then(() => { renderPendingChallenges(); refreshChallengeBadgeState(); });
   }
@@ -1605,10 +1631,20 @@
     clearInterval(_waitingRoomTimer);
     clearInterval(_waitingRoomCountdownTicker);
     document.getElementById('quizChallengeModal').classList.add('hidden');
+    _qcModalPanelHistory = [];
+    if (window.location.hash === '#mea-challenge') history.replaceState(null, '', window.location.pathname);
   }
 
-  function showQcPanel(id) {
-    ['qcHome','qcCreate','qcShare','qcLeaderboard','qcWaitingRoom'].forEach(p => {
+  function showQcPanel(id, fromBack = false) {
+    if (!fromBack && id !== _qcCurrentPanel) {
+      if (id === 'qcHome') {
+        _qcModalPanelHistory = []; // Home is the root — nothing further back
+      } else {
+        _qcModalPanelHistory.push(_qcCurrentPanel);
+      }
+    }
+    _qcCurrentPanel = id;
+    _qcPanelOrder.forEach(p => {
       const el = document.getElementById(p);
       if (el) el.classList.toggle('hidden', p !== id);
     });
@@ -1740,6 +1776,8 @@
 
   async function checkForStartedChallenges() {
     if (!S.currentUser) return;
+    const inQuiz = document.getElementById('quizScreen')?.classList.contains('active');
+
     const all = loadSafe(QC_STORE, {});
     const candidates = Object.values(all).filter(c =>
       c.syncMode && c.syncMode !== 'anytime' && !c.ended && !c.startedAt
@@ -1747,7 +1785,7 @@
     );
     if (!candidates.length) return;
 
-    let anyStarted = false;
+    const justStarted = [];
     for (const c of candidates) {
       try {
         const res = await fetch(API_BASE + '/api/challenge', {
@@ -1758,11 +1796,71 @@
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.ok && data.startedAt) {
           all[c.code].startedAt = data.startedAt;
-          anyStarted = true;
+          justStarted.push({ code: c.code, challenge: all[c.code], startedAt: data.startedAt });
         }
       } catch (err) { /* skip — try again next time */ }
     }
-    if (anyStarted) { saveSafe(QC_STORE, all); setChallengeBadge(true); playChallengeBeep(); }
+    if (!justStarted.length) return;
+
+    saveSafe(QC_STORE, all);
+    setChallengeBadge(true);
+    playChallengeBeep();
+
+    if (inQuiz) return; // badge is set — they'll see it once they finish
+
+    if (justStarted.length === 1) {
+      showChallengeStartedNotice(justStarted[0].code, justStarted[0].challenge, justStarted[0].startedAt);
+    } else {
+      showMultipleChallengesStartedNotice(justStarted);
+    }
+  }
+
+  function showMultipleChallengesStartedNotice(startedList) {
+    let card = document.getElementById('meaStartedNotice');
+    if (card) card.remove();
+    playChallengeBeep();
+
+    card = document.createElement('div');
+    card.id = 'meaStartedNotice';
+    card.style.cssText = `
+      position:fixed; bottom:1.25rem; left:50%; transform:translateX(-50%);
+      background:#0a1628; border:1.5px solid var(--gold,#d4af37); border-radius:14px;
+      padding:1.1rem 1.25rem; max-width:340px; width:calc(100% - 2rem);
+      box-shadow:0 10px 40px rgba(0,0,0,.5); z-index:10001; font-family:var(--sans,sans-serif);
+      text-align:center;
+    `;
+    const rows = startedList.map(({code, challenge}) => {
+      const endTxt = challenge.time > 0
+        ? ' · ends ' + new Date(challenge.startedAt + challenge.time * 60000).toLocaleTimeString(undefined, { hour:'numeric', minute:'2-digit' })
+        : '';
+      return `
+        <div class="qc-pending-row" style="text-align:left; margin-bottom:.5rem;">
+          <div class="qc-pending-info">
+            <div class="qc-pending-code">${safe(code)}</div>
+            <div class="qc-pending-sub">${safe(challenge.subject||'')}${endTxt}</div>
+          </div>
+          <button class="qc-pending-btn" data-code="${safe(code)}">Join</button>
+        </div>
+      `;
+    }).join('');
+    card.innerHTML = `
+      <button id="meaStartedClose" style="position:absolute; top:.6rem; right:.7rem; background:none; border:none;
+              color:rgba(255,255,255,.5); font-size:1.1rem; cursor:pointer; line-height:1;">✕</button>
+      <p style="margin:0 0 .7rem; color:#fff; font-size:.9rem; font-weight:600;">🎉 ${startedList.length} challenges have started!</p>
+      <p style="margin:0 0 .7rem; color:rgba(255,255,255,.55); font-size:.75rem;">Pick one to join now — the rest stay in your challenge list.</p>
+      ${rows}
+    `;
+    document.body.appendChild(card);
+
+    document.getElementById('meaStartedClose').addEventListener('click', () => card.remove());
+    card.querySelectorAll('.qc-pending-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const code = btn.dataset.code;
+        const picked = startedList.find(s => s.code === code);
+        card.remove();
+        if (picked) startChallengeAttempt(picked.challenge, picked.startedAt);
+      });
+    });
   }
 
   function generateChallengeCode() {
