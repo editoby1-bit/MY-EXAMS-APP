@@ -6,15 +6,16 @@
   <meta name="theme-color" content="#0a1628"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="mobile-web-app-capable" content="yes"/>
-  <meta name="description" content="My Exams App — WAEC, NECO, GCE & NABTEB Past Questions with Full Model Answers"/>
-  <title>My Exams App</title>
+  <meta name="description" content="Holiday Hub — Revision, quizzes, challenges and project help for the school break."/>
+  <title>Holiday Hub</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=41b"/>
+  <link rel="stylesheet" href="css/styles.css?v=1"/>
   <link rel="manifest" href="manifest.json"/>
-  <link rel="icon" type="image/x-icon" href="favicon.ico"/>
+  <link rel="icon" type="image/png" href="icon-192.png"/>
   <link rel="apple-touch-icon" href="icon-192.png"/>
+  <script src="https://js.paystack.co/v1/inline.js"></script>
 </head>
 <body>
 <div id="app">
@@ -28,808 +29,440 @@
         <div class="app-brand">
           <span class="brand-star">★</span>
           <div class="brand-text">
-            <h1 class="brand-name">My<span class="brand-em">Exams</span>App</h1>
-            <p class="brand-tagline">WAEC · NECO · GCE · NABTEB</p>
+            <h1 class="brand-name">Holiday<span class="brand-em">Hub</span></h1>
+            <p class="brand-tagline">Revise · Quiz · Challenge · Get Unstuck</p>
           </div>
-          <span id="streakDisplay" class="streak-badge"></span>
+          <span id="countdownBadge" class="countdown-badge">🎒 <b id="daysLeft">—</b>&nbsp;days left</span>
+          <span class="ai-credit-badge home-credit-badge">✨ 3 left</span>
         </div>
+
+        <h2 class="hero-title">Keep your brain warm this break.</h2>
+        <p class="hero-sub">Free revision. Real challenges. Zero pressure.</p>
+        <p class="ai-boost-expiry hidden"></p>
+
         <div class="hero-stats-row">
           <div class="hstat"><span id="hStatSessions">0</span><label>Sessions</label></div>
           <div class="hstat-div"></div>
           <div class="hstat"><span id="hStatAvg">—</span><label>Average</label></div>
           <div class="hstat-div"></div>
-          <div class="hstat"><span id="hStatBest">—</span><label>Best</label></div>
-          <div class="hstat-div"></div>
-          <div class="hstat"><span id="hStatQs">223</span><label>Questions</label></div>
+          <div class="hstat"><span id="hStatStreak">0</span><label>Day Streak</label></div>
         </div>
       </div>
     </div>
 
-    <div class="home-body">
+    <div class="category-tabs" id="categoryTabs">
+      <button class="cat-tab active" data-cat="senior">Senior<span class="cat-sub">WAEC/NECO/JAMB</span></button>
+      <button class="cat-tab" data-cat="junior">Junior<span class="cat-sub">JSS1–JSS3</span></button>
+    </div>
 
-      <!-- Left column: upgrade bar + student login + configure session -->
-      <div class="home-left">
+    <div id="dashboardNudge" class="dashboard-nudge-wrap"></div>
 
-        <!-- Student login — upgrade bar sits inside it for free users -->
-        <div class="setup-panel card" id="studentPanel">
-          <!-- Upgrade bar — inside student panel, free users only -->
-          <div class="upgrade-bar" id="upgradeBar">
-            <div class="upgrade-bar-left">
-              <span class="upgrade-bar-icon">⚡</span>
-              <span id="upgradeBarText">Unlock unlimited access — Student Pass from ₦2,000</span>
-            </div>
-            <button class="upgrade-bar-btn" id="upgradeBarBtn">Upgrade →</button>
-          </div>
-          <div class="panel-head">
-            <span class="panel-label">Student</span>
-          </div>
-          <div class="student-input-row">
-            <input id="studentNameInput" class="text-field" type="text"
-              placeholder="Enter your full name…" maxlength="60" autocomplete="name"/>
-            <button id="loginBtn" class="btn-primary">Go</button>
-          </div>
-          <div id="studentPill" class="student-status">No student logged in</div>
-          <div id="planBadge" class="plan-badge hidden"></div>
-        </div>
-
-        <!-- Configure session -->
-        <div class="setup-panel card" id="configPanel">
-          <div class="panel-head">
-            <span class="panel-label">Configure Session</span>
-          </div>
-
-          <div class="config-step">
-            <span class="step-num">1</span>
-            <span class="step-label">Choose Exam</span>
-          </div>
-          <div class="exam-pills" id="examPillsContainer">
-            <button class="exam-pill active" data-exam="WAEC">WAEC</button>
-            <button class="exam-pill" data-exam="NECO">NECO</button>
-            <button class="exam-pill" data-exam="GCE">GCE</button>
-            <button class="exam-pill" data-exam="NABTEB">NABTEB</button>
-          </div>
-
-          <div class="config-step" style="margin-top:0.9rem">
-            <span class="step-num">2</span>
-            <span class="step-label">Choose Year</span>
-          </div>
-          <div class="exam-pills" id="yearPillsContainer">
-            <button class="exam-pill year-pill active" data-year="random">Random</button>
-            <button class="exam-pill year-pill" data-year="2023">2023</button>
-            <button class="exam-pill year-pill" data-year="2022">2022</button>
-            <button class="exam-pill year-pill" data-year="2021">2021</button>
-            <button class="exam-pill year-pill" data-year="2020">2020</button>
-            <button class="exam-pill year-pill" data-year="2019">2019</button>
-          </div>
-
-          <div class="config-step" style="margin-top:0.9rem">
-            <span class="step-num">3</span>
-            <span class="step-label">Choose Subject</span>
-          </div>
-          <div class="subject-grid" id="subjectGrid"></div>
-
-          <div class="config-step" style="margin-top:0.9rem">
-            <span class="step-num">4</span>
-            <span class="step-label">Options</span>
-          </div>
-          <div class="options-row">
-            <div class="option-group">
-              <label class="opt-label">Mode</label>
-              <div class="mode-toggle" id="modeToggle">
-                <button class="mode-btn" data-mode="practice">Practice</button>
-                <button class="mode-btn" data-mode="exam">Exam</button>
-              </div>
-            </div>
-            <div class="option-group">
-              <label class="opt-label">Type</label>
-              <div class="mode-toggle" id="typeToggle">
-                <button class="mode-btn" data-type="objective">Objective</button>
-                <button class="mode-btn" data-type="theory">Theory</button>
-                <button class="mode-btn" data-type="both">Both</button>
-              </div>
-            </div>
-            <div class="option-group hidden" id="bothModeGroup">
-              <label class="opt-label">Both Mode</label>
-              <div class="mode-toggle" id="bothModeToggle">
-                <button class="mode-btn active" data-bothmode="sections">📋 Sections A+B</button>
-                <button class="mode-btn" data-bothmode="mixed">🔀 Mixed</button>
-              </div>
-              <div class="both-mode-hint" id="bothModeHint">
-                💡 In <strong>Sections A+B</strong> mode you can switch between Section A (Objectives) and Section B (Theory) at any time during your session using the tabs at the top.
-              </div>
-            </div>
-          </div>
-          <div class="options-row" style="margin-top:0.6rem">
-            <div class="option-group">
-              <label class="opt-label">Questions</label>
-              <select id="qCountSelect" class="select-field">
-                <option value="10">10 Questions</option>
-                <option value="20" selected>20 Questions</option>
-                <option value="30">30 Questions</option>
-                <option value="all">All Available</option>
-              </select>
-            </div>
-            <div class="option-group">
-              <label class="opt-label">Duration (Exam only)</label>
-              <select id="durationSelect" class="select-field" disabled>
-                <option value="auto">Auto (1 min / Q)</option>
-                <option value="15">15 Minutes</option>
-                <option value="30">30 Minutes</option>
-                <option value="45">45 Minutes</option>
-                <option value="60">60 Minutes</option>
-                <option value="90">90 Minutes</option>
-                <option value="120">120 Minutes</option>
-              </select>
-            </div>
-          </div>
-
-          <button id="startBtn" class="btn-start" disabled>
-            <span id="startBtnText">Select a subject to begin</span>
-            <span class="btn-arrow">→</span>
-          </button>
-        </div><!-- #configPanel -->
-
-      </div><!-- .home-left -->
-
-      <!-- Right column: session history -->
-      <div class="home-right">
-        <div class="setup-panel card history-panel">
-          <div class="panel-head">
-            <span class="panel-label">Session History</span>
-            <button id="clearHistoryBtn" class="ghost-link">Clear all</button>
-          </div>
-          <div id="historyList" class="history-list">
-            <div class="empty-history">Login to see your history.</div>
-          </div>
-        </div>
-
-        <!-- Hosted Contest Coming Soon -->
-        <div class="contest-card card" id="contestCard">
-          <!-- Collapsed state — always visible slim bar -->
-          <div class="contest-collapsed" id="contestCollapsed" style="display:none">
-            <span class="contest-collapsed-icon">🏆</span>
-            <span class="contest-collapsed-text">National Quiz Contest <span class="contest-coming-tag">Coming Soon</span></span>
-            <button class="contest-expand-btn" id="contestExpandBtn">See Details ▾</button>
-          </div>
-
-          <!-- Expanded state — full card -->
-          <div class="contest-expanded" id="contestExpanded">
-            <div class="contest-card-head">
-              <div>
-                <div class="contest-badge">COMING SOON</div>
-              </div>
-              <button class="contest-collapse-btn" id="contestCollapseBtn" title="Collapse">▴ Hide</button>
-            </div>
-            <div class="contest-icon">🏆</div>
-            <h3 class="contest-title">National Quiz Contest</h3>
-            <p class="contest-desc">Compete against students across Nigeria. Top scorers win prizes and recognition. Schools compete for the Partner School trophy.</p>
-            <div class="contest-features">
-              <div class="contest-feat">🎯 Open to all students</div>
-              <div class="contest-feat">🏫 School team rankings</div>
-              <div class="contest-feat">🥇 Prizes for top scorers</div>
-              <div class="contest-feat">📢 Winners featured on our platforms</div>
-            </div>
-            <button class="contest-notify-btn" id="contestNotifyBtn">Notify Me When Live →</button>
-            <p class="contest-note" id="contestNoteText">Be the first to know when registration opens.</p>
-          </div>
-        </div>
-
-      </div><!-- .home-right -->
-
-    </div><!-- .home-body -->
-
-    <!-- PAYWALL OVERLAY -->
-    <div id="paywallOverlay" class="paywall-overlay hidden">
-      <div class="paywall-card">
-        <button id="closePaywall" class="paywall-close-x">✕</button>
-        <div class="paywall-badge" id="paywallBadge">FREE TRIAL COMPLETE</div>
-        <h2 class="paywall-title">Unlock Full Access</h2>
-        <p class="paywall-sub">Unlimited practice across 15 subjects · WAEC, NECO, GCE, NABTEB · Full model answers · Snap-and-mark theory · JAMB prep included.</p>
-
-        <!-- Early adopter banner -->
-        <div class="early-adopter-banner" id="earlyAdopterBanner">
-          🔥 <strong>Early Access:</strong> First 100 students locked in at ₦2,000/quarter — forever.
-          <span id="earlyAdopterCounter" class="ea-counter">Loading...</span>
-        </div>
-
-        <!-- Paywall tab switcher -->
-        <div class="paywall-tabs">
-          <button class="paywall-tab active" id="tabIndividual" onclick="switchPaywallTab('individual')">Individual</button>
-          <button class="paywall-tab" id="tabJamb" onclick="switchPaywallTab('jamb')">JAMB Only</button>
-          <button class="paywall-tab" id="tabSchool" onclick="switchPaywallTab('school')">School</button>
-        </div>
-
-        <!-- INDIVIDUAL TIERS -->
-        <div id="paywallIndividual" class="paywall-panel">
-          <div class="paywall-tiers">
-
-            <div class="tier-card tier-featured">
-              <div class="tier-badge-top">MOST POPULAR</div>
-              <div class="tier-name">Student Pass</div>
-              <div class="tier-price-row">
-                <span class="tier-price" id="studentPassPrice">₦2,000</span>
-                <span class="tier-period">/quarter</span>
-              </div>
-              <div class="tier-yearly">or ₦7,500/year <span class="tier-save">save ₦2,500</span></div>
-              <ul class="tier-perks">
-                <li>✓ Unlimited sessions — all 15 subjects</li>
-                <li>✓ WAEC, NECO, GCE, NABTEB + year filters</li>
-                <li>✓ Full model answers + marking schemes</li>
-                <li>✓ 50 snap-and-mark credits per quarter</li>
-                <li>✓ JAMB prep included + 100 AI explanations</li>
-                <li>✓ Community quiz — challenge friends</li>
-                <li>✓ Works offline · PWA installable</li>
-              </ul>
-              <button class="btn-pay" id="payBtn" data-tier="student" data-amount="200000">
-                Get Student Pass →
-              </button>
-              <button class="btn-pay-year" id="payBtnYear" data-tier="student-yearly" data-amount="750000">
-                Pay ₦7,500 — full year →
-              </button>
-            </div>
-
-            <div class="tier-card">
-              <div class="tier-name">Student Pass <span class="tier-plus-label">Plus</span></div>
-              <div class="tier-price-row">
-                <span class="tier-price">₦3,500</span>
-                <span class="tier-period">/quarter</span>
-              </div>
-              <div class="tier-yearly">or ₦10,500/year <span class="tier-save">save ₦3,500</span></div>
-              <ul class="tier-perks">
-                <li>✓ Everything in Student Pass</li>
-                <li>✓ 100 AI explanations on Exams App/quarter</li>
-                <li>✓ 100 AI explanations on JAMB App/quarter</li>
-                <li>✓ "Why is this wrong?" on every question</li>
-                <li>✓ Personalised to your weak areas</li>
-                <li>✓ Snap top-up: ₦300 = 10 snaps</li>
-                <li>✓ AI top-up: ₦500 = 50 explanations</li>
-              </ul>
-              <button class="btn-pay btn-pay-secondary" id="payBtnPlus" data-tier="plus" data-amount="350000">
-                Get Student Pass Plus →
-              </button>
-              <button class="btn-pay-year btn-pay-secondary" id="payBtnPlusYear" data-tier="plus-yearly" data-amount="1050000">
-                Pay ₦10,500 — full year →
-              </button>
-            </div>
-
-          </div>
-        </div>
-
-        <!-- JAMB ONLY TIER -->
-        <div id="paywallJamb" class="paywall-panel hidden">
-          <div class="paywall-tiers paywall-tiers-single">
-            <div class="tier-card tier-featured">
-              <div class="tier-badge-top">JAMB / UTME</div>
-              <div class="tier-name">JAMB Only</div>
-              <div class="tier-price-row">
-                <span class="tier-price">₦1,500</span>
-                <span class="tier-period">/quarter</span>
-              </div>
-              <div class="tier-yearly">Already on Student Pass? JAMB is included free.</div>
-              <ul class="tier-perks">
-                <li>✓ 563 questions across 11 subjects</li>
-                <li>✓ Full JAMB combo simulation mode</li>
-                <li>✓ English + 3 subjects, timed</li>
-                <li>✓ 100 AI explanations per quarter</li>
-                <li>✓ Challenge friends — community quiz</li>
-                <li>✓ Share your session with friends</li>
-                <li>✓ AI top-up: ₦500 = 50 explanations</li>
-              </ul>
-              <p class="jamb-positioning">The only JAMB app with AI explanations. ₦1,500.</p>
-              <button class="btn-pay" id="payBtnJamb" data-tier="jamb" data-amount="150000">
-                Get JAMB Pass →
-              </button>
-            </div>
-          </div>
-          <p class="jamb-note">📌 If you already have Student Pass, JAMB access is included — no extra payment needed.</p>
-        </div>
-
-        <!-- SCHOOL TIERS -->
-        <div id="paywallSchool" class="paywall-panel hidden">
-          <div class="school-tiers">
-
-            <div class="school-tier-card">
-              <div class="school-tier-name">Standard</div>
-              <div class="school-tier-price">₦2,000 <span class="school-tier-unit">per student / year</span></div>
-              <div class="school-tier-min">Minimum 50 students · ₦100,000 minimum</div>
-              <ul class="tier-perks">
-                <li>✓ Same access as Student Pass</li>
-                <li>✓ All 15 subjects + JAMB included</li>
-                <li>✓ 50 snaps per student per year</li>
-                <li>✓ Students top up snaps individually</li>
-                <li>✓ Annual payment only</li>
-              </ul>
-            </div>
-
-            <div class="school-tier-card school-tier-featured">
-              <div class="school-tier-badge">BRANDED</div>
-              <div class="school-tier-name">Branded</div>
-              <div class="school-tier-price">₦500,000 <span class="school-tier-unit">/ year</span></div>
-              <div class="school-tier-min">Up to 100 students · or ₦150,000/quarter</div>
-              <ul class="tier-perks">
-                <li>✓ Student Pass Plus level access</li>
-                <li>✓ 50 snaps + 100 AI per student/year</li>
-                <li>✓ School logo + custom welcome</li>
-                <li>✓ School leaderboard</li>
-                <li>✓ Admin dashboard — usage analytics</li>
-              </ul>
-            </div>
-
-            <div class="school-tier-card">
-              <div class="school-tier-badge school-tier-badge-gold">PREMIUM</div>
-              <div class="school-tier-name">Premium Partner</div>
-              <div class="school-tier-price">₦1,000,000 <span class="school-tier-unit">/ year</span></div>
-              <div class="school-tier-min">Up to 200 students · or ₦300,000/quarter</div>
-              <ul class="tier-perks">
-                <li>✓ Everything in Branded</li>
-                <li>✓ Custom question sets — your mock exams</li>
-                <li>✓ PDF performance reports for teachers</li>
-                <li>✓ Priority WhatsApp support</li>
-                <li>✓ Featured as Partner School</li>
-              </ul>
-            </div>
-
-          </div>
-          <button class="btn-pay school-contact-btn" id="payBtnSchool">
-            Contact Us for School Bundle →
-          </button>
-          <p class="paywall-note">School enquiries: schools@myexamsapp.com · We'll set up your account within 24 hours</p>
-        </div>
-
-        <div class="access-code-row">
-          <span class="code-label">Have an access code?</span>
-          <input id="accessCodeInput" class="code-input" placeholder="Enter code" autocomplete="off" spellcheck="false"/>
-          <button id="redeemBtn" class="btn-redeem">Redeem</button>
-        </div>
-        <p class="paywall-note" id="paywallFooterNote">Demo code: <strong>MEA-DEMO-2025</strong> · Questions? WhatsApp us.</p>
+    <!-- Hidden by default. Flip SHOW_LAUNCH_BANNER to true in js/app.js when
+         ready to announce My Exams App / My JAMB App. Edit the text below
+         (or via JS) closer to launch. -->
+    <div class="launch-banner hidden" id="launchBanner">
+      <button class="launch-banner-close" id="launchBannerClose">✕</button>
+      <div class="lb-icon">🚀</div>
+      <div class="lb-text">
+        <h3 id="launchBannerTitle">Coming Soon</h3>
+        <p id="launchBannerSub">The full WAEC/NECO and JAMB experience — My Exams App and My JAMB App, launching soon.</p>
       </div>
     </div>
 
-  </section><!-- #homeScreen -->
+    <div class="study-plan-banner" id="studyPlanBanner">
+      <div class="spb-icon">🗓</div>
+      <div class="spb-text">
+        <h3>Your Holiday Study Plan</h3>
+        <p id="spbSub">Build a simple day-by-day plan for the rest of the break.</p>
+      </div>
+      <span class="spb-arrow">→</span>
+    </div>
 
-  <!-- ════════════════ QUIZ SCREEN ════════════════ -->
+    <div class="feature-grid">
+      <button class="feature-card" data-action="revision">
+        <div class="feature-icon fi-revision">📖</div>
+        <h3>Revision</h3>
+        <p>Browse past questions with full explanations, no timer.</p>
+      </button>
+
+      <button class="feature-card" data-action="library">
+        <div class="feature-icon fi-library">📚</div>
+        <h3>Study Library</h3>
+        <p>Flashcards, formula sheets, and concept notes — no quiz.</p>
+      </button>
+
+      <button class="feature-card" data-action="quiz">
+        <div class="feature-icon fi-quiz">✍️</div>
+        <h3>Quiz Me</h3>
+        <p>Timed practice. See your score at the end.</p>
+      </button>
+
+      <button class="feature-card" data-action="challenge">
+        <div class="feature-icon fi-challenge">🏆</div>
+        <h3>Challenge a Friend</h3>
+        <p>Same questions, same time. Who scores higher?</p>
+      </button>
+
+      <button class="feature-card" data-action="project">
+        <div class="feature-icon fi-project">🧭</div>
+        <h3>Project Helper</h3>
+        <p>Get guided step by step — we won't just give you the answer.</p>
+      </button>
+
+      <button class="feature-card" data-action="games">
+        <div class="feature-icon fi-games">🎮</div>
+        <h3>Games</h3>
+        <p>Speed Round, True or False, Memory Match — pick your game.</p>
+      </button>
+    </div>
+
+    <div style="padding:0 1.25rem 2rem; text-align:center;">
+      <p style="font-size:.72rem; color:var(--text-dim);">Holiday Hub is a free companion from Editoby Ventures — the team behind My Exams App and My JAMB App.</p>
+    </div>
+
+  </section>
+
+  <!-- ════════════════ SUBJECT PICKER (revision & quiz entry) ════════════════ -->
+  <section id="subjectScreen" class="screen">
+    <div class="topbar">
+      <button class="back-btn" data-back="home">←</button>
+      <h2 class="topbar-title" id="subjectScreenTitle">Pick a subject</h2>
+    </div>
+    <div class="container" style="padding-top:1.25rem; padding-bottom:2rem;">
+      <div id="subjectList" class="subject-list"></div>
+    </div>
+  </section>
+
+  <!-- ════════════════ REVISION SCREEN (Study Mode) ════════════════ -->
+  <section id="revisionScreen" class="screen">
+    <div class="topbar">
+      <button class="back-btn" data-back="subject">←</button>
+      <h2 class="topbar-title" id="revisionTitle">Study Mode</h2>
+      <span id="revisionProgress" class="topbar-progress"></span>
+    </div>
+    <div class="study-progress-track"><div class="study-progress-fill" id="studyProgressFill"></div></div>
+    <div class="container" id="revisionBody" style="padding-top:1.25rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ QUIZ SCREEN (Exam Mode) ════════════════ -->
   <section id="quizScreen" class="screen">
-
-    <!-- Mobile sidebar toggle -->
-    <button id="sidebarToggle" class="sidebar-toggle" aria-label="Open navigation">☰</button>
-
-    <!-- Sidebar backdrop (mobile) -->
-    <div id="sidebarBackdrop" class="sidebar-backdrop hidden"></div>
-
-    <div class="quiz-layout">
-
-      <aside class="quiz-sidebar" id="quizSidebar">
-        <div class="sidebar-top">
-          <div class="sidebar-brand">
-            <span class="brand-star sm">★</span>
-            <span class="sidebar-brand-name">MyExamsApp</span>
-          </div>
-          <button id="exitBtn" class="exit-btn">✕ Exit</button>
-        </div>
-
-        <div class="sidebar-meta-block">
-          <div class="smeta"><span class="smeta-label">Student</span><strong id="sbStudent">—</strong></div>
-          <div class="smeta"><span class="smeta-label">Subject</span><strong id="sbSubject">—</strong></div>
-          <div class="smeta"><span class="smeta-label">Mode</span><strong id="sbMode">—</strong></div>
-          <div class="smeta"><span class="smeta-label">Exam</span><strong id="sbExam">—</strong></div>
-        </div>
-
-        <div class="timer-card" id="timerCard" style="display:none">
-          <div class="timer-label-txt">Time Remaining</div>
-          <div class="timer-digits" id="timerDisplay">00:00</div>
-        </div>
-
-        <div class="progress-section">
-          <div class="progress-header">
-            <span>Progress</span>
-            <span id="progressFraction">1/0</span>
-          </div>
-          <div class="progress-track"><div id="progressBar" class="progress-fill"></div></div>
-          <div class="progress-sub" id="progressSub">0 answered</div>
-        </div>
-
-        <div class="pills-section">
-          <div class="pills-meta">
-            <span class="pills-label">Questions</span>
-            <div class="pills-legend">
-              <span class="leg"><span class="leg-dot ld-current"></span>Now</span>
-              <span class="leg"><span class="leg-dot ld-done"></span>Done</span>
-              <span class="leg"><span class="leg-dot ld-flag"></span>Flag</span>
-              <span class="leg"><span class="leg-dot ld-theory"></span>Theory</span>
-            </div>
-          </div>
-          <div class="q-pills" id="qPills"></div>
-        </div>
-
-        <button id="submitQuizBtn" class="btn-submit">Submit Session</button>
-      </aside>
-
-      <main class="quiz-main">
-
-        <!-- Section tabs — sections mode only -->
-        <div class="section-tabs hidden" id="sectionTabs">
-          <button class="section-tab active" id="sectionTabA" data-section="A">
-            <span class="section-tab-label">Section A</span>
-            <span class="section-tab-sub">Objectives</span>
-            <span class="section-tab-count" id="sectionACount"></span>
-          </button>
-          <button class="section-tab" id="sectionTabB" data-section="B">
-            <span class="section-tab-label">Section B</span>
-            <span class="section-tab-sub">Theory</span>
-            <span class="section-tab-count" id="sectionBCount"></span>
-          </button>
-        </div>
-
-        <!-- Subject switcher — multi-subject challenges only -->
-        <div class="section-tabs hidden" id="subjectSwitcher">
-          <div id="subjectTabs" style="display:contents"></div>
-        </div>
-
-        <div class="qtype-banner" id="qtypeBanner">Objective</div>
-
-        <div class="question-header">
-          <div class="qh-left">
-            <span class="qnum-badge" id="qNumBadge">Q1</span>
-            <span class="qsubject-tag" id="qSubjectTag"></span>
-            <span class="qyear-tag" id="qYearTag"></span>
-          </div>
-          <div class="qh-right">
-            <span class="qh-mobile-timer hidden" id="qhMobileTimer"></span>
-            <span class="qpos-indicator" id="qPosIndicator">1 of 20</span>
-            <button id="flagBtn" class="flag-btn" title="Flag this question for review (press F)">🏳 Flag</button>
-          </div>
-        </div>
-
-        <!-- OBJECTIVE PANEL -->
-        <div id="objectivePanel" class="q-panel">
-          <p class="question-text" id="objectiveQuestion"></p>
-          <div class="options-list" id="optionsList"></div>
-          <div class="explanation-area" id="explanationArea"></div>
-          <!-- AI Explain button — Plus tier only -->
-          <button id="aiExplainBtn" class="ai-explain-btn hidden">
-            🧠 <span class="aeb-main">Teach Me</span>
-            <span class="aeb-sub">tap to explain this answer</span>
-          </button>
-          <div class="key-hint" id="keyHint">
-            Keyboard: <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd> answer &nbsp;·&nbsp;
-            <kbd>←</kbd><kbd>→</kbd> navigate &nbsp;·&nbsp; <kbd>F</kbd> flag
-          </div>
-        </div>
-
-        <!-- THEORY PANEL -->
-        <div id="theoryPanel" class="q-panel hidden">
-          <p class="question-text theory-q" id="theoryQuestion"></p>
-          <div class="theory-body">
-            <div class="marking-scheme card-inset" id="markingScheme"></div>
-            <div class="model-answer-wrap">
-              <button class="toggle-answer-btn" id="toggleAnswerBtn">📄 Show Model Answer</button>
-              <div class="model-answer" id="modelAnswer"></div>
-            </div>
-            <div class="exam-tip-box" id="examTipBox" style="display:none"></div>
-
-            <!-- Snap and Mark — Student Pass subscribers -->
-            <div class="snap-action-row" id="snapActionRow" style="display:none">
-              <button class="snap-btn" id="snapBtn" style="background:#d4af37;color:#08111f;border:none;border-radius:8px;padding:.55rem 1.1rem;font-weight:700;font-size:.85rem;cursor:pointer;display:flex;align-items:center;gap:.4rem">📸 Snap My Answer</button>
-              <input type="file" id="snapFileInput" accept="image/*" capture="environment" style="display:none"/>
-              <span class="snap-credits-badge" id="snapCreditsBadge"></span>
-            </div>
-            <p class="snap-tip" id="snapTip">💡 Write clearly — illegible handwriting costs marks in real exams too.</p>
-
-            <!-- AI Explain button — Plus tier, theory -->
-            <button id="aiExplainTheoryBtn" class="ai-explain-btn hidden" style="margin-top:.75rem">
-              🧠 <span class="aeb-main">Teach Me</span>
-              <span class="aeb-sub">tap to explain this question</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="nav-footer">
-          <button id="prevBtn" class="btn-nav btn-ghost" disabled>← Prev</button>
-          <!-- Section jump button — only visible in Both/Sections mode -->
-          <button id="sectionJumpBtn" class="btn-nav btn-section-jump hidden">📋 Section B →</button>
-          <button id="nextBtn" class="btn-nav btn-gold">Next →</button>
-        </div>
-
-        <!-- Small, inert teaser shown only during a live Exam Mode session —
-             tells students when Teach Me becomes available without giving
-             anything away or pretending the feature doesn't exist. -->
-        <button id="aiExplainTeaser" class="ai-explain-teaser hidden">🧠 Explain This</button>
-
-      </main>
+    <div class="topbar">
+      <button class="back-btn" data-back="confirm-exit-quiz">←</button>
+      <h2 class="topbar-title" id="quizTitle">Quiz</h2>
+      <span id="quizTimer" class="topbar-progress">--:--</span>
     </div>
-  </section><!-- #quizScreen -->
+    <div class="exam-progress-track"><div class="exam-progress-fill" id="examProgressFill"></div></div>
+    <div class="container" id="quizBody" style="padding-top:1.25rem; padding-bottom:2rem;"></div>
+  </section>
 
-  <!-- ════════════════ RESULT SCREEN ════════════════ -->
-  <section id="resultScreen" class="screen">
-    <div class="result-page">
-
-      <div class="result-card card">
-        <div class="result-emoji" id="resultEmoji">★</div>
-        <div class="result-score" id="resultScore">—</div>
-        <div class="result-grade" id="resultGrade"></div>
-        <div class="result-summary" id="resultSummary"></div>
-        <div class="result-stats-grid" id="resultStatsGrid"></div>
-        <div id="resultBreakdown" class="result-breakdown"></div>
-        <div class="result-actions">
-          <button id="reviewBtn" class="btn-secondary">📖 Review Answers</button>
-          <button id="homeBtn" class="btn-primary">New Session →</button>
-        </div>
-      </div>
-
-      <div class="share-nudge">
-        <p>Know a student writing WAEC or NECO? Share this!</p>
-        <div class="share-nudge-btns">
-          <button id="shareSessionBtn" class="btn-share-session">📊 Share My Result</button>
-          <button id="shareBtn" class="btn-share">📤 Share App</button>
-        </div>
-      </div>
-
-      <!-- Upgrade teaser on results — shown to free users only -->
-      <div class="result-upgrade-teaser" id="resultUpgradTeaser">
-        <div class="rut-inner">
-          <div class="rut-icon">📸</div>
-          <div class="rut-body">
-            <div class="rut-title" id="rutTitle">Snap your theory answers. Get marked in seconds.</div>
-            <div class="rut-sub">Student Pass includes 50 snap-and-mark credits per quarter. No other app does this.</div>
-          </div>
-          <button class="rut-btn" id="rutBtn">Get Access →</button>
-        </div>
-      </div>
-
-      <footer class="app-footer">
-        <span class="footer-logo">★ MyExamsApp</span>
-        <span>Questions from WAEC / NECO / GCE / NABTEB past papers — publicly available materials.</span>
-      </footer>
+  <!-- ════════════════ GAMES HUB ════════════════ -->
+  <section id="gamesHubScreen" class="screen">
+    <div class="topbar">
+      <button class="back-btn" data-back="home">←</button>
+      <h2 class="topbar-title">🎮 Games</h2>
     </div>
-  </section><!-- #resultScreen -->
+    <div class="container" style="padding-top:1.25rem; padding-bottom:2rem;">
+      <button class="game-choice-card" data-game="sort">
+        <div class="gc-icon" style="background:rgba(22,163,74,.12);">🗂</div>
+        <div class="gc-text"><h3>Category Sort</h3><p>Terms from mixed subjects — tap the right subject bucket, fast.</p></div>
+        <span class="gc-arrow">→</span>
+      </button>
+      <button class="game-choice-card" data-game="memory">
+        <div class="gc-icon" style="background:rgba(124,58,237,.12);">🧠</div>
+        <div class="gc-text"><h3>Memory Match</h3><p>Flip cards to pair terms with definitions. No timer pressure.</p></div>
+        <span class="gc-arrow">→</span>
+      </button>
+      <button class="game-choice-card" data-game="game">
+        <div class="gc-icon" style="background:rgba(232,93,74,.12);">⚡</div>
+        <div class="gc-text"><h3>Speed Round</h3><p>60 seconds, rapid-fire multiple choice. Build a streak.</p></div>
+        <span class="gc-arrow">→</span>
+      </button>
+      <button class="game-choice-card" data-game="tf">
+        <div class="gc-icon" style="background:rgba(37,99,235,.12);">✓✗</div>
+        <div class="gc-text"><h3>True or False Blitz</h3><p>Rapid true/false calls. Fastest, simplest, most intense.</p></div>
+        <span class="gc-arrow">→</span>
+      </button>
+      <button class="game-choice-card" data-game="sequence">
+        <div class="gc-icon" style="background:rgba(234,88,12,.12);">🔢</div>
+        <div class="gc-text"><h3>Sequence</h3><p>What comes next? Spot the pattern before the clock runs out.</p></div>
+        <span class="gc-arrow">→</span>
+      </button>
+      <button class="game-choice-card" data-game="scramble">
+        <div class="gc-icon" style="background:rgba(219,39,119,.12);">🔤</div>
+        <div class="gc-text"><h3>Word Scramble</h3><p>Unscramble the letters to spell key academic terms.</p></div>
+        <span class="gc-arrow">→</span>
+      </button>
+      <button class="game-choice-card" data-game="formula">
+        <div class="gc-icon" style="background:rgba(8,145,178,.12);">🔢</div>
+        <div class="gc-text"><h3>Formula Rush</h3><p>Match the name to the formula before time runs out.</p></div>
+        <span class="gc-arrow">→</span>
+      </button>
+      <button class="game-choice-card" data-game="equation">
+        <div class="gc-icon" style="background:rgba(79,70,229,.12);">🧩</div>
+        <div class="gc-text"><h3>Equation Builder</h3><p>Solve for x — watch out for the common-mistake decoys.</p></div>
+        <span class="gc-arrow">→</span>
+      </button>
+    </div>
+  </section>
 
-  <!-- SNAP AND MARK RESULTS -->
-  <div id="snapResultModal" class="snap-overlay hidden">
-    <div class="snap-result-card">
-      <button class="snap-result-close" id="snapResultClose">✕</button>
-      <div class="snap-result-head">
-        <div class="snap-result-score-wrap">
-          <div class="snap-result-score" id="snapResultScore">0/0</div>
-          <div class="snap-result-grade" id="snapResultGrade">Fair</div>
-          <div class="snap-result-pct" id="snapResultPct">0%</div>
+  <!-- ════════════════ SPEED ROUND / TRUE-FALSE BLITZ (EDU GAME) ════════════════ -->
+  <section id="gameScreen" class="screen">
+    <div class="game-topbar">
+      <button class="back-btn back-btn-light" data-back="confirm-exit-quiz">←</button>
+      <div class="game-stat"><span id="gameScore">0</span><label>Score</label></div>
+      <div class="game-timer" id="gameTimer">60</div>
+      <div class="game-stat"><span id="gameStreak">0</span><label>Streak</label></div>
+    </div>
+    <div class="game-subject-badge" id="gameSubjectBadge"></div>
+    <div class="container" id="gameBody" style="padding-top:1.5rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ GAME RESULTS ════════════════ -->
+  <section id="gameResultsScreen" class="screen">
+    <div class="container" id="gameResultsBody" style="padding-top:2rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ MEMORY MATCH ════════════════ -->
+  <section id="memoryScreen" class="screen">
+    <div class="game-topbar">
+      <button class="back-btn back-btn-light" data-back="confirm-exit-quiz">←</button>
+      <div class="game-stat"><span id="memMoves">0</span><label>Moves</label></div>
+      <div class="game-timer mem-timer-calm" id="memTimer">0:00</div>
+      <div class="game-stat"><span id="memPairs">0/0</span><label>Pairs</label></div>
+    </div>
+    <div class="game-subject-badge" id="memSubjectBadge"></div>
+    <div class="container" id="memoryBody" style="padding-top:1.25rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ MEMORY MATCH RESULTS ════════════════ -->
+  <section id="memoryResultsScreen" class="screen">
+    <div class="container" id="memoryResultsBody" style="padding-top:2rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ QUIZ RESULTS ════════════════ -->
+  <section id="resultsScreen" class="screen">
+    <div class="container" id="resultsBody" style="padding-top:2rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ PROJECT HELPER ════════════════ -->
+  <section id="projectScreen" class="screen">
+    <div class="topbar">
+      <button class="back-btn" data-back="home">←</button>
+      <h2 class="topbar-title">Project Helper</h2>
+    </div>
+    <div class="container" id="projectBody" style="padding-top:1.25rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ STUDY PLAN ════════════════ -->
+  <section id="planScreen" class="screen">
+    <div class="topbar">
+      <button class="back-btn" data-back="home">←</button>
+      <h2 class="topbar-title" id="planScreenTitle">🗓 Study Plan</h2>
+    </div>
+    <div class="container" id="planBody" style="padding-top:1.25rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ STUDY LIBRARY ════════════════ -->
+  <section id="libraryScreen" class="screen">
+    <div class="topbar">
+      <button class="back-btn" data-back="subject">←</button>
+      <h2 class="topbar-title" id="libraryTitle">Study Library</h2>
+    </div>
+    <div class="library-tabs" id="libraryTabs"></div>
+    <div class="container" id="libraryBody" style="padding-top:1.25rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ COMMUNITY QUIZ / CHALLENGE MODAL ════════════════ -->
+  <div id="quizChallengeModal" class="overlay hidden">
+    <div class="sheet" style="position:relative;">
+      <button class="sheet-close" id="qcClose">✕</button>
+      <div id="qcCreate">
+        <h3 class="sheet-title">Challenge a Friend</h3>
+        <p class="sheet-sub">Same questions. You vs your friends. Who scores higher?</p>
+        <div style="display:flex; flex-direction:column; gap:.6rem; margin-top:1rem;">
+          <button class="btn btn-primary btn-block" id="qcCreateBtn">Create a Challenge →</button>
+        </div>
+        <div style="margin-top:1rem; display:flex; gap:.5rem;">
+          <input id="qcJoinCode" class="text-input" placeholder="Enter challenge code" maxlength="10"/>
+          <button class="btn btn-ghost" id="qcJoinConfirm">Join</button>
+        </div>
+        <div id="qcPendingWrap" style="margin-top:1.25rem;">
+          <h4 class="sheet-subtitle">Your Challenges (<span id="qcPendingCount">0</span>/3)</h4>
+          <div id="qcPendingList"></div>
         </div>
       </div>
 
-      <!-- Handwriting warning -->
-      <div class="snap-hw-warning hidden" id="snapHwWarning">
-        ✍️ <strong>Handwriting note:</strong> Some parts were difficult to read. In a real exam, illegible answers may not be marked. Practise writing clearly.
-      </div>
-
-      <!-- Feedback -->
-      <div class="snap-feedback" id="snapFeedback"></div>
-
-      <!-- Breakdown -->
-      <div class="snap-breakdown-title">Mark-by-mark breakdown:</div>
-      <div class="snap-breakdown" id="snapBreakdown"></div>
-
-      <!-- Examiner note -->
-      <div class="snap-examiner-note" id="snapExaminerNote"></div>
-
-      <button class="snap-result-done" id="snapResultDone">Got it — back to question</button>
-    </div>
-  </div>
-
-  <!-- Snap processing overlay -->
-  <div id="snapProcessing" class="snap-processing hidden">
-    <div class="snap-processing-inner">
-      <div class="snap-spinner"></div>
-      <div class="snap-processing-title">Marking your answer...</div>
-      <div class="snap-processing-sub">AI examiner is reading your handwriting</div>
-    </div>
-  </div>
-
-  <!-- AI EXPLANATION PANEL -->
-  <div id="meaAiPanel" class="mea-ai-panel hidden">
-    <div class="mea-ai-inner">
-      <div class="mea-ai-head">
-        <span class="mea-ai-title">🧠 Teach Me</span>
-        <span class="mea-ai-credits" id="meaAiCredits">100 credits left</span>
-        <button class="mea-ai-close" id="meaAiClose">✕</button>
-      </div>
-      <div id="meaAiContent" class="mea-ai-content">
-        <div class="mea-ai-loading hidden" id="meaAiLoading">
-          <div class="mea-ai-spinner"></div>
-          <span>Thinking...</span>
+      <div id="qcSetup" class="hidden">
+        <h3 class="sheet-title">Set Up Your Challenge</h3>
+        <div class="form-group">
+          <label>Subject</label>
+          <select id="qcSubject"></select>
         </div>
-        <div id="meaAiResponse" class="mea-ai-response hidden"></div>
+        <div class="form-group">
+          <label>Number of questions</label>
+          <select id="qcCount">
+            <option value="10">10 questions</option>
+            <option value="20" selected>20 questions</option>
+            <option value="30">30 questions</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Time limit</label>
+          <select id="qcTime">
+            <option value="0">No time limit</option>
+            <option value="10" selected>10 minutes</option>
+            <option value="20">20 minutes</option>
+            <option value="30">30 minutes</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>When should it start?</label>
+          <select id="qcSyncMode">
+            <option value="anytime" selected>Anytime — each person starts when ready</option>
+            <option value="ready">When everyone is ready</option>
+            <option value="scheduled">At a scheduled time</option>
+          </select>
+        </div>
+        <div class="form-group hidden" id="qcScheduleWrap">
+          <label>Start date & time</label>
+          <input type="datetime-local" id="qcScheduleAt"/>
+        </div>
+        <div class="ai-boost-row" id="qcAiBoostRow">
+          <label class="ai-boost-label">
+            <input type="checkbox" id="qcAiBoost"/>
+            <span>✨ Add AI-generated questions <em id="qcAiBoostHint"></em></span>
+          </label>
+        </div>
+        <button class="btn btn-primary btn-block" id="qcGenerateBtn" style="margin-top:.5rem;">Generate Challenge Code →</button>
+      </div>
+
+      <div id="qcCreated" class="hidden">
+        <h3 class="sheet-title">Challenge Created!</h3>
+        <p class="sheet-sub">Share this code with friends. It expires in 24 hours.</p>
+        <div class="code-display" id="qcCodeDisplay"></div>
+        <button class="btn btn-primary btn-block" id="qcShareLinkBtn" style="margin-top:.75rem;">📤 Share Challenge Link</button>
+        <button class="btn btn-ghost btn-block" id="qcStartOwnBtn" style="margin-top:.5rem;">Start My Attempt Now</button>
+      </div>
+
+      <div id="qcWaiting" class="hidden">
+        <h3 class="sheet-title">⚔️ Duel Lobby</h3>
+        <p class="sheet-sub" id="qcWaitingStatus">Waiting for everyone to be ready…</p>
+        <div id="qcWaitingList"></div>
+        <button class="btn btn-primary btn-block hidden" id="qcMarkReadyBtn" style="margin-top:1rem;">I'm Ready</button>
+        <button class="btn btn-ghost btn-block hidden" id="qcForceStartBtn" style="margin-top:.5rem;">Start Now (everyone joins mid-quiz)</button>
+        <button class="btn btn-ghost btn-block hidden" id="qcEndChallengeBtn" style="margin-top:.5rem;">🗑 End This Challenge</button>
+      </div>
+
+      <div id="qcResults" class="hidden">
+        <h3 class="sheet-title">🏆 Duel Results</h3>
+        <div id="qcLeaderboard"></div>
+        <button class="btn btn-primary btn-block" id="qcNewChallengeBtn" style="margin-top:.75rem;">New Challenge →</button>
+        <button class="btn btn-ghost btn-block" id="qcDoneBtn" style="margin-top:.5rem;">Done</button>
       </div>
     </div>
   </div>
 
-  <!-- EXIT CONFIRMATION MODAL -->
-  <div id="exitConfirmModal" class="exit-modal-overlay hidden">
-    <div class="exit-modal-card">
-      <div class="exit-modal-icon" id="exitModalIcon">⚠️</div>
-      <div class="exit-modal-title" id="exitModalTitle">Exit Session?</div>
-      <div class="exit-modal-sub" id="exitModalSub">Your progress will be lost.</div>
-      <div class="exit-modal-btns">
-        <button class="exit-modal-stay" id="exitModalStay">Stay</button>
-        <button class="exit-modal-leave" id="exitModalLeave">Exit</button>
-      </div>
+  <!-- ════════════════ GAME EXPLAINER (before starting a game) ════════════════ -->
+  <div id="gameExplainerModal" class="overlay hidden">
+    <div class="sheet">
+      <button class="sheet-close" id="geClose">✕</button>
+      <div class="ge-icon" id="geIcon">🎮</div>
+      <h3 class="sheet-title" id="geTitle">Game</h3>
+      <p class="ge-subject" id="geSubjectLine"></p>
+      <ul class="ge-rules" id="geRules"></ul>
+      <button class="btn btn-primary btn-block" id="geStartBtn">Start →</button>
+      <button class="btn btn-ghost btn-block" id="geMultiplayerBtn" style="margin-top:.5rem; display:none;">🔀 Play Multiplayer instead</button>
     </div>
   </div>
 
-  <!-- SECTION A COMPLETE MODAL -->
-  <div id="sectionEndModal" class="exit-modal-overlay hidden">
-    <div class="exit-modal-card section-end-card">
-      <button class="section-end-close" id="sectionEndClose" title="Close">✕</button>
-      <div class="exit-modal-icon">📋</div>
-      <div class="exit-modal-title">Section A Complete</div>
-      <div class="exit-modal-sub" id="sectionEndSub">You have finished Section A. Your answers are saved.</div>
-      <div class="section-end-btns">
-        <button class="se-btn se-secondary" id="seRemainBtn">📖 Remain in Section A — Review/Complete</button>
-        <button class="se-btn se-primary" id="seGoBBtn">📋 Go to Section B →</button>
-        <button class="se-btn se-finish" id="seFinishBtn">✓ Finish — Submit Now</button>
-      </div>
+  <!-- ════════════════ SPEED ROUND — DIFFICULTY PICKER ════════════════ -->
+  <div id="speedLevelModal" class="overlay hidden">
+    <div class="sheet">
+      <button class="sheet-close" id="slClose">✕</button>
+      <div class="ge-icon">⚡</div>
+      <h3 class="sheet-title">Pick your pace</h3>
+      <p class="ge-subject" id="slSubjectLine"></p>
+      <div class="speed-level-options" id="slOptions"></div>
     </div>
   </div>
 
-  <!-- Teaser toast — mid session nudge -->
-  <div id="teaserToast" class="teaser-toast hidden">
-    <div class="teaser-toast-inner">
-      <span class="teaser-toast-icon">💡</span>
-      <span id="teaserToastText">Subscribers get full AI explanations for every question</span>
-      <button id="teaserToastUpgrade" class="teaser-toast-upgrade">Upgrade</button>
-      <button id="teaserToastClose" class="teaser-toast-close">✕</button>
+  <!-- ════════════════ ALREADY COMPLETED THIS ════════════════ -->
+  <div id="completedModal" class="overlay hidden">
+    <div class="sheet">
+      <button class="sheet-close" id="completedClose">✕</button>
+      <div class="ge-icon" id="completedIcon">🔁</div>
+      <h3 class="sheet-title" id="completedTitle">You've already been through this</h3>
+      <p class="sheet-sub" id="completedSub" style="text-align:center;"></p>
+      <button class="btn btn-primary btn-block" id="completedGetMoreBtn">Get fresh content with AI →</button>
+      <button class="btn btn-ghost btn-block" id="completedContinueBtn" style="margin-top:.5rem;">Continue anyway</button>
     </div>
   </div>
 
-  <!-- COMMUNITY QUIZ MODAL -->
-  <div id="quizChallengeModal" class="qc-overlay hidden">
-    <div class="qc-card">
-      <button class="qc-close" id="qcClose">✕</button>
-      <div id="qcHome">
-        <div class="qc-icon">🏆</div>
-        <h2 class="qc-title">Community Quiz</h2>
-        <p class="qc-sub">Challenge friends. See who scores higher on the same questions.</p>
-        <div class="qc-actions">
-          <button class="qc-btn qc-btn-primary" id="qcCreateBtn">Create a Challenge →</button>
-          <button class="qc-btn qc-btn-secondary" id="qcJoinBtn">Join with a Code</button>
-        </div>
-        <div class="qc-join-row hidden" id="qcJoinRow">
-          <input id="qcJoinCode" class="qc-code-input" placeholder="Enter challenge code" maxlength="10"/>
-          <button class="qc-btn qc-btn-primary" id="qcJoinConfirm">Join →</button>
-        </div>
-        <div id="qcPendingWrap" class="hidden">
-          <h4 class="qc-pending-title">Your Challenges (<span id="qcPendingCount">0</span>/<span id="qcPendingMax">5</span>)</h4>
-          <div id="qcPendingList" class="qc-pending-list"></div>
-        </div>
-      </div>
-
-      <div id="qcCreate" class="hidden">
-        <h3 class="qc-section-title">Set Up Your Challenge</h3>
-        <div class="qc-form">
-          <div class="qc-field">
-            <label class="qc-label">Subjects (pick one or more)</label>
-            <div id="qcSubjects" class="qc-subject-checks"></div>
-          </div>
-          <div class="qc-field">
-            <label class="qc-label">Exam board <span class="qc-optional-tag">(optional — defaults to all, for the widest variety)</span></label>
-            <select id="qcExamBoard" class="qc-select">
-              <option value="" selected>All boards</option>
-              <option value="WAEC">WAEC only</option>
-              <option value="NECO">NECO only</option>
-              <option value="GCE">GCE only</option>
-              <option value="NABTEB">NABTEB only</option>
-            </select>
-          </div>
-          <div class="qc-field">
-            <label class="qc-label">Year range <span class="qc-optional-tag">(optional)</span></label>
-            <select id="qcYearRange" class="qc-select">
-              <option value="" selected>All years</option>
-              <option value="2023-2023">2023 only</option>
-              <option value="2021-2023">2021 – 2023</option>
-              <option value="2019-2020">2019 – 2020</option>
-            </select>
-          </div>
-          <div class="qc-field">
-            <label class="qc-label">Questions</label>
-            <select id="qcCount" class="qc-select">
-              <option value="5">5 Questions</option>
-              <option value="10" selected>10 Questions</option>
-              <option value="20">20 Questions</option>
-            </select>
-          </div>
-          <p class="qc-note" style="margin-top:0">💡 By default each challenge avoids questions you've used in your last few challenges, so repeated matches with the same friends stay fresh.</p>
-          <div class="qc-field">
-            <label class="qc-label">Time limit</label>
-            <select id="qcTime" class="qc-select">
-              <option value="0">No limit</option>
-              <option value="5">5 minutes</option>
-              <option value="10" selected>10 minutes</option>
-              <option value="15">15 minutes</option>
-              <option value="20">20 minutes</option>
-            </select>
-          </div>
-          <div class="qc-field">
-            <label class="qc-label">Start mode</label>
-            <div class="qc-radio-group">
-              <label class="qc-radio"><input type="radio" name="qcSyncMode" value="anytime" checked/> <span>Anytime — everyone takes it at their own pace</span></label>
-              <label class="qc-radio"><input type="radio" name="qcSyncMode" value="ready"/> <span>Wait until everyone's ready, then start together</span></label>
-              <label class="qc-radio"><input type="radio" name="qcSyncMode" value="scheduled"/> <span>Start at a specific time — late joiners jump into the already-running timer</span></label>
-            </div>
-            <div id="qcScheduledTimeWrap" class="hidden" style="margin-top:.5rem">
-              <input type="datetime-local" id="qcScheduledTime" class="qc-select" style="width:100%"/>
-            </div>
-          </div>
-        </div>
-        <button class="qc-btn qc-btn-primary" id="qcGenerateBtn" style="width:100%">Generate Challenge Code →</button>
-        <button class="qc-btn qc-btn-ghost" id="qcBackBtn">← Back</button>
-      </div>
-
-      <div id="qcShare" class="hidden">
-        <div class="qc-icon">🎯</div>
-        <h3 class="qc-section-title">Challenge Created!</h3>
-        <p class="qc-sub">Share this code with friends. It expires in 24 hours.</p>
-        <div class="qc-code-display" id="qcCodeDisplay">MEA-000</div>
-        <button class="qc-btn qc-btn-primary" id="qcShareLinkBtn" style="width:100%;margin-bottom:.5rem">📤 Share Challenge Link</button>
-        <button class="qc-btn qc-btn-primary" id="qcStartOwnBtn" style="width:100%;margin-bottom:.5rem">Start My Attempt →</button>
-        <p class="qc-note">You and your friends take the same questions. Scores are compared on the leaderboard.</p>
-        <button class="qc-btn qc-btn-ghost" id="qcShareBackBtn">← Back</button>
-      </div>
-
-      <div id="qcLeaderboard" class="hidden">
-        <div class="qc-icon">📊</div>
-        <h3 class="qc-section-title">Challenge Results</h3>
-        <div id="qcLeaderboardList" class="qc-leaderboard-list"></div>
-        <button class="qc-btn qc-btn-primary" id="qcNewChallengeBtn" style="width:100%;margin-top:.75rem">New Challenge →</button>
-        <button class="qc-btn qc-btn-ghost" id="qcDoneBtn">Done</button>
-      </div>
-
-      <div id="qcWaitingRoom" class="hidden">
-        <div class="qc-icon">⏱️</div>
-        <h3 class="qc-section-title">Waiting Room</h3>
-        <div class="qc-code-display" id="qcWaitingCodeDisplay">MEA-000</div>
-        <p class="qc-sub" id="qcWaitingStatus">Waiting for everyone to be ready…</p>
-        <p class="qc-countdown hidden" id="qcWaitingCountdown"></p>
-        <div id="qcWaitingList" class="qc-leaderboard-list" style="margin-bottom:1rem"></div>
-        <button class="qc-btn qc-btn-primary" id="qcReadyBtn" style="width:100%;margin-bottom:.5rem">✅ I'm Ready</button>
-        <button class="qc-btn qc-btn-secondary hidden" id="qcForceStartBtn" style="width:100%;margin-bottom:.5rem">▶ Start Now (everyone else joins mid-way)</button>
-        <button class="qc-btn qc-btn-ghost hidden" id="qcEndChallengeBtn" style="width:100%">🗑 End This Challenge</button>
-        <button class="qc-btn qc-btn-ghost" id="qcWaitingBackBtn" style="margin-top:.4rem">← Back</button>
-      </div>
-
+  <!-- ════════════════ AI CREDITS PAYWALL ════════════════ -->
+  <div id="aiPaywallModal" class="overlay hidden">
+    <div class="sheet">
+      <button class="sheet-close" id="paywallClose">✕</button>
+      <div class="paywall-icon">✨</div>
+      <h3 class="sheet-title" style="text-align:center;">You're out of AI credits</h3>
+      <p class="sheet-sub" style="text-align:center;">Unlock a 2-Day AI Boost — 10 credits for Project Helper, Explain Differently, fresh game questions, AI-boosted challenges, and extra flashcards in Study Library.</p>
+      <div class="paywall-price">₦500 <span>for 10 credits, 48 hours to use them</span></div>
+      <button class="btn btn-primary btn-block" id="paywallPayBtn">Pay ₦500 →</button>
+      <button class="btn btn-ghost btn-block" id="paywallLaterBtn" style="margin-top:.5rem;">Maybe later</button>
+      <p class="paywall-note">Revision, Quiz, and Study Library stay free, no limit. Games have a free daily allowance — see the Games Pass if you've used yours up.</p>
     </div>
   </div>
 
-  <!-- SHARED SESSION VIEW -->
-  <div id="sharedSessionModal" class="ss-overlay hidden">
-    <div class="ss-card">
-      <div class="ss-header">
-        <div class="ss-logo">⭐ My<em>Exams</em>App</div>
-        <button class="ss-close" id="ssClose">✕</button>
-      </div>
-      <div id="ssContent">
-        <div class="ss-emoji" id="ssEmoji">🏆</div>
-        <div class="ss-score" id="ssScore">0%</div>
-        <div class="ss-grade" id="ssGrade">Distinction</div>
-        <div class="ss-meta" id="ssMeta"></div>
-        <div class="ss-stats" id="ssStats"></div>
-        <div class="ss-bar-wrap"><div class="ss-bar-fill" id="ssBarFill"></div></div>
-        <div class="ss-questions" id="ssQuestions"></div>
-      </div>
-      <div class="ss-footer">
-        <p class="ss-cta">Think you can do better?</p>
-        <button class="ss-try-btn" id="ssTryBtn">Try This Subject →</button>
-        <p class="ss-app-link">My Exams App — WAEC · NECO · GCE · NABTEB · JAMB</p>
-      </div>
+  <!-- ════════════════ GAMES PAYWALL ════════════════ -->
+  <div id="gamesPaywallModal" class="overlay hidden">
+    <div class="sheet">
+      <button class="sheet-close" id="gpClose">✕</button>
+      <div class="paywall-icon">🎮</div>
+      <h3 class="sheet-title" style="text-align:center;">You're out of free game rounds</h3>
+      <p class="sheet-sub" style="text-align:center;">Revision, Quiz, and Study Library stay free forever — this is just for the games.</p>
+      <div class="paywall-price">₦400 <span>for 7 days of unlimited games</span></div>
+      <button class="btn btn-primary btn-block" id="gpPassBtn">Get 7-Day Games Pass →</button>
+      <button class="btn btn-ghost btn-block" id="gpTopupBtn" style="margin-top:.5rem;">Or just add 15 more rounds — ₦150</button>
+      <button class="btn btn-ghost btn-block" id="gpClose2" style="margin-top:.5rem;">Maybe later</button>
     </div>
   </div>
 
-  <!-- Community quiz trigger button -->
-  <button id="quizChallengeBtn" class="qc-trigger-btn hidden">
-    🏆 Challenge a Friend
-    <span id="qcChallengeBadge" class="qc-challenge-badge hidden"></span>
-  </button>
+  <!-- ════════════════ MULTIPLAYER WORD SCRAMBLE ════════════════ -->
+  <div id="wsChallengeModal" class="overlay hidden">
+    <div class="sheet">
+      <button class="sheet-close" id="wsClose">✕</button>
+      <div id="wsChallengeBody"></div>
+    </div>
+  </div>
 
-</div><!-- #app -->
-<script src="https://js.paystack.co/v1/inline.js"></script>
-<script src="data/questions.js?v=41b"></script>
-<script src="js/app.js?v=41b"></script>
+  <!-- ════════════════ NAME PROMPT (first run) ════════════════ -->
+  <div id="namePromptModal" class="overlay hidden">
+    <div class="sheet">
+      <h3 class="sheet-title">What's your name?</h3>
+      <p class="sheet-sub">So your friends know it's you on the leaderboard.</p>
+      <input id="nameInput" class="text-input" placeholder="e.g. Emeka" style="margin-top:1rem;"/>
+      <button class="btn btn-primary btn-block" id="nameConfirmBtn" style="margin-top:.75rem;">Continue →</button>
+    </div>
+  </div>
+
+  <div id="toastHost"></div>
+
+</div>
+
+<script src="data/senior/senior-bank.js"></script>
+<script src="data/senior/senior-resources.js"></script>
+<script src="data/junior/junior-bank.js"></script>
+<script src="data/junior/junior-resources.js"></script>
+<script src="data/manifest.js"></script>
+<script src="js/app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {
+        // Offline support just won't be available this session — the app
+        // still works fully online, so fail silently rather than alarm anyone.
+      });
+    });
+  }
+</script>
 </body>
 </html>
