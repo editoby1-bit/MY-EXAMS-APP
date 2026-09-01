@@ -11,6 +11,8 @@
     free:    'mea-free-lifetime-v1',   // lifetime trial counter
     streak:  'mea-streak-v1',
     tier:    'mea-tier-v1',            // 'student' | 'plus'
+    class:   'mea-class-v1',           // { classCode, name, pin } — this device's class membership
+    classAdmin: 'mea-class-admin-v1',  // { classCode, adminSecret, schoolName } — teacher device only
   };
   const FREE_TRIAL_LIMIT    = 10;   // lifetime questions, not daily
   const FREE_SNAP_LIMIT     = 3;    // lifetime snaps on free tier
@@ -119,6 +121,30 @@
       checkForStartedChallenges();
       checkScheduledChallengeReminders();
     }, 45000);
+
+    // School & Class nav card + back buttons for the new dashboard screens
+    const classNav = document.getElementById('classNavCard');
+    if (classNav) classNav.addEventListener('click', openClassScreen);
+    const cbb = document.getElementById('classBackBtn');
+    if (cbb) cbb.addEventListener('click', () => showScreen('home'));
+    const tbb = document.getElementById('teacherDashBackBtn');
+    if (tbb) tbb.addEventListener('click', () => showScreen('home'));
+    const pbb = document.getElementById('parentDashBackBtn');
+    if (pbb) pbb.addEventListener('click', () => showScreen('home'));
+
+    // Direct-link entry points for teacher/parent dashboards — e.g.
+    // ?dash=teacher (this device's saved admin credentials, from Create
+    // Class) or ?dash=parent&code=P-XXXXXXXX (works on ANY device — the
+    // parent code itself is the credential).
+    const dashParams = new URLSearchParams(location.search);
+    const dashParam = dashParams.get('dash');
+    if (dashParam === 'teacher') {
+      const admin = loadSafe(SK.classAdmin);
+      if (admin) openTeacherDashboard(admin.classCode, admin.adminSecret);
+      else openClassScreen();
+    } else if (dashParam === 'parent') {
+      openParentDashboard(dashParams.get('code'));
+    }
   }
 
   function countQuestions() {
@@ -1013,10 +1039,267 @@
     _lastQuestions = [...S.questions];
     _lastAnswers   = [...S.answers];
 
+    // Captured before saveChallengeScore runs — it clears S._challengeCode
+    // synchronously as one of its first lines.
+    const wasChallenge = !!S._challengeCode;
+
     // Save challenge score if this was a challenge session
     if (S._challengeCode && total > 0) {
       saveChallengeScore(correct, total);
     }
+
+    // Best-effort report to the class dashboard (no-op if this device
+    // hasn't joined a class). Only objective questions are auto-graded
+    // here, so "missed" only ever covers those.
+    if (total > 0) {
+      const missed = objQs
+        .filter(q => {
+          const a = S.answers[S.questions.indexOf(q)];
+          return a !== null && a !== 'seen' && a !== q.answer;
+        })
+        .map(q => q.id).filter(Boolean);
+      recordClassSession({
+        subject: SUBJECTS[S.subject]?.name || S.subject,
+        exam: S.exam,
+        mode: wasChallenge ? 'challenge' : 'practice',
+        score: correct, total, missed,
+      });
+    }
+  }
+
+  /* ════════ SCHOOL / PARENT DASHBOARDS ════════
+     A student joins a class with a class code + a 4-6 digit PIN they pick
+     (stops another student claiming their name). Every completed session
+     (practice, exam, or challenge) reports to /api/dashboard — best-effort,
+     never blocks the student's own result screen. A parent link is a
+     read-only code the student's own device generates for one child. */
+  function getClassMembership() { return loadSafe(SK.class); }
+  function saveClassMembership(m) { saveSafe(SK.class, m); }
+  function clearClassMembership() { try { localStorage.removeItem(SK.class); } catch (e) {} }
+
+  async function dashApi(action, body) {
+    const res = await fetch(API_BASE + '/api/dashboard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...body }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  }
+
+  async function recordClassSession({ subject, exam, mode, score, total, missed }) {
+    const m = getClassMembership();
+    if (!m) return;
+    try {
+      await dashApi('record_session', {
+        classCode: m.classCode, name: m.name, pin: m.pin,
+        subject, category: exam, mode, score, total, missed, timestamp: Date.now(),
+      });
+    } catch (e) { /* offline or class removed — not worth surfacing */ }
+  }
+
+  function openClassScreen() {
+    showScreen('class');
+    renderClassScreen();
+  }
+
+  function renderClassScreen() {
+    const body = document.getElementById('classBody');
+    const m = getClassMembership();
+
+    if (m) {
+      body.innerHTML = `
+        <div class="card" style="padding:1rem; margin-bottom:1rem;">
+          <p style="margin:0 0 .35rem;">You're in a class</p>
+          <p style="color:var(--text-dim,#8a94a6); font-size:.9rem;">Class code <b>${safe(m.classCode)}</b> · joined as <b>${safe(m.name)}</b></p>
+          <p style="color:var(--text-dim,#8a94a6); font-size:.85rem;">Your practice sessions and challenges are now shared with your teacher's class dashboard.</p>
+        </div>
+        <div class="card" style="padding:1rem; margin-bottom:1rem;">
+          <p style="margin:0 0 .5rem; font-weight:600;">Share progress with a parent</p>
+          <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:.75rem;">Generates a link only they can use — nobody else's results.</p>
+          <button class="btn-primary" id="genParentLinkBtn" style="width:100%;">Generate Parent Link</button>
+          <div id="parentLinkOut" style="margin-top:.75rem;"></div>
+        </div>
+        <button class="btn-secondary" id="leaveClassBtn" style="width:100%;">Leave Class</button>
+      `;
+      document.getElementById('genParentLinkBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('genParentLinkBtn');
+        btn.disabled = true; btn.textContent = 'Generating…';
+        try {
+          const { parentCode } = await dashApi('link_parent', { classCode: m.classCode, name: m.name, pin: m.pin });
+          const url = `${location.origin}${location.pathname}?dash=parent&code=${encodeURIComponent(parentCode)}`;
+          document.getElementById('parentLinkOut').innerHTML = `
+            <input class="text-field" readonly value="${safe(parentCode)}" style="margin-bottom:.5rem;">
+            <p style="font-size:.78rem; color:var(--text-dim,#8a94a6);">Or send this link: <br><span style="word-break:break-all;">${safe(url)}</span></p>`;
+        } catch (e) {
+          showInfoToast(e.message || 'Could not generate link');
+        }
+        btn.disabled = false; btn.textContent = 'Generate Parent Link';
+      });
+      document.getElementById('leaveClassBtn').addEventListener('click', () => {
+        if (!confirm('Leave this class? You can rejoin any time with the class code.')) return;
+        clearClassMembership();
+        renderClassScreen();
+      });
+      return;
+    }
+
+    body.innerHTML = `
+      <div class="card" style="padding:1rem; margin-bottom:1rem;">
+        <p style="margin:0 0 .5rem; font-weight:600;">Join your class</p>
+        <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:1rem;">Ask your teacher for the class code. Pick a 4-6 digit PIN — this keeps your results only yours.</p>
+        <input class="text-field" id="joinClassCode" placeholder="Class code (e.g. C-XXXXXX)" style="margin-bottom:.6rem;" autocapitalize="characters">
+        <input class="text-field" id="joinClassName" placeholder="Your name" value="${S.currentUser ? safe(S.currentUser) : ''}" style="margin-bottom:.6rem;">
+        <input class="text-field" id="joinClassPin" type="tel" placeholder="PIN (4-6 digits)" maxlength="6" style="margin-bottom:.8rem;">
+        <button class="btn-primary" id="joinClassBtn" style="width:100%;">Join Class</button>
+      </div>
+      <div class="card" style="padding:1rem;">
+        <p style="margin:0 0 .5rem; font-weight:600;">Are you a teacher?</p>
+        <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:1rem;">Create a class and get a code to share with your students.</p>
+        <button class="btn-secondary" id="showCreateClassBtn" style="width:100%;">Create a Class</button>
+        <div id="createClassForm" class="hidden" style="margin-top:1rem;">
+          <input class="text-field" id="newSchoolName" placeholder="School / class name" style="margin-bottom:.6rem;">
+          <input class="text-field" id="newAdminPin" type="tel" placeholder="Admin PIN (4-6 digits, for recovery)" maxlength="6" style="margin-bottom:.8rem;">
+          <button class="btn-primary" id="createClassBtn" style="width:100%;">Create Class</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('joinClassBtn').addEventListener('click', async () => {
+      const classCode = document.getElementById('joinClassCode').value.trim().toUpperCase();
+      const name = document.getElementById('joinClassName').value.trim();
+      const pin = document.getElementById('joinClassPin').value.trim();
+      if (!classCode || !name || !/^\d{4,6}$/.test(pin)) { showInfoToast('Fill in class code, name, and a 4-6 digit PIN.'); return; }
+      const btn = document.getElementById('joinClassBtn');
+      btn.disabled = true; btn.textContent = 'Joining…';
+      try {
+        await dashApi('join_class', { classCode, name, pin });
+        saveClassMembership({ classCode, name, pin });
+        showInfoToast('Joined class!');
+        renderClassScreen();
+      } catch (e) {
+        showInfoToast(e.message || 'Could not join class');
+        btn.disabled = false; btn.textContent = 'Join Class';
+      }
+    });
+
+    document.getElementById('showCreateClassBtn').addEventListener('click', () => {
+      document.getElementById('createClassForm').classList.toggle('hidden');
+    });
+
+    document.getElementById('createClassBtn').addEventListener('click', async () => {
+      const schoolName = document.getElementById('newSchoolName').value.trim();
+      const adminPin = document.getElementById('newAdminPin').value.trim();
+      if (!schoolName || !/^\d{4,6}$/.test(adminPin)) { showInfoToast('Enter a class name and a 4-6 digit PIN.'); return; }
+      const btn = document.getElementById('createClassBtn');
+      btn.disabled = true; btn.textContent = 'Creating…';
+      try {
+        const { classCode, adminSecret } = await dashApi('create_class', { schoolName, adminPin });
+        saveSafe(SK.classAdmin, { classCode, adminSecret, schoolName });
+        const url = `${location.origin}${location.pathname}?dash=teacher`;
+        document.getElementById('createClassForm').innerHTML = `
+          <div class="card-inset" style="padding:1rem;">
+            <p style="font-weight:600; margin-bottom:.5rem;">Class created! Share this code with your students:</p>
+            <p style="font-size:1.4rem; font-weight:700; letter-spacing:.05em;">${safe(classCode)}</p>
+            <p style="font-size:.8rem; color:var(--text-dim,#8a94a6); margin-top:.75rem;">Your teacher dashboard is saved on this device. Open it any time from: <br><span style="word-break:break-all;">${safe(url)}</span></p>
+            <button class="btn-primary" style="width:100%; margin-top:1rem;" id="openTeacherDashBtn">Open Teacher Dashboard</button>
+          </div>`;
+        document.getElementById('openTeacherDashBtn').addEventListener('click', () => openTeacherDashboard(classCode, adminSecret));
+      } catch (e) {
+        showInfoToast(e.message || 'Could not create class');
+        btn.disabled = false; btn.textContent = 'Create Class';
+      }
+    });
+  }
+
+  /* ── Teacher dashboard (class-wide view) ─────────────────────── */
+  function openTeacherDashboard(classCode, adminSecret) {
+    showScreen('teacherDash');
+    document.getElementById('teacherDashBody').innerHTML = `<p style="color:var(--text-dim,#8a94a6);">Loading class…</p>`;
+    dashApi('get_class_dashboard', { classCode, adminSecret }).then(renderTeacherDash).catch(e => {
+      document.getElementById('teacherDashBody').innerHTML = `<p style="color:var(--red,#e55);">${safe(e.message || 'Could not load dashboard')}</p>`;
+    });
+  }
+  function renderTeacherDash(data) {
+    const body = document.getElementById('teacherDashBody');
+    if (!data.students.length) {
+      body.innerHTML = `<p style="color:var(--text-dim,#8a94a6);">No students have joined <b>${safe(data.classCode)}</b> yet. Share the class code to get started.</p>`;
+      return;
+    }
+    const sorted = [...data.students].sort((a, b) => (b.avgPct || 0) - (a.avgPct || 0));
+    body.innerHTML = `
+      <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:1rem;">${safe(data.schoolName || 'Class')} · ${data.students.length} student${data.students.length === 1 ? '' : 's'}</p>
+      ${sorted.map(s => `
+        <div class="card-inset" style="padding:1rem; margin-bottom:.85rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong>${safe(s.name)}</strong>
+            <span style="font-weight:700; font-size:1.1rem;">${s.avgPct == null ? '—' : s.avgPct + '%'}</span>
+          </div>
+          <p style="font-size:.8rem; color:var(--text-dim,#8a94a6); margin:.35rem 0;">${s.sessionCount} session${s.sessionCount === 1 ? '' : 's'} · ${s.practiceCount || 0} practice · ${s.challengeCount || 0} challenge${(s.challengeCount || 0) === 1 ? '' : 's'}</p>
+          ${renderSubjectBreakdown(s.bySubject)}
+        </div>`).join('')}
+    `;
+  }
+  function renderSubjectBreakdown(bySubject) {
+    const entries = Object.entries(bySubject || {});
+    if (!entries.length) return '';
+    return `<div style="border-top:1px solid var(--border,#e2e2e2); margin-top:.5rem; padding-top:.5rem;">
+      ${entries.sort((a, b) => a[1].avgPct - b[1].avgPct).map(([subj, d]) => `
+        <div style="display:flex; justify-content:space-between; font-size:.82rem; padding:.2rem 0;">
+          <span>${safe(subj)} ${d.weakQuestions.length ? '⚠️' : ''}</span>
+          <span style="color:var(--text-dim,#8a94a6);">${d.avgPct}% avg · ${d.sessions}x</span>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  /* ── Parent dashboard (single-child, read-only) ──────────────── */
+  function openParentDashboard(prefillCode) {
+    showScreen('parentDash');
+    const body = document.getElementById('parentDashBody');
+    body.innerHTML = `
+      <input class="text-field" id="parentCodeInput" placeholder="Parent code (e.g. P-XXXXXXXX)" value="${prefillCode ? safe(prefillCode) : ''}" style="margin-bottom:.6rem;">
+      <button class="btn-primary" id="parentCodeGoBtn" style="width:100%;">View Progress</button>
+      <p id="parentCodeErr" style="color:var(--red,#e55); font-size:.82rem; margin-top:.5rem;"></p>`;
+    const go = async () => {
+      const code = document.getElementById('parentCodeInput').value.trim().toUpperCase();
+      if (!code) return;
+      const btn = document.getElementById('parentCodeGoBtn');
+      btn.disabled = true; btn.textContent = 'Loading…';
+      try {
+        const data = await dashApi('get_parent_dashboard', { parentCode: code });
+        renderParentDash(data);
+      } catch (e) {
+        document.getElementById('parentCodeErr').textContent = e.message || 'Could not load — check the code.';
+        btn.disabled = false; btn.textContent = 'View Progress';
+      }
+    };
+    document.getElementById('parentCodeGoBtn').addEventListener('click', go);
+    if (prefillCode) go();
+  }
+  function renderParentDash(data) {
+    const body = document.getElementById('parentDashBody');
+    body.innerHTML = `
+      <div class="card-inset" style="padding:1rem; margin-bottom:1rem;">
+        <strong>${safe(data.name)}</strong>
+        <p style="font-size:.85rem; color:var(--text-dim,#8a94a6);">${safe(data.schoolName || '')}</p>
+        <div style="display:flex; gap:1.5rem; margin-top:.75rem;">
+          <div><span style="font-weight:700; font-size:1.3rem;">${data.avgPct == null ? '—' : data.avgPct + '%'}</span><br><span style="font-size:.75rem; color:var(--text-dim,#8a94a6);">Average</span></div>
+          <div><span style="font-weight:700; font-size:1.3rem;">${data.sessions.length}</span><br><span style="font-size:.75rem; color:var(--text-dim,#8a94a6);">Sessions</span></div>
+        </div>
+      </div>
+      <div class="card-inset" style="padding:1rem; margin-bottom:1rem;">
+        <p style="margin:0 0 .5rem; font-weight:600;">By subject</p>
+        ${renderSubjectBreakdown(data.bySubject) || '<p style="color:var(--text-dim,#8a94a6); font-size:.85rem;">No sessions yet.</p>'}
+      </div>
+      <div class="card-inset" style="padding:1rem;">
+        <p style="margin:0 0 .5rem; font-weight:600;">Recent sessions</p>
+        ${data.sessions.slice(0, 15).map(s => `
+          <div style="display:flex; justify-content:space-between; font-size:.82rem; padding:.3rem 0; border-bottom:1px solid var(--border,#e2e2e2);">
+            <span>${safe(s.subject)} ${s.mode === 'challenge' ? '🏆' : ''}</span>
+            <span style="color:var(--text-dim,#8a94a6);">${s.score}/${s.total} · ${new Date(s.at).toLocaleDateString()}</span>
+          </div>`).join('') || '<p style="color:var(--text-dim,#8a94a6); font-size:.85rem;">No sessions yet.</p>'}
+      </div>`;
   }
 
   /* ════════ RESULTS ════════ */
@@ -3439,7 +3722,7 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
 
   /* ════════ SCREENS ════════ */
   function showScreen(name) {
-    ['home','quiz','result'].forEach(n => {
+    ['home','quiz','result','class','teacherDash','parentDash'].forEach(n => {
       document.getElementById(n+'Screen').classList.toggle('active', n===name);
     });
     window.scrollTo(0,0);

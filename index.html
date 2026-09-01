@@ -183,6 +183,14 @@
           </div>
         </div>
 
+        <!-- School & Class -->
+        <div class="setup-panel card" id="classNavCard" style="cursor:pointer;">
+          <div class="panel-head">
+            <span class="panel-label">🏫 School & Class</span>
+          </div>
+          <p style="font-size:.85rem; color:var(--text-dim,#8a94a6); margin:.25rem 0 0;">Join your class, or share your progress with a parent.</p>
+        </div>
+
         <!-- Hosted Contest Coming Soon -->
         <div class="contest-card card" id="contestCard">
           <!-- Collapsed state — always visible slim bar -->
@@ -582,6 +590,39 @@
       </footer>
     </div>
   </section><!-- #resultScreen -->
+
+  <!-- ════════════════ SCHOOL / CLASS ════════════════ -->
+  <section id="classScreen" class="screen">
+    <div class="result-page">
+      <div class="card" style="padding:1.5rem; max-width:520px; margin:0 auto 1rem;">
+        <button class="ghost-link" id="classBackBtn" style="margin-bottom:.5rem;">← Back</button>
+        <h2 style="margin:.25rem 0 1rem;">School & Class</h2>
+        <div id="classBody"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ TEACHER DASHBOARD (class-wide) ════════════════ -->
+  <section id="teacherDashScreen" class="screen">
+    <div class="result-page">
+      <div class="card" style="padding:1.5rem; max-width:640px; margin:0 auto 1rem;">
+        <button class="ghost-link" id="teacherDashBackBtn" style="margin-bottom:.5rem;">← Back</button>
+        <h2 style="margin:.25rem 0 1rem;">Class Dashboard</h2>
+        <div id="teacherDashBody"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ PARENT DASHBOARD (single child) ════════════════ -->
+  <section id="parentDashScreen" class="screen">
+    <div class="result-page">
+      <div class="card" style="padding:1.5rem; max-width:520px; margin:0 auto 1rem;">
+        <button class="ghost-link" id="parentDashBackBtn" style="margin-bottom:.5rem;">← Back</button>
+        <h2 style="margin:.25rem 0 1rem;">Your Child's Progress</h2>
+        <div id="parentDashBody"></div>
+      </div>
+    </div>
+  </section>
 
   <!-- SNAP AND MARK RESULTS -->
   <div id="snapResultModal" class="snap-overlay hidden">
