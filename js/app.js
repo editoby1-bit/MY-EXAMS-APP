@@ -124,7 +124,7 @@
 
     // School & Class nav card + back buttons for the new dashboard screens
     const classNav = document.getElementById('classNavCard');
-    if (classNav) classNav.addEventListener('click', openClassScreen);
+    if (classNav) classNav.addEventListener('click', () => openClassScreen());
     const cbb = document.getElementById('classBackBtn');
     if (cbb) cbb.addEventListener('click', () => showScreen('home'));
     const tbb = document.getElementById('teacherDashBackBtn');
@@ -141,7 +141,7 @@
     if (dashParam === 'teacher') {
       const admin = loadSafe(SK.classAdmin);
       if (admin) openTeacherDashboard(admin.classCode, admin.adminSecret);
-      else openClassScreen();
+      else openClassScreen('teacher');
     } else if (dashParam === 'parent') {
       openParentDashboard(dashParams.get('code'));
     }
@@ -1099,15 +1099,39 @@
     } catch (e) { /* offline or class removed — not worth surfacing */ }
   }
 
-  function openClassScreen() {
+  let _classTab = null; // 'student' | 'teacher' | 'parent' — remembered while classScreen is open
+
+  function openClassScreen(tab) {
     showScreen('class');
+    if (tab) _classTab = tab;
     renderClassScreen();
   }
 
   function renderClassScreen() {
+    if (!_classTab) {
+      _classTab = getClassMembership() ? 'student' : (loadSafe(SK.classAdmin) ? 'teacher' : 'student');
+    }
     const body = document.getElementById('classBody');
-    const m = getClassMembership();
+    body.innerHTML = `
+      <div class="mode-toggle" id="classTabBar" style="margin-bottom:1rem;">
+        <button class="mode-btn ${_classTab === 'student' ? 'active' : ''}" data-tab="student">Student</button>
+        <button class="mode-btn ${_classTab === 'teacher' ? 'active' : ''}" data-tab="teacher">Teacher</button>
+        <button class="mode-btn ${_classTab === 'parent' ? 'active' : ''}" data-tab="parent">Parent</button>
+      </div>
+      <div id="classTabBody"></div>
+    `;
+    document.querySelectorAll('#classTabBar [data-tab]').forEach(btn => {
+      btn.addEventListener('click', () => { _classTab = btn.dataset.tab; renderClassScreen(); });
+    });
+    const tabBody = document.getElementById('classTabBody');
+    if (_classTab === 'teacher') renderTeacherTab(tabBody);
+    else if (_classTab === 'parent') renderParentTab(tabBody);
+    else renderStudentTab(tabBody);
+  }
 
+  /* ── Student tab: join a class, or manage membership + parent link ── */
+  function renderStudentTab(body) {
+    const m = getClassMembership();
     if (m) {
       body.innerHTML = `
         <div class="card" style="padding:1rem; margin-bottom:1rem;">
@@ -1146,7 +1170,7 @@
     }
 
     body.innerHTML = `
-      <div class="card" style="padding:1rem; margin-bottom:1rem;">
+      <div class="card" style="padding:1rem;">
         <p style="margin:0 0 .5rem; font-weight:600;">Join your class</p>
         <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:1rem;">Ask your teacher for the class code. Pick a 4-6 digit PIN — this keeps your results only yours.</p>
         <input class="text-field" id="joinClassCode" placeholder="Class code (e.g. C-XXXXXX)" style="margin-bottom:.6rem;" autocapitalize="characters">
@@ -1154,18 +1178,7 @@
         <input class="text-field" id="joinClassPin" type="tel" placeholder="PIN (4-6 digits)" maxlength="6" style="margin-bottom:.8rem;">
         <button class="btn-primary" id="joinClassBtn" style="width:100%;">Join Class</button>
       </div>
-      <div class="card" style="padding:1rem;">
-        <p style="margin:0 0 .5rem; font-weight:600;">Are you a teacher?</p>
-        <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:1rem;">Create a class and get a code to share with your students.</p>
-        <button class="btn-secondary" id="showCreateClassBtn" style="width:100%;">Create a Class</button>
-        <div id="createClassForm" class="hidden" style="margin-top:1rem;">
-          <input class="text-field" id="newSchoolName" placeholder="School / class name" style="margin-bottom:.6rem;">
-          <input class="text-field" id="newAdminPin" type="tel" placeholder="Admin PIN (4-6 digits, for recovery)" maxlength="6" style="margin-bottom:.8rem;">
-          <button class="btn-primary" id="createClassBtn" style="width:100%;">Create Class</button>
-        </div>
-      </div>
     `;
-
     document.getElementById('joinClassBtn').addEventListener('click', async () => {
       const classCode = document.getElementById('joinClassCode').value.trim().toUpperCase();
       const name = document.getElementById('joinClassName').value.trim();
@@ -1181,6 +1194,64 @@
       } catch (e) {
         showInfoToast(e.message || 'Could not join class');
         btn.disabled = false; btn.textContent = 'Join Class';
+      }
+    });
+  }
+
+  /* ── Teacher tab: create a class, or log in to an existing one ── */
+  function renderTeacherTab(body) {
+    const admin = loadSafe(SK.classAdmin);
+    if (admin) {
+      body.innerHTML = `
+        <div class="card" style="padding:1rem; margin-bottom:1rem;">
+          <p style="margin:0 0 .35rem;">Logged in as admin</p>
+          <p style="color:var(--text-dim,#8a94a6); font-size:.9rem;">${safe(admin.schoolName || 'Class')} · code <b>${safe(admin.classCode)}</b></p>
+        </div>
+        <button class="btn-primary" id="openTeacherDashBtn2" style="width:100%; margin-bottom:.6rem;">Open Teacher Dashboard</button>
+        <button class="btn-secondary" id="teacherLogoutBtn" style="width:100%;">Log Out / Switch Class</button>
+      `;
+      document.getElementById('openTeacherDashBtn2').addEventListener('click', () => openTeacherDashboard(admin.classCode, admin.adminSecret));
+      document.getElementById('teacherLogoutBtn').addEventListener('click', () => {
+        try { localStorage.removeItem(SK.classAdmin); } catch (e) {}
+        renderClassScreen();
+      });
+      return;
+    }
+
+    body.innerHTML = `
+      <div class="card" style="padding:1rem; margin-bottom:1rem;">
+        <p style="margin:0 0 .5rem; font-weight:600;">Log in to your class</p>
+        <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:1rem;">Already created a class? Log back in with your class code and admin PIN.</p>
+        <input class="text-field" id="loginClassCode" placeholder="Class code (e.g. C-XXXXXX)" style="margin-bottom:.6rem;" autocapitalize="characters">
+        <input class="text-field" id="loginAdminPin" type="tel" placeholder="Admin PIN" maxlength="6" style="margin-bottom:.8rem;">
+        <button class="btn-primary" id="teacherLoginBtn" style="width:100%;">Log In</button>
+      </div>
+      <div class="card" style="padding:1rem;">
+        <p style="margin:0 0 .5rem; font-weight:600;">New here?</p>
+        <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:1rem;">Create a class and get a code to share with your students.</p>
+        <button class="btn-secondary" id="showCreateClassBtn" style="width:100%;">Create a Class</button>
+        <div id="createClassForm" class="hidden" style="margin-top:1rem;">
+          <input class="text-field" id="newSchoolName" placeholder="School / class name" style="margin-bottom:.6rem;">
+          <input class="text-field" id="newAdminPin" type="tel" placeholder="Admin PIN (4-6 digits, for future logins)" maxlength="6" style="margin-bottom:.8rem;">
+          <button class="btn-primary" id="createClassBtn" style="width:100%;">Create Class</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('teacherLoginBtn').addEventListener('click', async () => {
+      const classCode = document.getElementById('loginClassCode').value.trim().toUpperCase();
+      const adminPin = document.getElementById('loginAdminPin').value.trim();
+      if (!classCode || !/^\d{4,6}$/.test(adminPin)) { showInfoToast('Enter your class code and admin PIN.'); return; }
+      const btn = document.getElementById('teacherLoginBtn');
+      btn.disabled = true; btn.textContent = 'Logging in…';
+      try {
+        const { adminSecret, schoolName } = await dashApi('admin_login', { classCode, adminPin });
+        saveSafe(SK.classAdmin, { classCode, adminSecret, schoolName });
+        showInfoToast('Logged in!');
+        openTeacherDashboard(classCode, adminSecret);
+      } catch (e) {
+        showInfoToast(e.message || 'Could not log in — check your class code and PIN.');
+        btn.disabled = false; btn.textContent = 'Log In';
       }
     });
 
@@ -1209,6 +1280,33 @@
       } catch (e) {
         showInfoToast(e.message || 'Could not create class');
         btn.disabled = false; btn.textContent = 'Create Class';
+      }
+    });
+  }
+
+  /* ── Parent tab: log in with a parent code ───────────────────── */
+  function renderParentTab(body) {
+    body.innerHTML = `
+      <div class="card" style="padding:1rem;">
+        <p style="margin:0 0 .5rem; font-weight:600;">Log in as a parent</p>
+        <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:1rem;">Enter the parent code your child shared with you.</p>
+        <input class="text-field" id="parentTabCode" placeholder="Parent code (e.g. P-XXXXXXXX)" style="margin-bottom:.8rem;" autocapitalize="characters">
+        <button class="btn-primary" id="parentTabGoBtn" style="width:100%;">View Progress</button>
+        <p id="parentTabErr" style="color:var(--red,#e55); font-size:.82rem; margin-top:.5rem;"></p>
+      </div>
+    `;
+    document.getElementById('parentTabGoBtn').addEventListener('click', async () => {
+      const code = document.getElementById('parentTabCode').value.trim().toUpperCase();
+      if (!code) return;
+      const btn = document.getElementById('parentTabGoBtn');
+      btn.disabled = true; btn.textContent = 'Loading…';
+      try {
+        const data = await dashApi('get_parent_dashboard', { parentCode: code });
+        showScreen('parentDash');
+        renderParentDash(data);
+      } catch (e) {
+        document.getElementById('parentTabErr').textContent = e.message || 'Could not load — check the code.';
+        btn.disabled = false; btn.textContent = 'View Progress';
       }
     });
   }
