@@ -1,3 +1,514 @@
+#!/bin/bash
+set -e
+# Run from the ROOT of your MY-EXAMS-APP repo in Codespaces.
+# Overwrites index.html and js/app.js with the School/Parent Dashboards build.
+cat > index.html << 'INDEXHTML_EOF_MARK'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="theme-color" content="#0a1628"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="description" content="Holiday Hub — Revision, quizzes, challenges and project help for the school break."/>
+  <title>Holiday Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css?v=1"/>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="icon" type="image/png" href="icon-192.png"/>
+  <link rel="apple-touch-icon" href="icon-192.png"/>
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+</head>
+<body>
+<div id="app">
+
+  <!-- ════════════════ HOME SCREEN ════════════════ -->
+  <section id="homeScreen" class="screen active">
+
+    <div class="home-hero">
+      <div class="hero-bg-pattern"></div>
+      <div class="hero-content">
+        <div class="app-brand">
+          <span class="brand-star">★</span>
+          <div class="brand-text">
+            <h1 class="brand-name">Holiday<span class="brand-em">Hub</span></h1>
+            <p class="brand-tagline">Revise · Quiz · Challenge · Get Unstuck</p>
+          </div>
+          <span id="countdownBadge" class="countdown-badge">🎒 <b id="daysLeft">—</b>&nbsp;days left</span>
+          <span class="ai-credit-badge home-credit-badge">✨ 3 left</span>
+        </div>
+
+        <h2 class="hero-title">Keep your brain warm this break.</h2>
+        <p class="hero-sub">Free revision. Real challenges. Zero pressure.</p>
+        <p class="ai-boost-expiry hidden"></p>
+
+        <div class="hero-stats-row">
+          <div class="hstat"><span id="hStatSessions">0</span><label>Sessions</label></div>
+          <div class="hstat-div"></div>
+          <div class="hstat"><span id="hStatAvg">—</span><label>Average</label></div>
+          <div class="hstat-div"></div>
+          <div class="hstat"><span id="hStatStreak">0</span><label>Day Streak</label></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="category-tabs" id="categoryTabs">
+      <button class="cat-tab active" data-cat="senior">Senior<span class="cat-sub">WAEC/NECO/JAMB</span></button>
+      <button class="cat-tab" data-cat="junior">Junior<span class="cat-sub">JSS1–JSS3</span></button>
+    </div>
+
+    <div id="dashboardNudge" class="dashboard-nudge-wrap"></div>
+
+    <!-- Hidden by default. Flip SHOW_LAUNCH_BANNER to true in js/app.js when
+         ready to announce My Exams App / My JAMB App. Edit the text below
+         (or via JS) closer to launch. -->
+    <div class="launch-banner hidden" id="launchBanner">
+      <button class="launch-banner-close" id="launchBannerClose">✕</button>
+      <div class="lb-icon">🚀</div>
+      <div class="lb-text">
+        <h3 id="launchBannerTitle">Coming Soon</h3>
+        <p id="launchBannerSub">The full WAEC/NECO and JAMB experience — My Exams App and My JAMB App, launching soon.</p>
+      </div>
+    </div>
+
+    <div class="study-plan-banner" id="studyPlanBanner">
+      <div class="spb-icon">🗓</div>
+      <div class="spb-text">
+        <h3>Your Holiday Study Plan</h3>
+        <p id="spbSub">Build a simple day-by-day plan for the rest of the break.</p>
+      </div>
+      <span class="spb-arrow">→</span>
+    </div>
+
+    <div class="feature-grid">
+      <button class="feature-card" data-action="revision">
+        <div class="feature-icon fi-revision">📖</div>
+        <h3>Revision</h3>
+        <p>Browse past questions with full explanations, no timer.</p>
+      </button>
+
+      <button class="feature-card" data-action="library">
+        <div class="feature-icon fi-library">📚</div>
+        <h3>Study Library</h3>
+        <p>Flashcards, formula sheets, and concept notes — no quiz.</p>
+      </button>
+
+      <button class="feature-card" data-action="quiz">
+        <div class="feature-icon fi-quiz">✍️</div>
+        <h3>Quiz Me</h3>
+        <p>Timed practice. See your score at the end.</p>
+      </button>
+
+      <button class="feature-card" data-action="challenge">
+        <div class="feature-icon fi-challenge">🏆</div>
+        <h3>Challenge a Friend</h3>
+        <p>Same questions, same time. Who scores higher?</p>
+      </button>
+
+      <button class="feature-card" data-action="project">
+        <div class="feature-icon fi-project">🧭</div>
+        <h3>Project Helper</h3>
+        <p>Get guided step by step — we won't just give you the answer.</p>
+      </button>
+
+      <button class="feature-card" data-action="games">
+        <div class="feature-icon fi-games">🎮</div>
+        <h3>Games</h3>
+        <p>Speed Round, True or False, Memory Match — pick your game.</p>
+      </button>
+
+      <button class="feature-card" data-action="class">
+        <div class="feature-icon fi-class">🏫</div>
+        <h3>School & Class</h3>
+        <p>Join your class, or share your progress with a parent.</p>
+      </button>
+    </div>
+
+    <div style="padding:0 1.25rem 2rem; text-align:center;">
+      <p style="font-size:.72rem; color:var(--text-dim);">Holiday Hub is a free companion from Editoby Ventures — the team behind My Exams App and My JAMB App.</p>
+    </div>
+
+  </section>
+
+  <!-- ════════════════ SUBJECT PICKER (revision & quiz entry) ════════════════ -->
+  <section id="subjectScreen" class="screen">
+    <div class="topbar">
+      <button class="back-btn" data-back="home">←</button>
+      <h2 class="topbar-title" id="subjectScreenTitle">Pick a subject</h2>
+    </div>
+    <div class="container" style="padding-top:1.25rem; padding-bottom:2rem;">
+      <div id="subjectList" class="subject-list"></div>
+    </div>
+  </section>
+
+  <!-- ════════════════ REVISION SCREEN (Study Mode) ════════════════ -->
+  <section id="revisionScreen" class="screen">
+    <div class="topbar">
+      <button class="back-btn" data-back="subject">←</button>
+      <h2 class="topbar-title" id="revisionTitle">Study Mode</h2>
+      <span id="revisionProgress" class="topbar-progress"></span>
+    </div>
+    <div class="study-progress-track"><div class="study-progress-fill" id="studyProgressFill"></div></div>
+    <div class="container" id="revisionBody" style="padding-top:1.25rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ QUIZ SCREEN (Exam Mode) ════════════════ -->
+  <section id="quizScreen" class="screen">
+    <div class="topbar">
+      <button class="back-btn" data-back="confirm-exit-quiz">←</button>
+      <h2 class="topbar-title" id="quizTitle">Quiz</h2>
+      <span id="quizTimer" class="topbar-progress">--:--</span>
+    </div>
+    <div class="exam-progress-track"><div class="exam-progress-fill" id="examProgressFill"></div></div>
+    <div class="container" id="quizBody" style="padding-top:1.25rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ GAMES HUB ════════════════ -->
+  <section id="gamesHubScreen" class="screen">
+    <div class="topbar">
+      <button class="back-btn" data-back="home">←</button>
+      <h2 class="topbar-title">🎮 Games</h2>
+    </div>
+    <div class="container" style="padding-top:1.25rem; padding-bottom:2rem;">
+      <button class="game-choice-card" data-game="sort">
+        <div class="gc-icon" style="background:rgba(22,163,74,.12);">🗂</div>
+        <div class="gc-text"><h3>Category Sort</h3><p>Terms from mixed subjects — tap the right subject bucket, fast.</p></div>
+        <span class="gc-arrow">→</span>
+      </button>
+      <button class="game-choice-card" data-game="memory">
+        <div class="gc-icon" style="background:rgba(124,58,237,.12);">🧠</div>
+        <div class="gc-text"><h3>Memory Match</h3><p>Flip cards to pair terms with definitions. No timer pressure.</p></div>
+        <span class="gc-arrow">→</span>
+      </button>
+      <button class="game-choice-card" data-game="game">
+        <div class="gc-icon" style="background:rgba(232,93,74,.12);">⚡</div>
+        <div class="gc-text"><h3>Speed Round</h3><p>60 seconds, rapid-fire multiple choice. Build a streak.</p></div>
+        <span class="gc-arrow">→</span>
+      </button>
+      <button class="game-choice-card" data-game="tf">
+        <div class="gc-icon" style="background:rgba(37,99,235,.12);">✓✗</div>
+        <div class="gc-text"><h3>True or False Blitz</h3><p>Rapid true/false calls. Fastest, simplest, most intense.</p></div>
+        <span class="gc-arrow">→</span>
+      </button>
+      <button class="game-choice-card" data-game="sequence">
+        <div class="gc-icon" style="background:rgba(234,88,12,.12);">🔢</div>
+        <div class="gc-text"><h3>Sequence</h3><p>What comes next? Spot the pattern before the clock runs out.</p></div>
+        <span class="gc-arrow">→</span>
+      </button>
+      <button class="game-choice-card" data-game="scramble">
+        <div class="gc-icon" style="background:rgba(219,39,119,.12);">🔤</div>
+        <div class="gc-text"><h3>Word Scramble</h3><p>Unscramble the letters to spell key academic terms.</p></div>
+        <span class="gc-arrow">→</span>
+      </button>
+      <button class="game-choice-card" data-game="formula">
+        <div class="gc-icon" style="background:rgba(8,145,178,.12);">🔢</div>
+        <div class="gc-text"><h3>Formula Rush</h3><p>Match the name to the formula before time runs out.</p></div>
+        <span class="gc-arrow">→</span>
+      </button>
+      <button class="game-choice-card" data-game="equation">
+        <div class="gc-icon" style="background:rgba(79,70,229,.12);">🧩</div>
+        <div class="gc-text"><h3>Equation Builder</h3><p>Solve for x — watch out for the common-mistake decoys.</p></div>
+        <span class="gc-arrow">→</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ════════════════ SPEED ROUND / TRUE-FALSE BLITZ (EDU GAME) ════════════════ -->
+  <section id="gameScreen" class="screen">
+    <div class="game-topbar">
+      <button class="back-btn back-btn-light" data-back="confirm-exit-quiz">←</button>
+      <div class="game-stat"><span id="gameScore">0</span><label>Score</label></div>
+      <div class="game-timer" id="gameTimer">60</div>
+      <div class="game-stat"><span id="gameStreak">0</span><label>Streak</label></div>
+    </div>
+    <div class="game-subject-badge" id="gameSubjectBadge"></div>
+    <div class="container" id="gameBody" style="padding-top:1.5rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ GAME RESULTS ════════════════ -->
+  <section id="gameResultsScreen" class="screen">
+    <div class="container" id="gameResultsBody" style="padding-top:2rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ MEMORY MATCH ════════════════ -->
+  <section id="memoryScreen" class="screen">
+    <div class="game-topbar">
+      <button class="back-btn back-btn-light" data-back="confirm-exit-quiz">←</button>
+      <div class="game-stat"><span id="memMoves">0</span><label>Moves</label></div>
+      <div class="game-timer mem-timer-calm" id="memTimer">0:00</div>
+      <div class="game-stat"><span id="memPairs">0/0</span><label>Pairs</label></div>
+    </div>
+    <div class="game-subject-badge" id="memSubjectBadge"></div>
+    <div class="container" id="memoryBody" style="padding-top:1.25rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ MEMORY MATCH RESULTS ════════════════ -->
+  <section id="memoryResultsScreen" class="screen">
+    <div class="container" id="memoryResultsBody" style="padding-top:2rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ QUIZ RESULTS ════════════════ -->
+  <section id="resultsScreen" class="screen">
+    <div class="container" id="resultsBody" style="padding-top:2rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ PROJECT HELPER ════════════════ -->
+  <section id="projectScreen" class="screen">
+    <div class="topbar">
+      <button class="back-btn" data-back="home">←</button>
+      <h2 class="topbar-title">Project Helper</h2>
+    </div>
+    <div class="container" id="projectBody" style="padding-top:1.25rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ STUDY PLAN ════════════════ -->
+  <section id="planScreen" class="screen">
+    <div class="topbar">
+      <button class="back-btn" data-back="home">←</button>
+      <h2 class="topbar-title" id="planScreenTitle">🗓 Study Plan</h2>
+    </div>
+    <div class="container" id="planBody" style="padding-top:1.25rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ SCHOOL / CLASS ════════════════ -->
+  <section id="classScreen" class="screen">
+    <div class="topbar">
+      <button class="back-btn" data-back="home">←</button>
+      <h2 class="topbar-title">School & Class</h2>
+    </div>
+    <div class="container" id="classBody" style="padding-top:1.25rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ TEACHER DASHBOARD (class-wide) ════════════════ -->
+  <section id="teacherDashScreen" class="screen">
+    <div class="topbar">
+      <button class="back-btn" data-back="home">←</button>
+      <h2 class="topbar-title">Class Dashboard</h2>
+    </div>
+    <div class="container" id="teacherDashBody" style="padding-top:1.25rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ PARENT DASHBOARD (single child) ════════════════ -->
+  <section id="parentDashScreen" class="screen">
+    <div class="topbar">
+      <button class="back-btn" data-back="home">←</button>
+      <h2 class="topbar-title">Your Child's Progress</h2>
+    </div>
+    <div class="container" id="parentDashBody" style="padding-top:1.25rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ STUDY LIBRARY ════════════════ -->
+  <section id="libraryScreen" class="screen">
+    <div class="topbar">
+      <button class="back-btn" data-back="subject">←</button>
+      <h2 class="topbar-title" id="libraryTitle">Study Library</h2>
+    </div>
+    <div class="library-tabs" id="libraryTabs"></div>
+    <div class="container" id="libraryBody" style="padding-top:1.25rem; padding-bottom:2rem;"></div>
+  </section>
+
+  <!-- ════════════════ COMMUNITY QUIZ / CHALLENGE MODAL ════════════════ -->
+  <div id="quizChallengeModal" class="overlay hidden">
+    <div class="sheet" style="position:relative;">
+      <button class="sheet-close" id="qcClose">✕</button>
+      <div id="qcCreate">
+        <h3 class="sheet-title">Challenge a Friend</h3>
+        <p class="sheet-sub">Same questions. You vs your friends. Who scores higher?</p>
+        <div style="display:flex; flex-direction:column; gap:.6rem; margin-top:1rem;">
+          <button class="btn btn-primary btn-block" id="qcCreateBtn">Create a Challenge →</button>
+        </div>
+        <div style="margin-top:1rem; display:flex; gap:.5rem;">
+          <input id="qcJoinCode" class="text-input" placeholder="Enter challenge code" maxlength="10"/>
+          <button class="btn btn-ghost" id="qcJoinConfirm">Join</button>
+        </div>
+        <div id="qcPendingWrap" style="margin-top:1.25rem;">
+          <h4 class="sheet-subtitle">Your Challenges (<span id="qcPendingCount">0</span>/3)</h4>
+          <div id="qcPendingList"></div>
+        </div>
+      </div>
+
+      <div id="qcSetup" class="hidden">
+        <h3 class="sheet-title">Set Up Your Challenge</h3>
+        <div class="form-group">
+          <label>Subject</label>
+          <select id="qcSubject"></select>
+        </div>
+        <div class="form-group">
+          <label>Number of questions</label>
+          <select id="qcCount">
+            <option value="10">10 questions</option>
+            <option value="20" selected>20 questions</option>
+            <option value="30">30 questions</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Time limit</label>
+          <select id="qcTime">
+            <option value="0">No time limit</option>
+            <option value="10" selected>10 minutes</option>
+            <option value="20">20 minutes</option>
+            <option value="30">30 minutes</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>When should it start?</label>
+          <select id="qcSyncMode">
+            <option value="anytime" selected>Anytime — each person starts when ready</option>
+            <option value="ready">When everyone is ready</option>
+            <option value="scheduled">At a scheduled time</option>
+          </select>
+        </div>
+        <div class="form-group hidden" id="qcScheduleWrap">
+          <label>Start date & time</label>
+          <input type="datetime-local" id="qcScheduleAt"/>
+        </div>
+        <div class="ai-boost-row" id="qcAiBoostRow">
+          <label class="ai-boost-label">
+            <input type="checkbox" id="qcAiBoost"/>
+            <span>✨ Add AI-generated questions <em id="qcAiBoostHint"></em></span>
+          </label>
+        </div>
+        <button class="btn btn-primary btn-block" id="qcGenerateBtn" style="margin-top:.5rem;">Generate Challenge Code →</button>
+      </div>
+
+      <div id="qcCreated" class="hidden">
+        <h3 class="sheet-title">Challenge Created!</h3>
+        <p class="sheet-sub">Share this code with friends. It expires in 24 hours.</p>
+        <div class="code-display" id="qcCodeDisplay"></div>
+        <button class="btn btn-primary btn-block" id="qcShareLinkBtn" style="margin-top:.75rem;">📤 Share Challenge Link</button>
+        <button class="btn btn-ghost btn-block" id="qcStartOwnBtn" style="margin-top:.5rem;">Start My Attempt Now</button>
+      </div>
+
+      <div id="qcWaiting" class="hidden">
+        <h3 class="sheet-title">⚔️ Duel Lobby</h3>
+        <p class="sheet-sub" id="qcWaitingStatus">Waiting for everyone to be ready…</p>
+        <div id="qcWaitingList"></div>
+        <button class="btn btn-primary btn-block hidden" id="qcMarkReadyBtn" style="margin-top:1rem;">I'm Ready</button>
+        <button class="btn btn-ghost btn-block hidden" id="qcForceStartBtn" style="margin-top:.5rem;">Start Now (everyone joins mid-quiz)</button>
+        <button class="btn btn-ghost btn-block hidden" id="qcEndChallengeBtn" style="margin-top:.5rem;">🗑 End This Challenge</button>
+      </div>
+
+      <div id="qcResults" class="hidden">
+        <h3 class="sheet-title">🏆 Duel Results</h3>
+        <div id="qcLeaderboard"></div>
+        <button class="btn btn-primary btn-block" id="qcNewChallengeBtn" style="margin-top:.75rem;">New Challenge →</button>
+        <button class="btn btn-ghost btn-block" id="qcDoneBtn" style="margin-top:.5rem;">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════ GAME EXPLAINER (before starting a game) ════════════════ -->
+  <div id="gameExplainerModal" class="overlay hidden">
+    <div class="sheet">
+      <button class="sheet-close" id="geClose">✕</button>
+      <div class="ge-icon" id="geIcon">🎮</div>
+      <h3 class="sheet-title" id="geTitle">Game</h3>
+      <p class="ge-subject" id="geSubjectLine"></p>
+      <ul class="ge-rules" id="geRules"></ul>
+      <button class="btn btn-primary btn-block" id="geStartBtn">Start →</button>
+      <button class="btn btn-ghost btn-block" id="geMultiplayerBtn" style="margin-top:.5rem; display:none;">🔀 Play Multiplayer instead</button>
+    </div>
+  </div>
+
+  <!-- ════════════════ SPEED ROUND — DIFFICULTY PICKER ════════════════ -->
+  <div id="speedLevelModal" class="overlay hidden">
+    <div class="sheet">
+      <button class="sheet-close" id="slClose">✕</button>
+      <div class="ge-icon">⚡</div>
+      <h3 class="sheet-title">Pick your pace</h3>
+      <p class="ge-subject" id="slSubjectLine"></p>
+      <div class="speed-level-options" id="slOptions"></div>
+    </div>
+  </div>
+
+  <!-- ════════════════ ALREADY COMPLETED THIS ════════════════ -->
+  <div id="completedModal" class="overlay hidden">
+    <div class="sheet">
+      <button class="sheet-close" id="completedClose">✕</button>
+      <div class="ge-icon" id="completedIcon">🔁</div>
+      <h3 class="sheet-title" id="completedTitle">You've already been through this</h3>
+      <p class="sheet-sub" id="completedSub" style="text-align:center;"></p>
+      <button class="btn btn-primary btn-block" id="completedGetMoreBtn">Get fresh content with AI →</button>
+      <button class="btn btn-ghost btn-block" id="completedContinueBtn" style="margin-top:.5rem;">Continue anyway</button>
+    </div>
+  </div>
+
+  <!-- ════════════════ AI CREDITS PAYWALL ════════════════ -->
+  <div id="aiPaywallModal" class="overlay hidden">
+    <div class="sheet">
+      <button class="sheet-close" id="paywallClose">✕</button>
+      <div class="paywall-icon">✨</div>
+      <h3 class="sheet-title" style="text-align:center;">You're out of AI credits</h3>
+      <p class="sheet-sub" style="text-align:center;">Unlock a 2-Day AI Boost — 10 credits for Project Helper, Explain Differently, fresh game questions, AI-boosted challenges, and extra flashcards in Study Library.</p>
+      <div class="paywall-price">₦500 <span>for 10 credits, 48 hours to use them</span></div>
+      <button class="btn btn-primary btn-block" id="paywallPayBtn">Pay ₦500 →</button>
+      <button class="btn btn-ghost btn-block" id="paywallLaterBtn" style="margin-top:.5rem;">Maybe later</button>
+      <p class="paywall-note">Revision, Quiz, and Study Library stay free, no limit. Games have a free daily allowance — see the Games Pass if you've used yours up.</p>
+    </div>
+  </div>
+
+  <!-- ════════════════ GAMES PAYWALL ════════════════ -->
+  <div id="gamesPaywallModal" class="overlay hidden">
+    <div class="sheet">
+      <button class="sheet-close" id="gpClose">✕</button>
+      <div class="paywall-icon">🎮</div>
+      <h3 class="sheet-title" style="text-align:center;">You're out of free game rounds</h3>
+      <p class="sheet-sub" style="text-align:center;">Revision, Quiz, and Study Library stay free forever — this is just for the games.</p>
+      <div class="paywall-price">₦400 <span>for 7 days of unlimited games</span></div>
+      <button class="btn btn-primary btn-block" id="gpPassBtn">Get 7-Day Games Pass →</button>
+      <button class="btn btn-ghost btn-block" id="gpTopupBtn" style="margin-top:.5rem;">Or just add 15 more rounds — ₦150</button>
+      <button class="btn btn-ghost btn-block" id="gpClose2" style="margin-top:.5rem;">Maybe later</button>
+    </div>
+  </div>
+
+  <!-- ════════════════ MULTIPLAYER WORD SCRAMBLE ════════════════ -->
+  <div id="wsChallengeModal" class="overlay hidden">
+    <div class="sheet">
+      <button class="sheet-close" id="wsClose">✕</button>
+      <div id="wsChallengeBody"></div>
+    </div>
+  </div>
+
+  <!-- ════════════════ NAME PROMPT (first run) ════════════════ -->
+  <div id="namePromptModal" class="overlay hidden">
+    <div class="sheet">
+      <h3 class="sheet-title">What's your name?</h3>
+      <p class="sheet-sub">So your friends know it's you on the leaderboard.</p>
+      <input id="nameInput" class="text-input" placeholder="e.g. Emeka" style="margin-top:1rem;"/>
+      <button class="btn btn-primary btn-block" id="nameConfirmBtn" style="margin-top:.75rem;">Continue →</button>
+    </div>
+  </div>
+
+  <div id="toastHost"></div>
+
+</div>
+
+<script src="data/senior/senior-bank.js"></script>
+<script src="data/senior/senior-resources.js"></script>
+<script src="data/junior/junior-bank.js"></script>
+<script src="data/junior/junior-resources.js"></script>
+<script src="data/manifest.js"></script>
+<script src="js/app.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {
+        // Offline support just won't be available this session — the app
+        // still works fully online, so fail silently rather than alarm anyone.
+      });
+    });
+  }
+</script>
+</body>
+</html>
+INDEXHTML_EOF_MARK
+echo "index.html written."
+mkdir -p js
+
+cat > js/app.js << 'APPJS_EOF_MARK'
 /* ═══════════════════════════════════════════════════════════════
    HOLIDAY HUB — App Logic v1.0
 ═══════════════════════════════════════════════════════════════ */
@@ -5016,3 +5527,6 @@
   window._HH = { S, showScreen, showToast, loadSafe, saveSafe, getBank, API_BASE, recordSession, ensureUser };
 
 })();
+APPJS_EOF_MARK
+echo "js/app.js written."
+echo "Now: git add -A && git commit -m \"Add School/Parent Dashboards frontend\" && git push"
