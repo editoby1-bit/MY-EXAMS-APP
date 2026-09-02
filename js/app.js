@@ -123,7 +123,7 @@
     }, 45000);
 
     // School & Class nav card + back buttons for the new dashboard screens
-    const classNav = document.getElementById('classNavCard');
+    const classNav = document.getElementById('dashTopBanner');
     if (classNav) classNav.addEventListener('click', () => openClassScreen());
     const cbb = document.getElementById('classBackBtn');
     if (cbb) cbb.addEventListener('click', () => showScreen('home'));

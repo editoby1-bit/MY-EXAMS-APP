@@ -1147,6 +1147,31 @@ body {
 }
 .upgrade-bar-btn:hover { background: var(--gold-dk); }
 
+/* School & Class — sits beside the hero stat row, inside the dark hero
+   itself (not in the login card below). .hero-bottom-row puts the stat
+   row and this banner side by side; wraps under it on narrow screens. */
+.hero-bottom-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.hero-dash-banner {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  background: linear-gradient(135deg, var(--gold,#d4af37), #e8c458);
+  border-radius: var(--r-m);
+  padding: .6rem 1rem;
+  cursor: pointer;
+  transition: filter .15s, transform .15s;
+  white-space: nowrap;
+}
+.hero-dash-banner:hover { filter: brightness(1.04); transform: translateY(-1px); }
+.hdb-icon { font-size: 1.05rem; }
+.hdb-text { font-family: var(--sans); font-size: .85rem; font-weight: 700; color: var(--ink,#1a1a1a); }
+.hdb-arrow { font-family: var(--sans); font-size: .85rem; font-weight: 700; color: var(--ink,#1a1a1a); }
+
 /* ══════════════════════════════
    RESULT UPGRADE TEASER
 ══════════════════════════════ */
