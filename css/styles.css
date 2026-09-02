@@ -1168,9 +1168,11 @@ body {
   white-space: nowrap;
 }
 .hero-dash-banner:hover { filter: brightness(1.04); transform: translateY(-1px); }
-.hdb-icon { font-size: 1.05rem; }
+.hdb-icon { font-size: 1.15rem; flex-shrink: 0; }
+.hdb-text-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: .05rem; line-height: 1.25; }
 .hdb-text { font-family: var(--sans); font-size: .85rem; font-weight: 700; color: var(--ink,#1a1a1a); }
-.hdb-arrow { font-family: var(--sans); font-size: .85rem; font-weight: 700; color: var(--ink,#1a1a1a); }
+.hdb-sub { font-family: var(--sans); font-size: .7rem; font-weight: 600; color: rgba(26,26,26,.65); }
+.hdb-arrow { font-family: var(--sans); font-size: .85rem; font-weight: 700; color: var(--ink,#1a1a1a); flex-shrink: 0; }
 
 /* ══════════════════════════════
    RESULT UPGRADE TEASER
