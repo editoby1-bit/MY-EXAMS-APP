@@ -1187,9 +1187,13 @@
       const btn = document.getElementById('joinClassBtn');
       btn.disabled = true; btn.textContent = 'Joining…';
       try {
-        await dashApi('join_class', { classCode, name, pin });
+        const result = await dashApi('join_class', { classCode, name, pin });
         saveClassMembership({ classCode, name, pin });
-        showInfoToast('Joined class!');
+        if (result.entitlement) {
+          grantAccess(result.entitlement.days, result.entitlement.tier);
+        } else {
+          showInfoToast('Joined class!');
+        }
         renderClassScreen();
       } catch (e) {
         showInfoToast(e.message || 'Could not join class');
@@ -1321,12 +1325,15 @@
   }
   function renderTeacherDash(data) {
     const body = document.getElementById('teacherDashBody');
+    const admin = loadSafe(SK.classAdmin);
+    const bundleHtml = renderBundleSection(data.bundle, data.classCode, admin?.adminSecret);
     if (!data.students.length) {
-      body.innerHTML = `<p style="color:var(--text-dim,#8a94a6);">No students have joined <b>${safe(data.classCode)}</b> yet. Share the class code to get started.</p>`;
+      body.innerHTML = bundleHtml + `<p style="color:var(--text-dim,#8a94a6);">No students have joined <b>${safe(data.classCode)}</b> yet. Share the class code to get started.</p>`;
+      wireBundleSection(data.classCode, admin?.adminSecret);
       return;
     }
     const sorted = [...data.students].sort((a, b) => (b.avgPct || 0) - (a.avgPct || 0));
-    body.innerHTML = `
+    body.innerHTML = bundleHtml + `
       <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:1rem;">${safe(data.schoolName || 'Class')} · ${data.students.length} student${data.students.length === 1 ? '' : 's'}</p>
       ${sorted.map(s => `
         <div class="card-inset" style="padding:1rem; margin-bottom:.85rem;">
@@ -1338,6 +1345,122 @@
           ${renderSubjectBreakdown(s.bySubject)}
         </div>`).join('')}
     `;
+    wireBundleSection(data.classCode, admin?.adminSecret);
+  }
+
+  /* ── School Bundle purchase/status — top of the teacher dashboard ── */
+  function renderBundleSection(bundle, classCode, adminSecret) {
+    if (bundle && bundle.active) {
+      const expDate = new Date(bundle.expiresAt).toLocaleDateString('en-NG');
+      const tierLabel = { standard: 'Standard', branded: 'Branded', premium: 'Premium' }[bundle.tier] || bundle.tier;
+      const nearExpiry = (bundle.expiresAt - Date.now()) < 30 * 24 * 60 * 60 * 1000;
+      return `
+        <div class="card-inset" style="padding:1rem; margin-bottom:1rem; border:1px solid var(--gold,#d4af37);">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong>${tierLabel} Bundle — Active</strong>
+            <span style="font-size:.8rem; color:var(--text-dim,#8a94a6);">Expires ${expDate}</span>
+          </div>
+          <p style="font-size:.82rem; color:var(--text-dim,#8a94a6); margin:.35rem 0;">${bundle.seatsUsed} of ${bundle.tier === 'standard' ? bundle.seatLimit : 'unlimited'} seats used · students who join get ${bundle.tier === 'standard' ? 'Student Pass' : 'Student Pass Plus'} automatically</p>
+          ${nearExpiry ? `<button class="btn-secondary" id="bundleRenewBtn" style="width:100%; margin-top:.5rem;">Renew Bundle</button>` : ''}
+        </div>
+        <div id="bundlePickerOut"></div>
+      `;
+    }
+    return `
+      <div class="card-inset" style="padding:1rem; margin-bottom:1rem;">
+        <strong>No active school bundle</strong>
+        <p style="font-size:.82rem; color:var(--text-dim,#8a94a6); margin:.35rem 0 .75rem;">Activate a bundle so students who join this class automatically get Student Pass access — no individual payment needed.</p>
+        <button class="btn-primary" id="bundleActivateBtn" style="width:100%;">Activate School Bundle</button>
+        <div id="bundlePickerOut"></div>
+      </div>
+    `;
+  }
+
+  function wireBundleSection(classCode, adminSecret) {
+    const openPicker = () => renderBundlePicker(classCode, adminSecret);
+    document.getElementById('bundleActivateBtn')?.addEventListener('click', openPicker);
+    document.getElementById('bundleRenewBtn')?.addEventListener('click', openPicker);
+  }
+
+  function renderBundlePicker(classCode, adminSecret) {
+    const out = document.getElementById('bundlePickerOut');
+    if (!out) return;
+    out.innerHTML = `
+      <div class="card-inset" style="padding:1rem; margin-top:.75rem;">
+        <div class="mode-toggle" id="bundleTierTabs" style="margin-bottom:1rem;">
+          <button class="mode-btn active" data-tier="standard">Standard</button>
+          <button class="mode-btn" data-tier="branded">Branded</button>
+          <button class="mode-btn" data-tier="premium">Premium</button>
+        </div>
+        <div id="bundleTierBody"></div>
+      </div>
+    `;
+    let tier = 'standard';
+    const renderTierBody = () => {
+      const tb = document.getElementById('bundleTierBody');
+      if (tier === 'standard') {
+        tb.innerHTML = `
+          <p style="font-size:.82rem; color:var(--text-dim,#8a94a6); margin-bottom:.5rem;">₦2,000 per student/year · minimum 50 seats</p>
+          <input class="text-field" id="bundleSeats" type="number" min="50" value="50" style="margin-bottom:.5rem;">
+          <p style="font-weight:700; margin-bottom:.75rem;" id="bundlePriceOut">Total: ₦100,000</p>
+        `;
+        document.getElementById('bundleSeats').addEventListener('input', (e) => {
+          const seats = Math.max(50, parseInt(e.target.value) || 50);
+          document.getElementById('bundlePriceOut').textContent = `Total: ₦${(seats * 2000).toLocaleString('en-NG')}`;
+        });
+      } else if (tier === 'branded') {
+        tb.innerHTML = `<p style="font-size:.82rem; color:var(--text-dim,#8a94a6); margin-bottom:.75rem;">Unlimited seats, branded experience — ₦500,000/year flat.</p>`;
+      } else {
+        tb.innerHTML = `<p style="font-size:.82rem; color:var(--text-dim,#8a94a6); margin-bottom:.75rem;">Unlimited seats, full premium tier — ₦1,000,000/year flat.</p>`;
+      }
+      tb.innerHTML += `<button class="btn-primary" id="bundlePayBtn" style="width:100%;">Pay & Activate →</button>`;
+      document.getElementById('bundlePayBtn').addEventListener('click', () => payForBundle(tier, classCode, adminSecret));
+    };
+    renderTierBody();
+    document.querySelectorAll('#bundleTierTabs .mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        tier = btn.dataset.tier;
+        document.querySelectorAll('#bundleTierTabs .mode-btn').forEach(b => b.classList.toggle('active', b === btn));
+        renderTierBody();
+      });
+    });
+  }
+
+  async function payForBundle(tier, classCode, adminSecret) {
+    const seats = tier === 'standard' ? Math.max(50, parseInt(document.getElementById('bundleSeats')?.value) || 50) : null;
+    const amount = tier === 'standard' ? seats * 200000 : (tier === 'branded' ? 50000000 : 100000000);
+    const email = await getEmailViaModal();
+    if (!email) return;
+    const PAYSTACK_KEY = 'pk_live_5d12ee2a90900116dc222107e059a06214c085ff';
+    const handler = window.PaystackPop.setup({
+      key: PAYSTACK_KEY, email, amount, currency: 'NGN',
+      ref: 'MEA-BUNDLE-' + Date.now(),
+      metadata: { custom_fields: [
+        { display_name: 'Bundle', variable_name: 'bundle_tier', value: tier },
+        { display_name: 'Class Code', variable_name: 'class_code', value: classCode },
+      ]},
+      onClose() {},
+      callback(response) {
+        (async () => {
+          const btn = document.getElementById('bundlePayBtn');
+          if (btn) { btn.disabled = true; btn.textContent = 'Activating…'; }
+          try {
+            const result = await dashApi('activate_bundle', {
+              classCode, adminSecret, tier, seats, reference: response.reference,
+            });
+            if (result.error) {
+              alert('Payment received but activation failed: ' + result.error + '\nContact support with reference: ' + response.reference);
+              return;
+            }
+            alert('✅ Bundle activated! Students who join this class now get automatic access.');
+            openTeacherDashboard(classCode, adminSecret);
+          } catch (e) {
+            alert('Could not confirm activation. If you were charged, contact support with reference: ' + response.reference);
+          }
+        })();
+      },
+    });
+    handler.openIframe();
   }
   function renderSubjectBreakdown(bySubject) {
     const entries = Object.entries(bySubject || {});
