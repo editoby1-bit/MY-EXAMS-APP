@@ -2809,7 +2809,16 @@ body {
   gap: .5rem;
 }
 .memory-card {
-  aspect-ratio: 1;
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 100%; /* box size comes purely from width — content can never affect it */
+  border-radius: var(--r-s);
+  cursor: pointer;
+}
+.memory-card-inner {
+  position: absolute;
+  inset: 0;
   border-radius: var(--r-s);
   background: var(--ink);
   color: var(--gold);
@@ -2821,15 +2830,12 @@ body {
   font-size: .68rem;
   font-weight: 600;
   padding: .4rem;
-  cursor: pointer;
-  transition: transform .15s, background .15s;
   overflow: hidden;
   line-height: 1.2;
+  transition: background .15s;
 }
-.memory-card.flipped { background: var(--cream); color: var(--text); border: 1.5px solid var(--gold); }
-.memory-card.matched { background: var(--green-bg); color: var(--green); border: 1.5px solid var(--green); cursor: default; }
-.memory-card.hidden-face::before { content: "?"; font-size: 1.3rem; }
-.memory-card.flipped .memory-card-back, .memory-card.matched .memory-card-back { display: none; }
+.memory-card.flipped .memory-card-inner { background: var(--cream); color: var(--text); border: 1.5px solid var(--gold); }
+.memory-card.matched .memory-card-inner { background: var(--green-bg); color: var(--green); border: 1.5px solid var(--green); cursor: default; }
 .memory-stats { display: flex; justify-content: space-between; font-family: var(--sans); font-size: .82rem; color: var(--text-dim); margin-bottom: .75rem; }
 
 .game-result-score { font-family: var(--serif); font-size: 3rem; font-weight: 700; color: var(--gold); margin: .5rem 0; }

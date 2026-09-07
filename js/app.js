@@ -1770,7 +1770,7 @@
       <div class="memory-grid" id="memoryGrid">
         ${G.cards.map((c, i) => `
           <div class="memory-card hidden-face" data-i="${i}">
-            <span class="memory-card-back"></span>
+            <div class="memory-card-inner">?</div>
           </div>`).join('')}
       </div>
     `;
@@ -1787,7 +1787,7 @@
     const el = document.querySelector(`#memoryGrid .memory-card[data-i="${i}"]`);
     el.classList.remove('hidden-face');
     el.classList.add('flipped');
-    el.textContent = card.text;
+    el.querySelector('.memory-card-inner').textContent = card.text;
     G.flipped.push(i);
     if (G.flipped.length === 2) {
       G.moves++;
@@ -1808,7 +1808,7 @@
         setTimeout(() => {
           [i1, i2].forEach(idx => {
             const cel = document.querySelector(`#memoryGrid .memory-card[data-i="${idx}"]`);
-            if (cel) { cel.classList.remove('flipped'); cel.classList.add('hidden-face'); cel.textContent = ''; }
+            if (cel) { cel.classList.remove('flipped'); cel.classList.add('hidden-face'); cel.querySelector('.memory-card-inner').textContent = '?'; }
           });
           G.flipped = [];
           const statsEl = document.querySelector('.memory-stats span:last-child');
