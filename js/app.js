@@ -132,6 +132,12 @@
     const pbb = document.getElementById('parentDashBackBtn');
     if (pbb) pbb.addEventListener('click', () => showScreen('home'));
 
+    // Games
+    const gamesNav = document.getElementById('gamesNavCard');
+    if (gamesNav) gamesNav.addEventListener('click', openGamesHub);
+    const ghb = document.getElementById('gamesHubBackBtn');
+    if (ghb) ghb.addEventListener('click', () => showScreen('home'));
+
     // Direct-link entry points for teacher/parent dashboards — e.g.
     // ?dash=teacher (this device's saved admin credentials, from Create
     // Class) or ?dash=parent&code=P-XXXXXXXX (works on ANY device — the
@@ -1109,7 +1115,7 @@
 
   function renderClassScreen() {
     if (!_classTab) {
-      _classTab = getClassMembership() ? 'student' : (loadSafe(SK.classAdmin) ? 'teacher' : 'student');
+      _classTab = getClassMembership() ? 'student' : (loadSafe(SK.classAdmin) ? 'teacher' : 'teacher');
     }
     const body = document.getElementById('classBody');
     body.innerHTML = `
@@ -1224,21 +1230,18 @@
 
     body.innerHTML = `
       <div class="card" style="padding:1rem; margin-bottom:1rem;">
-        <p style="margin:0 0 .5rem; font-weight:600;">Log in to your class</p>
-        <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:1rem;">Already created a class? Log back in with your class code and admin PIN.</p>
-        <input class="text-field" id="loginClassCode" placeholder="Class code (e.g. C-XXXXXX)" style="margin-bottom:.6rem;" autocapitalize="characters">
-        <input class="text-field" id="loginAdminPin" type="tel" placeholder="Admin PIN" maxlength="6" style="margin-bottom:.8rem;">
-        <button class="btn-primary" id="teacherLoginBtn" style="width:100%;">Log In</button>
+        <p style="margin:0 0 .5rem; font-weight:600;">Sign up your school</p>
+        <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:1rem;">Create a free class and get a code to share with your students — no card required to get started.</p>
+        <input class="text-field" id="newSchoolName" placeholder="School / class name" style="margin-bottom:.6rem;">
+        <input class="text-field" id="newAdminPin" type="tel" placeholder="Set an admin PIN (4-6 digits, for future logins)" maxlength="6" style="margin-bottom:.8rem;">
+        <button class="btn-primary" id="createClassBtn" style="width:100%;">Create Class</button>
+        <div id="createClassForm"></div>
       </div>
       <div class="card" style="padding:1rem;">
-        <p style="margin:0 0 .5rem; font-weight:600;">New here?</p>
-        <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:1rem;">Create a class and get a code to share with your students.</p>
-        <button class="btn-secondary" id="showCreateClassBtn" style="width:100%;">Create a Class</button>
-        <div id="createClassForm" class="hidden" style="margin-top:1rem;">
-          <input class="text-field" id="newSchoolName" placeholder="School / class name" style="margin-bottom:.6rem;">
-          <input class="text-field" id="newAdminPin" type="tel" placeholder="Admin PIN (4-6 digits, for future logins)" maxlength="6" style="margin-bottom:.8rem;">
-          <button class="btn-primary" id="createClassBtn" style="width:100%;">Create Class</button>
-        </div>
+        <p style="margin:0 0 .5rem; font-weight:600;">Already have an account?</p>
+        <input class="text-field" id="loginClassCode" placeholder="Class code (e.g. C-XXXXXX)" style="margin-bottom:.6rem;" autocapitalize="characters">
+        <input class="text-field" id="loginAdminPin" type="tel" placeholder="Admin PIN" maxlength="6" style="margin-bottom:.8rem;">
+        <button class="btn-secondary" id="teacherLoginBtn" style="width:100%;">Log In</button>
       </div>
     `;
 
@@ -1257,10 +1260,6 @@
         showInfoToast(e.message || 'Could not log in — check your class code and PIN.');
         btn.disabled = false; btn.textContent = 'Log In';
       }
-    });
-
-    document.getElementById('showCreateClassBtn').addEventListener('click', () => {
-      document.getElementById('createClassForm').classList.toggle('hidden');
     });
 
     document.getElementById('createClassBtn').addEventListener('click', async () => {
@@ -1521,6 +1520,337 @@
             <span style="color:var(--text-dim,#8a94a6);">${s.score}/${s.total} · ${new Date(s.at).toLocaleDateString()}</span>
           </div>`).join('') || '<p style="color:var(--text-dim,#8a94a6); font-size:.85rem;">No sessions yet.</p>'}
       </div>`;
+  }
+
+
+  /* ════════ GAMES ════════
+     Three lightweight game modes, all replaying the SAME existing
+     objective question bank through a faster-paced UI loop — no new
+     content needed. Deliberately NOT reported to class dashboards
+     (recordClassSession) — these are for-fun practice, kept separate
+     from tracked practice/exam/challenge sessions. Uses its own
+     namespaced state object G so it never touches the main quiz state S. */
+  let G = null;
+
+  function gameObjectivePool(subjectKey) {
+    const bank = EXAM_BANK[subjectKey];
+    if (!bank || !bank.objective) return [];
+    return bank.objective.filter(q => Array.isArray(q.options) && q.options.length >= 2);
+  }
+
+  // Memory Match needs short text to fit on a card — a subject can pass
+  // the general objective-question count but still come up short here,
+  // so both the picker's eligibility check and the actual game must use
+  // this exact same filter, not just gameObjectivePool.
+  function memoryEligiblePool(subjectKey) {
+    return gameObjectivePool(subjectKey).filter(q => q.question.length <= 70 && q.options[q.answer].length <= 22);
+  }
+
+  function openGamesHub() {
+    showScreen('gamesHub');
+    renderGamesHub();
+  }
+
+  function renderGamesHub() {
+    const body = document.getElementById('gamesHubBody');
+    body.innerHTML = `
+      <div class="game-type-card" data-game="speed">
+        <span class="gtc-icon">⚡</span>
+        <div class="gtc-body"><div class="gtc-title">Speed Round</div><div class="gtc-sub">12 questions, 8 seconds each — how many can you get right?</div></div>
+      </div>
+      <div class="game-type-card" data-game="tf">
+        <span class="gtc-icon">✅</span>
+        <div class="gtc-body"><div class="gtc-title">True or False</div><div class="gtc-sub">Quick-fire judgment calls, 6 seconds each.</div></div>
+      </div>
+      <div class="game-type-card" data-game="memory">
+        <span class="gtc-icon">🧠</span>
+        <div class="gtc-body"><div class="gtc-title">Memory Match</div><div class="gtc-sub">Match each question to its correct answer.</div></div>
+      </div>
+      <div id="gamesSubjectPicker"></div>
+    `;
+    document.querySelectorAll('#gamesHubBody .game-type-card').forEach(card => {
+      card.addEventListener('click', () => renderGamesSubjectPicker(card.dataset.game));
+    });
+  }
+
+  function renderGamesSubjectPicker(gameType) {
+    const minNeeded = gameType === 'memory' ? 8 : 12;
+    const out = document.getElementById('gamesSubjectPicker');
+    const options = Object.entries(SUBJECTS)
+      .map(([key, meta]) => ({ key, meta, count: (gameType === 'memory' ? memoryEligiblePool(key) : gameObjectivePool(key)).length }))
+      .filter(s => s.count >= minNeeded);
+    if (!options.length) {
+      out.innerHTML = `<p style="color:var(--text-dim); font-size:.85rem; margin-top:1rem;">Not enough objective questions yet for this game.</p>`;
+      return;
+    }
+    out.innerHTML = `
+      <p style="font-weight:600; margin:1rem 0 .5rem;">Pick a subject</p>
+      <div class="subject-grid" style="max-height:220px;">
+        ${options.map(s => `
+          <button class="subject-btn" data-subject="${s.key}">
+            <span class="sub-icon">${s.meta.icon}</span>
+            <span class="sub-name">${safe(s.meta.name)}</span>
+            <span class="sub-count">${s.count}Q</span>
+          </button>`).join('')}
+      </div>
+    `;
+    document.querySelectorAll('#gamesSubjectPicker .subject-btn').forEach(btn => {
+      btn.addEventListener('click', () => startGame(gameType, btn.dataset.subject));
+    });
+  }
+
+  function startGame(gameType, subjectKey) {
+    if (gameType === 'speed') startSpeedRound(subjectKey);
+    else if (gameType === 'tf') startTrueFalse(subjectKey);
+    else if (gameType === 'memory') startMemoryMatch(subjectKey);
+  }
+
+  function shuffleArr(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function exitGameConfirm(targetScreen) {
+    if (G && G.active && !confirm('Leave this game? Your progress will be lost.')) return;
+    if (G) G.active = false;
+    clearGameTimer();
+    showScreen(targetScreen || 'gamesHub');
+    if (!targetScreen) renderGamesHub();
+  }
+
+  function clearGameTimer() {
+    if (G && G.timerHandle) { clearInterval(G.timerHandle); G.timerHandle = null; }
+  }
+
+  /* ── Speed Round ── */
+  function startSpeedRound(subjectKey) {
+    const pool = shuffleArr(gameObjectivePool(subjectKey)).slice(0, 12);
+    G = { type: 'speed', subject: subjectKey, questions: pool, idx: 0, score: 0, active: true, timerHandle: null };
+    showScreen('speedRound');
+    renderSpeedRoundQ();
+  }
+
+  function renderSpeedRoundQ() {
+    const body = document.getElementById('speedRoundBody');
+    const q = G.questions[G.idx];
+    const total = G.questions.length;
+    body.innerHTML = `
+      <button class="ghost-link" id="speedExitBtn" style="margin-bottom:.5rem;">✕ Exit</button>
+      <div class="game-progress"><span>⚡ Speed Round · Q${G.idx + 1} of ${total}</span><span class="game-score-live">Score: ${G.score}</span></div>
+      <div class="game-timer-bar"><div class="game-timer-fill" id="speedTimerFill" style="width:100%;"></div></div>
+      <p class="game-question">${safe(q.question)}</p>
+      <div id="speedOptions">
+        ${q.options.map((opt, i) => `<button class="game-option-btn" data-i="${i}">${safe(opt)}</button>`).join('')}
+      </div>
+    `;
+    document.getElementById('speedExitBtn').addEventListener('click', () => exitGameConfirm());
+    document.querySelectorAll('#speedOptions .game-option-btn').forEach(btn => {
+      btn.addEventListener('click', () => answerSpeedRound(parseInt(btn.dataset.i)));
+    });
+    runGameTimer(8, document.getElementById('speedTimerFill'), () => answerSpeedRound(null));
+  }
+
+  function runGameTimer(seconds, fillEl, onExpire) {
+    clearGameTimer();
+    const start = Date.now();
+    const durationMs = seconds * 1000;
+    G.timerHandle = setInterval(() => {
+      const elapsed = Date.now() - start;
+      const pct = Math.max(0, 100 - (elapsed / durationMs) * 100);
+      if (fillEl) {
+        fillEl.style.width = pct + '%';
+        fillEl.classList.toggle('urgent', pct < 30);
+      }
+      if (elapsed >= durationMs) {
+        clearGameTimer();
+        onExpire();
+      }
+    }, 100);
+  }
+
+  function answerSpeedRound(choiceIdx) {
+    if (!G || !G.active) return;
+    clearGameTimer();
+    const q = G.questions[G.idx];
+    const correct = choiceIdx === q.answer;
+    if (correct) G.score++;
+    document.querySelectorAll('#speedOptions .game-option-btn').forEach((btn, i) => {
+      btn.disabled = true;
+      if (i === q.answer) btn.classList.add('correct');
+      else if (i === choiceIdx) btn.classList.add('wrong');
+    });
+    setTimeout(() => {
+      G.idx++;
+      if (G.idx >= G.questions.length) finishGame();
+      else renderSpeedRoundQ();
+    }, 600);
+  }
+
+  /* ── True or False ── */
+  function startTrueFalse(subjectKey) {
+    const pool = shuffleArr(gameObjectivePool(subjectKey)).slice(0, 12);
+    const rounds = pool.map(q => {
+      const showCorrect = Math.random() < 0.5;
+      let statementIdx;
+      if (showCorrect) statementIdx = q.answer;
+      else {
+        const wrongIndices = q.options.map((_, i) => i).filter(i => i !== q.answer);
+        statementIdx = wrongIndices[Math.floor(Math.random() * wrongIndices.length)];
+      }
+      return { q, statementIdx, isTrue: statementIdx === q.answer };
+    });
+    G = { type: 'tf', subject: subjectKey, rounds, idx: 0, score: 0, active: true, timerHandle: null };
+    showScreen('trueFalse');
+    renderTrueFalseQ();
+  }
+
+  function renderTrueFalseQ() {
+    const body = document.getElementById('trueFalseBody');
+    const r = G.rounds[G.idx];
+    const total = G.rounds.length;
+    body.innerHTML = `
+      <button class="ghost-link" id="tfExitBtn" style="margin-bottom:.5rem;">✕ Exit</button>
+      <div class="game-progress"><span>✅ True or False · Q${G.idx + 1} of ${total}</span><span class="game-score-live">Score: ${G.score}</span></div>
+      <div class="game-timer-bar"><div class="game-timer-fill" id="tfTimerFill" style="width:100%;"></div></div>
+      <div class="tf-statement" id="tfStatement">${safe(r.q.question)} — <b>${safe(r.q.options[r.statementIdx])}</b></div>
+      <div class="tf-btn-row">
+        <button class="tf-btn true-btn" id="tfTrueBtn">TRUE</button>
+        <button class="tf-btn false-btn" id="tfFalseBtn">FALSE</button>
+      </div>
+    `;
+    document.getElementById('tfExitBtn').addEventListener('click', () => exitGameConfirm());
+    document.getElementById('tfTrueBtn').addEventListener('click', () => answerTrueFalse(true));
+    document.getElementById('tfFalseBtn').addEventListener('click', () => answerTrueFalse(false));
+    runGameTimer(6, document.getElementById('tfTimerFill'), () => answerTrueFalse(null));
+  }
+
+  function answerTrueFalse(choice) {
+    if (!G || !G.active) return;
+    clearGameTimer();
+    const r = G.rounds[G.idx];
+    const correct = choice === r.isTrue;
+    if (correct) G.score++;
+    document.getElementById('tfTrueBtn').disabled = true;
+    document.getElementById('tfFalseBtn').disabled = true;
+    document.getElementById('tfStatement').classList.add(r.isTrue ? 'correct' : 'wrong');
+    setTimeout(() => {
+      G.idx++;
+      if (G.idx >= G.rounds.length) finishGame();
+      else renderTrueFalseQ();
+    }, 600);
+  }
+
+  /* ── Memory Match ── */
+  function startMemoryMatch(subjectKey) {
+    const pool = memoryEligiblePool(subjectKey);
+    const shuffled = shuffleArr(pool).slice(0, 8);
+    const cards = [];
+    shuffled.forEach((q, pairIdx) => {
+      cards.push({ pairIdx, side: 'q', text: q.question, matched: false });
+      cards.push({ pairIdx, side: 'a', text: q.options[q.answer], matched: false });
+    });
+    G = {
+      type: 'memory', subject: subjectKey, cards: shuffleArr(cards),
+      flipped: [], moves: 0, matchedCount: 0, totalPairs: shuffled.length,
+      active: true, startTime: Date.now(),
+    };
+    showScreen('memoryMatch');
+    renderMemoryMatch();
+  }
+
+  function renderMemoryMatch() {
+    const body = document.getElementById('memoryMatchBody');
+    body.innerHTML = `
+      <button class="ghost-link" id="memoryExitBtn" style="margin-bottom:.5rem;">✕ Exit</button>
+      <div class="memory-stats"><span>🧠 Memory Match</span><span>Moves: ${G.moves} · Pairs: ${G.matchedCount}/${G.totalPairs}</span></div>
+      <div class="memory-grid" id="memoryGrid">
+        ${G.cards.map((c, i) => `
+          <div class="memory-card hidden-face" data-i="${i}">
+            <span class="memory-card-back"></span>
+          </div>`).join('')}
+      </div>
+    `;
+    document.getElementById('memoryExitBtn').addEventListener('click', () => exitGameConfirm());
+    document.querySelectorAll('#memoryGrid .memory-card').forEach(el => {
+      el.addEventListener('click', () => flipMemoryCard(parseInt(el.dataset.i)));
+    });
+  }
+
+  function flipMemoryCard(i) {
+    if (!G || !G.active) return;
+    const card = G.cards[i];
+    if (card.matched || G.flipped.includes(i) || G.flipped.length >= 2) return;
+    const el = document.querySelector(`#memoryGrid .memory-card[data-i="${i}"]`);
+    el.classList.remove('hidden-face');
+    el.classList.add('flipped');
+    el.textContent = card.text;
+    G.flipped.push(i);
+    if (G.flipped.length === 2) {
+      G.moves++;
+      const [i1, i2] = G.flipped;
+      const c1 = G.cards[i1], c2 = G.cards[i2];
+      if (c1.pairIdx === c2.pairIdx && c1.side !== c2.side) {
+        c1.matched = true; c2.matched = true;
+        G.matchedCount++;
+        [i1, i2].forEach(idx => {
+          const cel = document.querySelector(`#memoryGrid .memory-card[data-i="${idx}"]`);
+          cel.classList.remove('flipped');
+          cel.classList.add('matched');
+        });
+        G.flipped = [];
+        document.querySelector('.memory-stats span:last-child').textContent = `Moves: ${G.moves} · Pairs: ${G.matchedCount}/${G.totalPairs}`;
+        if (G.matchedCount >= G.totalPairs) setTimeout(finishGame, 500);
+      } else {
+        setTimeout(() => {
+          [i1, i2].forEach(idx => {
+            const cel = document.querySelector(`#memoryGrid .memory-card[data-i="${idx}"]`);
+            if (cel) { cel.classList.remove('flipped'); cel.classList.add('hidden-face'); cel.textContent = ''; }
+          });
+          G.flipped = [];
+          const statsEl = document.querySelector('.memory-stats span:last-child');
+          if (statsEl) statsEl.textContent = `Moves: ${G.moves} · Pairs: ${G.matchedCount}/${G.totalPairs}`;
+        }, 800);
+      }
+    }
+  }
+
+  /* ── Shared results screen ── */
+  function finishGame() {
+    if (!G) return;
+    G.active = false;
+    clearGameTimer();
+    showScreen('gameResult');
+    const body = document.getElementById('gameResultBody');
+    const subjName = SUBJECTS[G.subject]?.name || G.subject;
+    let scoreLine, labelLine;
+    if (G.type === 'speed') {
+      scoreLine = `${G.score}/${G.questions.length}`;
+      labelLine = `Speed Round · ${safe(subjName)}`;
+    } else if (G.type === 'tf') {
+      scoreLine = `${G.score}/${G.rounds.length}`;
+      labelLine = `True or False · ${safe(subjName)}`;
+    } else {
+      const seconds = Math.round((Date.now() - G.startTime) / 1000);
+      scoreLine = `${G.moves} moves`;
+      labelLine = `Memory Match · ${safe(subjName)} · ${seconds}s`;
+    }
+    body.innerHTML = `
+      <div style="font-size:2.5rem;">🎮</div>
+      <div class="game-result-score">${scoreLine}</div>
+      <div class="game-result-label">${labelLine}</div>
+      <div class="game-result-actions">
+        <button class="btn-primary" id="gamePlayAgainBtn">Play Again</button>
+        <button class="btn-secondary" id="gameChangeBtn">Change Game</button>
+        <button class="ghost-link" id="gameHomeBtn">Home</button>
+      </div>
+    `;
+    document.getElementById('gamePlayAgainBtn').addEventListener('click', () => startGame(G.type, G.subject));
+    document.getElementById('gameChangeBtn').addEventListener('click', () => { showScreen('gamesHub'); renderGamesHub(); });
+    document.getElementById('gameHomeBtn').addEventListener('click', () => showScreen('home'));
   }
 
   /* ════════ RESULTS ════════ */
@@ -3943,7 +4273,7 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
 
   /* ════════ SCREENS ════════ */
   function showScreen(name) {
-    ['home','quiz','result','class','teacherDash','parentDash'].forEach(n => {
+    ['home','quiz','result','class','teacherDash','parentDash','gamesHub','speedRound','trueFalse','memoryMatch','gameResult'].forEach(n => {
       document.getElementById(n+'Screen').classList.toggle('active', n===name);
     });
     window.scrollTo(0,0);
