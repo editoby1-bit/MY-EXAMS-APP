@@ -1168,6 +1168,9 @@ body {
   white-space: nowrap;
 }
 .hero-dash-banner:hover { filter: brightness(1.04); transform: translateY(-1px); }
+.hero-games-banner { background: linear-gradient(135deg, #7c5cff, #a78bfa); }
+.hero-games-banner .hdb-text, .hero-games-banner .hdb-arrow { color: #1a1042; }
+.hero-games-banner .hdb-sub { color: rgba(26,16,66,.65); }
 .hdb-icon { font-size: 1.15rem; flex-shrink: 0; }
 .hdb-text-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: .05rem; line-height: 1.25; }
 .hdb-text { font-family: var(--sans); font-size: .85rem; font-weight: 700; color: var(--ink,#1a1a1a); }
