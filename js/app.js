@@ -1,3876 +1,1612 @@
-/* ═══════════════════════════════════════════════════════════════
-   MY STUDY APP — App Logic v1.0
-═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════
+   MY EXAMS APP — v2.1  (bug-fixed)
+   WAEC · NECO · GCE · NABTEB
+═══════════════════════════════════════════════════════════ */
+(() => {
 
-(function () {
-  'use strict';
+  const SK = {
+    users:   'mea-users-v1',
+    current: 'mea-current-v1',
+    access:  'mea-access-v1',
+    free:    'mea-free-lifetime-v1',   // lifetime trial counter
+    streak:  'mea-streak-v1',
+    tier:    'mea-tier-v1',            // 'student' | 'plus'
+    class:   'mea-class-v1',           // { classCode, name, pin } — this device's class membership
+    classAdmin: 'mea-class-admin-v1',  // { classCode, adminSecret, schoolName } — teacher device only
+  };
+  const FREE_TRIAL_LIMIT    = 10;   // lifetime questions, not daily
+  const FREE_SNAP_LIMIT     = 3;    // lifetime snaps on free tier
+  const EARLY_ADOPTER_PRICE = 200000; // ₦2,000 in kobo
+  const STANDARD_PRICE      = 250000; // ₦2,500 in kobo
+  const EARLY_ADOPTER_CAP   = 100;    // first 100 students
 
-  const API_BASE = 'https://editoby-api.vercel.app';
-
-  /* ────────────────────────────────
-     STATE
-  ──────────────────────────────── */
   const S = {
-    category: 'senior',        // 'senior' | 'junior'
-    currentUser: null,
-    subject: null,
-    mode: null,                // 'revision' | 'quiz' | 'challenge'
-    questions: [],
-    idx: 0,
-    answers: [],
-    score: 0,
-    timerSecs: 0,
-    timerInterval: null,
-    startedAt: null,
-    _challengeCode: null,
-    stats: { sessions: 0, totalPct: 0, streak: 0, lastActiveDate: null }
+    currentUser: loadSafe(SK.current) || '',
+    users:       loadSafe(SK.users, {}),
+    hasAccess:   checkAccess(),
+    tier:        loadSafe(SK.tier) || 'free',
+    freeUsed:    getFreeUsed(),       // lifetime questions used on free tier
+    freeSnaps:   getFreeSnaps(),      // lifetime snaps used on free tier
+    streak:      loadSafe(SK.streak, { count:0, lastDate:'' }),
+    exam:        'WAEC',
+    year:        'random',
+    bothMode:    'sections',
+    section:     'A',
+    sectionA:    [],
+    sectionB:    [],            // 'random' or e.g. 2023
+    subject:     '',
+    mode:        '',
+    type:        '',
+    bothMode:    'sections',
+    count:       20,
+    questions:   [],
+    answers:     [],
+    flagged:     [],
+    idx:         0,
+    reviewMode:  false,
+    showAnswer:  false,
+    timerSecs:   0,
+    timerId:     null,
+    inSession:   false,
   };
 
-  /* ────────────────────────────────
-     STORAGE HELPERS
-  ──────────────────────────────── */
-  function loadSafe(key, fallback) {
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallback;
-    } catch (e) { return fallback; }
-  }
-  function saveSafe(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
-  }
-
-  const STATS_KEY = 'hh-stats-v1';
-  const USER_KEY = 'hh-user-v1';
-  const SEEN_KEY = 'hh-seen-v1';
-  const MASTERY_KEY = 'hh-mastery-v1';
-  const PLAN_KEY = 'hh-study-plan-v1';
-  const AI_CREDITS_KEY = 'hh-ai-credits-v1';
-  const FREE_TRIAL_CREDITS = 3;
-  const PAYSTACK_KEY = 'pk_live_5d12ee2a90900116dc222107e059a06214c085ff';
-  const AI_CREDIT_PACK_SIZE = 10;
-  const AI_CREDIT_PACK_PRICE_KOBO = 50000; // ₦500
-  const GAMES_PASS_PRICE_KOBO = 40000;     // ₦400 / 7-day unlimited games
-  const GAMES_TOPUP_PRICE_KOBO = 15000;    // ₦150 / +15 rounds, one-off
-  const GAMES_TOPUP_ROUNDS = 15;
-  const FREE_GAME_ROUNDS = 8;
-  const GAMES_PASS_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
-  const GAMES_CREDITS_KEY = 'hh-games-credits-v1';
-
-  /** Games used to be entirely free and unlimited — this is the gate that
-   * makes that untrue on purpose: 8 free rounds total across all 8 games,
-   * then either a 7-day unlimited pass or a smaller one-off round top-up.
-   * Deliberately separate from AI_CREDITS_KEY — "can I play at all" and
-   * "can I get fresh AI content while playing" are two different
-   * questions with two different answers, same as the design discussion
-   * settled on. */
-  function getGamesCredits() {
-    return loadSafe(GAMES_CREDITS_KEY, { freeRoundsRemaining: FREE_GAME_ROUNDS, extraRoundsRemaining: 0, passExpiresAt: 0 });
-  }
-
-  function hasGamesAccess() {
-    const g = getGamesCredits();
-    if (g.passExpiresAt && Date.now() < g.passExpiresAt) return true;
-    if (g.freeRoundsRemaining > 0) return true;
-    if (g.extraRoundsRemaining > 0) return true;
-    return false;
-  }
-
-  /** Called once per round START (not completion) — starting and
-   * abandoning still costs a round, same as a real arcade credit, so
-   * there's no incentive to game the gate by bailing early. An active
-   * pass means unlimited play, so nothing gets decremented at all while
-   * one is active. */
-  function consumeGameRound() {
-    const g = getGamesCredits();
-    if (g.passExpiresAt && Date.now() < g.passExpiresAt) return;
-    if (g.freeRoundsRemaining > 0) { g.freeRoundsRemaining--; saveSafe(GAMES_CREDITS_KEY, g); return; }
-    if (g.extraRoundsRemaining > 0) { g.extraRoundsRemaining--; saveSafe(GAMES_CREDITS_KEY, g); }
-  }
-
-  function activateGamesPass() {
-    const g = getGamesCredits();
-    g.passExpiresAt = Date.now() + GAMES_PASS_DURATION_MS;
-    saveSafe(GAMES_CREDITS_KEY, g);
-  }
-
-  function addExtraGameRounds(n) {
-    const g = getGamesCredits();
-    g.extraRoundsRemaining = (g.extraRoundsRemaining || 0) + n;
-    saveSafe(GAMES_CREDITS_KEY, g);
-  }
-
-  /** Read-only access check for the 7 games with a single-phase start
-   * (no intermediate picker step like Speed Round has). Deliberately
-   * does NOT consume a round here — each caller does that itself, after
-   * its own "is there actually content for this subject" check passes,
-   * so a subject with no data can never cost someone a free round for
-   * nothing. */
-  function gateGameStart() {
-    if (!hasGamesAccess()) { showGamesPaywall(); return false; }
-    return true;
-  }
-
-  function showGamesPaywall() {
-    document.getElementById('gamesPaywallModal').classList.remove('hidden');
-  }
-  function hideGamesPaywall() {
-    document.getElementById('gamesPaywallModal').classList.add('hidden');
-  }
-
-  function initGamesPaywall() {
-    const closeBtn = document.getElementById('gpClose');
-    if (closeBtn) closeBtn.addEventListener('click', hideGamesPaywall);
-    const laterBtn = document.getElementById('gpClose2');
-    if (laterBtn) laterBtn.addEventListener('click', hideGamesPaywall);
-    const passBtn = document.getElementById('gpPassBtn');
-    if (passBtn) passBtn.addEventListener('click', purchaseGamesPass);
-    const topupBtn = document.getElementById('gpTopupBtn');
-    if (topupBtn) topupBtn.addEventListener('click', purchaseGamesTopUp);
-  }
-
-  async function purchaseGamesPass() {
-    const email = await getEmailViaModal();
-    if (!email) return;
-    if (typeof window.PaystackPop === 'undefined') {
-      showToast('Payment could not load — check your connection and try again.');
-      return;
-    }
-    const handler = window.PaystackPop.setup({
-      key: PAYSTACK_KEY,
-      email,
-      amount: GAMES_PASS_PRICE_KOBO,
-      currency: 'NGN',
-      ref: 'MSA-GP-' + Date.now(),
-      metadata: { custom_fields: [
-        { display_name: 'Product', variable_name: 'product', value: 'My Study App — 7-Day Games Pass' },
-      ]},
-      onClose() {},
-      callback(response) {
-        (async () => {
-          showToast('Confirming payment…');
-          try {
-            const res = await fetch(API_BASE + '/api/verify-payment', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ reference: response.reference }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.verified || data.tier !== 'hh-games-pass') {
-              showToast('Could not confirm payment yet. If you were charged, contact support with reference: ' + response.reference, 5000);
-              return;
-            }
-            activateGamesPass();
-            hideGamesPaywall();
-            showToast('✅ 7-Day Games Pass unlocked — unlimited games all week!', 4000);
-          } catch (err) {
-            showToast('Could not confirm payment — contact support with reference: ' + response.reference, 5000);
-          }
-        })();
-      },
-    });
-    handler.openIframe();
-  }
-
-  async function purchaseGamesTopUp() {
-    const email = await getEmailViaModal();
-    if (!email) return;
-    if (typeof window.PaystackPop === 'undefined') {
-      showToast('Payment could not load — check your connection and try again.');
-      return;
-    }
-    const handler = window.PaystackPop.setup({
-      key: PAYSTACK_KEY,
-      email,
-      amount: GAMES_TOPUP_PRICE_KOBO,
-      currency: 'NGN',
-      ref: 'MSA-GT-' + Date.now(),
-      metadata: { custom_fields: [
-        { display_name: 'Product', variable_name: 'product', value: `My Study App — +${GAMES_TOPUP_ROUNDS} Game Rounds` },
-      ]},
-      onClose() {},
-      callback(response) {
-        (async () => {
-          showToast('Confirming payment…');
-          try {
-            const res = await fetch(API_BASE + '/api/verify-payment', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ reference: response.reference }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.verified || data.tier !== 'hh-games-topup') {
-              showToast('Could not confirm payment yet. If you were charged, contact support with reference: ' + response.reference, 5000);
-              return;
-            }
-            addExtraGameRounds(GAMES_TOPUP_ROUNDS);
-            hideGamesPaywall();
-            showToast(`✅ +${GAMES_TOPUP_ROUNDS} game rounds added — no expiry, play whenever!`, 4000);
-          } catch (err) {
-            showToast('Could not confirm payment — contact support with reference: ' + response.reference, 5000);
-          }
-        })();
-      },
-    });
-    handler.openIframe();
-  }
-
-
-  function getBank(cat) {
-    return cat === 'junior' ? JUNIOR_BANK : SENIOR_BANK;
-  }
-
-  /* ────────────────────────────────
-     MASTERY / WEAK-AREA TRACKING
-     Tracks per-subject accuracy from scored sessions (Quiz and Speed
-     Round — not Revision, since that's open browsing, not a test).
-     Powers the home screen "Focus area" nudge and the Study Plan.
-  ──────────────────────────────── */
-  function masteryKey(category, subject) { return `${category}:${subject}`; }
-
-  function recordMastery(category, subject, correctCount, totalCount) {
-    if (!totalCount) return;
-    const all = loadSafe(MASTERY_KEY, {});
-    const key = masteryKey(category, subject);
-    const existing = all[key] || { correct: 0, total: 0 };
-    all[key] = { correct: existing.correct + correctCount, total: existing.total + totalCount };
-    saveSafe(MASTERY_KEY, all);
-  }
-
-  /**
-   * Returns the weakest subject (lowest accuracy) the student has
-   * attempted at least MIN_ATTEMPTS questions in, within `category`.
-   * Returns null if there isn't enough data yet to make a fair call.
-   */
-  function getWeakestSubject(category) {
-    const MIN_ATTEMPTS = 8;
-    const all = loadSafe(MASTERY_KEY, {});
-    const manifest = CONTENT_MANIFEST[category];
-    let weakest = null;
-    manifest.subjects.forEach(subj => {
-      const data = all[masteryKey(category, subj)];
-      if (!data || data.total < MIN_ATTEMPTS) return;
-      const pct = data.correct / data.total;
-      if (!weakest || pct < weakest.pct) weakest = { subject: subj, pct, total: data.total };
-    });
-    return weakest;
-  }
-
-  function getLastActivity() {
-    return loadSafe('hh-last-activity-v1', null);
-  }
-  function setLastActivity(category, subject, mode) {
-    saveSafe('hh-last-activity-v1', { category, subject, mode, at: Date.now() });
-  }
-
-  /* ────────────────────────────────
-     SEEN-QUESTION TRACKING
-     Avoids repeating the same questions for a user in Revision, Quiz,
-     and Challenge creation. Tracked per category+subject so Senior and
-     Junior pools don't interfere with each other. Once every question
-     in a subject has been seen, the pool quietly resets (recycles)
-     rather than blocking the student from practicing further.
-  ──────────────────────────────── */
-  function seenKey(category, subject) { return `${category}:${subject}`; }
-
-  function getSeenSet(category, subject) {
-    const all = loadSafe(SEEN_KEY, {});
-    return new Set(all[seenKey(category, subject)] || []);
-  }
-
-  function markSeen(category, subject, questionIds) {
-    if (!questionIds.length) return;
-    const all = loadSafe(SEEN_KEY, {});
-    const key = seenKey(category, subject);
-    const set = new Set(all[key] || []);
-    questionIds.forEach(id => set.add(id));
-    all[key] = Array.from(set);
-    saveSafe(SEEN_KEY, all);
-  }
-
-  function resetSeen(category, subject) {
-    const all = loadSafe(SEEN_KEY, {});
-    delete all[seenKey(category, subject)];
-    saveSafe(SEEN_KEY, all);
-  }
-
-  /** Coverage ratio (0–1) of how much of a subject's static question bank
-   * has already been seen. Used to decide when it's honest to tell a
-   * student "you've worked through most of this" rather than showing that
-   * message on a guess or a fixed schedule. */
-  function seenCoverage(category, subject) {
-    const bank = getBank(category)[subject];
-    const total = bank && bank.objective ? bank.objective.length : 0;
-    if (!total) return 0;
-    const seen = getSeenSet(category, subject).size;
-    return Math.min(1, seen / total);
-  }
-
-  const COMPLETED_KEY = 'hh-completed-v1';
-  /** Tracks whether a person has been all the way through a piece of
-   * content before — one full pass, not a coverage percentage. Far more
-   * reliably triggerable than a 90%-of-the-whole-bank threshold, which
-   * needed dozens of questions answered in one sitting to ever fire. This
-   * fires the SECOND time someone opens the same subject's same content
-   * type, having already reached the end of it once already. */
-  function completedKey(category, subject, type) { return `${category}:${subject}:${type}`; }
-  function markCompleted(category, subject, type) {
-    const all = loadSafe(COMPLETED_KEY, {});
-    all[completedKey(category, subject, type)] = Date.now();
-    saveSafe(COMPLETED_KEY, all);
-  }
-  function wasCompletedBefore(category, subject, type) {
-    const all = loadSafe(COMPLETED_KEY, {});
-    return !!all[completedKey(category, subject, type)];
-  }
-
-  /** A genuinely blocking modal, not a scroll-past inline banner — used
-   * for deliberately strong signals only (real repeat completion, or
-   * pushing past the end of content on a first pass). Reused across
-   * Library/Quiz/Revision with fresh values each time via .onclick/
-   * textContent (always overwrites, no leaked/stacked listeners across
-   * repeated shows). Title/icon/continue-label are optional — default to
-   * the "you've done this before" framing, since that's the original and
-   * most common case; pass overrides for a different honest framing
-   * (e.g. "that's everything for now" on first-pass exhaustion). */
-  function showCompletedModal(message, onGetMore, opts) {
-    const o = opts || {};
-    document.getElementById('completedTitle').textContent = o.title || "You've already been through this";
-    document.getElementById('completedIcon').textContent = o.icon || '🔁';
-    document.getElementById('completedSub').textContent = message;
-    document.getElementById('completedContinueBtn').textContent = o.continueLabel || 'Continue anyway';
-    const modal = document.getElementById('completedModal');
-    modal.classList.remove('hidden');
-    document.getElementById('completedGetMoreBtn').onclick = () => {
-      modal.classList.add('hidden');
-      hasAICredit() ? onGetMore() : showAIPaywall();
-    };
-    document.getElementById('completedContinueBtn').onclick = () => modal.classList.add('hidden');
-    document.getElementById('completedClose').onclick = () => modal.classList.add('hidden');
-    modal.onclick = (e) => { if (e.target === modal) modal.classList.add('hidden'); };
-  }
-
-  const COVERAGE_NUDGE_KEY = 'hh-coverage-nudge-v1';
-  /** Shows the "you've seen most of this" upsell at most once per subject
-   * per day — a student revising the same subject repeatedly shouldn't get
-   * nagged on every single visit once they cross the threshold. */
-  function maybeShowCoverageNudge(category, subject, contextLabel) {
-    const coverage = seenCoverage(category, subject);
-    if (coverage < 0.7) return;
-    const key = seenKey(category, subject);
-    const shown = loadSafe(COVERAGE_NUDGE_KEY, {});
-    const today = new Date().toDateString();
-    if (shown[key] === today) return;
-    shown[key] = today;
-    saveSafe(COVERAGE_NUDGE_KEY, shown);
-    const pct = Math.round(coverage * 100);
-    showActionToast(
-      `You've worked through ${pct}% of ${SUBJECT_LABELS[subject] || subject} ${contextLabel}.`,
-      'Get more with AI →',
-      () => { hasAICredit() ? generateExtraContentForSubject(category, subject) : showAIPaywall(); },
-      5500
-    );
-  }
-
-  async function generateExtraContentForSubject(category, subject) {
-    showToast('Generating fresh questions with AI…', 4000);
-    try {
-      const bank = getBank(category)[subject];
-      const avoid = (bank.objective || []).map(q => q.question).slice(0, 60);
-      const res = await fetch(API_BASE + '/api/generate-questions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category, subject: SUBJECT_LABELS[subject] || subject,
-          count: 15, avoidQuestions: avoid,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok || !data.questions.length) {
-        showToast('Could not generate more questions right now — please try again shortly.');
-        return;
-      }
-      consumeAICredit();
-      // Persisted now, matching the fix already applied to flashcards/
-      // formulas/notes — this used to be ephemeral (comment above used
-      // to admit it: "not written back... gone on reload"), which meant
-      // Speed Round's mid-game top-up, Revision, Quiz, and Challenge's AI
-      // Boost all quietly lost any AI-generated questions on refresh, and
-      // couldn't benefit from each other's generations either, since each
-      // was working off a bank that reset on every reload. One fix here
-      // means any game or mode reading from getBank(category)[subject]
-      // automatically sees everything ever generated for that subject,
-      // from any entry point, permanently.
-      bank.objective = (bank.objective || []).concat(data.questions);
-      saveAIGeneratedItems(category, subject, 'objective', data.questions);
-      // If the student is mid-Revision on this exact subject, extend their
-      // current session too, rather than making them back out and restart.
-      if (S.mode === 'revision' && S.subject === subject && S.category === category) {
-        S.questions = S.questions.concat(data.questions);
-      }
-      const left = getAICredits().credits;
-      showToast(`✨ ${data.questions.length} new questions added — 1 credit used (${left} left)`, 3800);
-    } catch (err) {
-      showToast('Could not generate more questions right now — please try again shortly.');
-    }
-  }
-
-  const LIBRARY_NUDGE_KEY = 'hh-library-nudge-v1';
-  /** Library has no "seen" tracking (unlike the question bank), so this
-   * uses total content depth instead of a coverage ratio — a different,
-   * honest signal for a different situation. Now generates real flashcards
-   * via AI (see generateExtraFlashcardsForSubject below) instead of just
-   * opening Project Helper's chat — that was a mismatch between what the
-   * button promised ("more materials") and what it actually did (opened a
-   * conversation you'd have to steer yourself). */
-  function maybeShowThinLibraryNudge(category, subject, totalItems) {
-    // Threshold raised from 10 to 20 now that Math/English carry 40-70+
-    // items each after the core-subjects deep pass — everything else
-    // still sits at 10-19, so this correctly keeps firing for every
-    // subject except the two flagship ones, which is the honest signal:
-    // "there's more coming here, AI can bridge the gap today."
-    if (totalItems >= 20) return;
-    const key = seenKey(category, subject);
-    const shown = loadSafe(LIBRARY_NUDGE_KEY, {});
-    const today = new Date().toDateString();
-    if (shown[key] === today) return;
-    shown[key] = today;
-    saveSafe(LIBRARY_NUDGE_KEY, shown);
-    showActionToast(
-      `We're still adding offline material for ${SUBJECT_LABELS[subject] || subject}.`,
-      'Activate AI mode for more →',
-      () => { hasAICredit() ? generateExtraFlashcardsForSubject(category, subject) : showAIPaywall(); },
-      5500
-    );
-  }
-
-  async function generateExtraFlashcardsForSubject(category, subject) {
-    showToast('Generating fresh flashcards with AI…', 4000);
-    try {
-      const resBank = getResourceBank(category);
-      const r = resBank[subject] || (resBank[subject] = { flashcards: [], formulas: [], notes: [] });
-      const avoid = (r.flashcards || []).map(c => c.term).slice(0, 60);
-      const res = await fetch(API_BASE + '/api/generate-questions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category, subject: SUBJECT_LABELS[subject] || subject,
-          count: 10, avoidQuestions: avoid, contentType: 'flashcards',
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok || !data.flashcards || !data.flashcards.length) {
-        showToast('Could not generate more flashcards right now — please try again shortly.');
-        return;
-      }
-      consumeAICredit();
-      // Merges into memory for this session AND persists to localStorage
-      // so it survives a reload — this is now genuinely part of this
-      // device's permanent offline library, not a session-only bonus.
-      r.flashcards = (r.flashcards || []).concat(data.flashcards);
-      saveAIGeneratedItems(category, subject, 'flashcards', data.flashcards);
-      // If mid-Library on this exact subject's flashcard tab, refresh in place.
-      if (LIB.subject === subject && LIB.tab === 'flashcards') {
-        LIB.cards = LIB.cards.concat(data.flashcards);
-        renderFlashcards(document.getElementById('libraryTabBody'), LIB.cards);
-      }
-      const left = getAICredits().credits;
-      showToast(`✨ ${data.flashcards.length} new flashcards added — 1 credit used (${left} left)`, 3800);
-    } catch (err) {
-      showToast('Could not generate more flashcards right now — please try again shortly.');
-    }
-  }
-
-  /** Mirrors generateExtraFlashcardsForSubject exactly, but for the Notes
-   * tab — this used to not exist at all (Notes had no AI generation path;
-   * "already completed" fell back to opening Project Helper's chat
-   * instead of actually generating notes). Persisted via
-   * saveAIGeneratedItems, same as flashcards and formulas. */
-  async function generateExtraNotesForSubject(category, subject) {
-    showToast('Generating fresh notes with AI…', 4000);
-    try {
-      const resBank = getResourceBank(category);
-      const r = resBank[subject] || (resBank[subject] = { flashcards: [], formulas: [], notes: [] });
-      const avoid = (r.notes || []).map(n => n.topic).slice(0, 60);
-      const res = await fetch(API_BASE + '/api/generate-questions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category, subject: SUBJECT_LABELS[subject] || subject,
-          count: 6, avoidQuestions: avoid, contentType: 'notes',
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok || !data.notes || !data.notes.length) {
-        showToast('Could not generate more notes right now — please try again shortly.');
-        return;
-      }
-      consumeAICredit();
-      r.notes = (r.notes || []).concat(data.notes);
-      saveAIGeneratedItems(category, subject, 'notes', data.notes);
-      // If mid-Library on this exact subject's notes tab, refresh in place.
-      if (LIB.subject === subject && LIB.tab === 'notes') {
-        renderNotes(document.getElementById('libraryTabBody'), r.notes);
-      }
-      const left = getAICredits().credits;
-      showToast(`✨ ${data.notes.length} new notes added — 1 credit used (${left} left)`, 3800);
-    } catch (err) {
-      showToast('Could not generate more notes right now — please try again shortly.');
-    }
-  }
-
-  /** Same pattern again, for Formulas — the one gap left after Flashcards
-   * and Notes got real AI generation. A subject with no genuine formulas
-   * (English, CRS, etc.) can validly get back an empty array from the
-   * backend; that's not an error, so it gets its own honest message
-   * instead of the generic failure toast. */
-  async function generateExtraFormulasForSubject(category, subject) {
-    showToast('Generating fresh formulas with AI…', 4000);
-    try {
-      const resBank = getResourceBank(category);
-      const r = resBank[subject] || (resBank[subject] = { flashcards: [], formulas: [], notes: [] });
-      const avoid = (r.formulas || []).map(f => f.title).slice(0, 60);
-      const res = await fetch(API_BASE + '/api/generate-questions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category, subject: SUBJECT_LABELS[subject] || subject,
-          count: 6, avoidQuestions: avoid, contentType: 'formulas',
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok || !Array.isArray(data.formulas)) {
-        showToast('Could not generate more formulas right now — please try again shortly.');
-        return;
-      }
-      if (!data.formulas.length) {
-        showToast(`${SUBJECT_LABELS[subject] || subject} doesn't really use formulas — try Flashcards or Notes instead.`, 4200);
-        return;
-      }
-      consumeAICredit();
-      r.formulas = (r.formulas || []).concat(data.formulas);
-      saveAIGeneratedItems(category, subject, 'formulas', data.formulas);
-      if (LIB.subject === subject && LIB.tab === 'formulas') {
-        renderFormulas(document.getElementById('libraryTabBody'), r.formulas);
-      }
-      const left = getAICredits().credits;
-      showToast(`✨ ${data.formulas.length} new formulas added — 1 credit used (${left} left)`, 3800);
-    } catch (err) {
-      showToast('Could not generate more formulas right now — please try again shortly.');
-    }
-  }
-
-
-  /**
-   * Picks `count` questions from `pool` (array of question objects with
-   * an `id`), preferring ones the user hasn't seen yet for this
-   * category+subject. If the unseen pool can't cover the full count,
-   * it recycles seen ones to fill the rest (and if the WHOLE pool has
-   * been seen, it resets tracking so the cycle starts fresh — better
-   * than refusing to serve questions at all).
-   * Returns { questions, recycled } where `recycled` is true if any
-   * previously-seen questions had to be reused.
-   */
-  function pickQuestions(category, subject, pool, count) {
-    const seen = getSeenSet(category, subject);
-    const unseen = shuffleArray(pool.filter(q => !seen.has(q.id)));
-    const alreadySeen = shuffleArray(pool.filter(q => seen.has(q.id)));
-
-    let selected = unseen.slice(0, count);
-    let recycled = false;
-
-    if (selected.length < count) {
-      recycled = selected.length > 0 || alreadySeen.length > 0;
-      const stillNeeded = count - selected.length;
-      selected = selected.concat(alreadySeen.slice(0, stillNeeded));
-    }
-
-    // Whole subject exhausted (every question already seen at least
-    // once) — reset tracking now so the NEXT session starts fresh
-    // rather than immediately recycling again.
-    if (unseen.length === 0 && pool.length > 0) {
-      resetSeen(category, subject);
-    }
-
-    return { questions: selected, recycled };
-  }
-
-  /* ────────────────────────────────
-     TOAST
-  ──────────────────────────────── */
-  function showToast(msg, ms) {
-    const host = document.getElementById('toastHost');
-    const t = document.createElement('div');
-    t.className = 'toast';
-    t.textContent = msg;
-    host.appendChild(t);
-    setTimeout(() => t.remove(), ms || 2600);
-  }
-  window.showInfoToast = showToast;
-
-  /** A toast with a tappable call-to-action — for gentle upsell nudges that
-   * should never block play. Tapping the action button runs onAction();
-   * tapping anywhere else just dismisses it, same as it would time out on
-   * its own. Used sparingly and only where a person can act on it. */
-  function showActionToast(msg, actionLabel, onAction, ms) {
-    const host = document.getElementById('toastHost');
-    const t = document.createElement('div');
-    t.className = 'toast toast-action';
-    t.innerHTML = `<span class="ta-msg">${safe(msg)}</span><button class="ta-btn">${safe(actionLabel)}</button>`;
-    t.querySelector('.ta-btn').addEventListener('click', () => { t.remove(); onAction(); });
-    host.appendChild(t);
-    const timer = setTimeout(() => t.remove(), ms || 5000);
-    t.addEventListener('click', (e) => { if (e.target === t) { clearTimeout(timer); t.remove(); } });
-  }
-
-  /** A persistent inline banner — unlike showActionToast, this does NOT
-   * auto-disappear. Meant for real end-of-content moments (last flashcard,
-   * end of a Revision queue, post-game results) where the person has
-   * actually stopped to look at the screen, so it's fair to ask for a
-   * couple seconds of attention rather than something they have to catch
-   * before it vanishes. Always dismissible with a real close button.
-   * Returns the created element in case the caller wants to remove it
-   * itself later (e.g. before re-rendering the same container). */
-  function renderExpandBanner(container, message, actionLabel, onAction) {
-    const el = document.createElement('div');
-    el.className = 'expand-banner';
-    el.innerHTML = `
-      <button class="expand-banner-close" aria-label="Dismiss">✕</button>
-      <div class="expand-banner-icon">✨</div>
-      <div class="expand-banner-text">${safe(message)}</div>
-      <button class="expand-banner-btn">${safe(actionLabel)}</button>
-    `;
-    el.querySelector('.expand-banner-close').addEventListener('click', () => el.remove());
-    el.querySelector('.expand-banner-btn').addEventListener('click', () => { el.remove(); onAction(); });
-    container.appendChild(el);
-    return el;
-  }
-
-  /* ────────────────────────────────
-     SCREEN ROUTING
-  ──────────────────────────────── */
-  function showScreen(id) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  /* ── Element cache ── */
+  const E = {};
+  [
+    'homeScreen','quizScreen','resultScreen',
+    'studentNameInput','loginBtn','studentPill','streakDisplay',
+    'subjectGrid','modeToggle','typeToggle','qCountSelect','durationSelect',
+    'bothModeGroup','bothModeToggle',
+    'sectionTabs','sectionTabA','sectionTabB','sectionACount','sectionBCount',
+    'subjectSwitcher','subjectTabs',
+    'startBtn','startBtnText',
+    'historyList','clearHistoryBtn',
+    'hStatSessions','hStatAvg','hStatBest','hStatQs',
+    'paywallOverlay','paywallBadge','payBtn','payBtnPlus','payBtnYear','payBtnPlusYear','payBtnJamb','payBtnSchool',
+    'accessCodeInput','redeemBtn','closePaywall',
+    'earlyAdopterBanner','earlyAdopterCounter',
+    'yearPillsContainer',
+    'tabIndividual','tabJamb','tabSchool',
+    'paywallIndividual','paywallJamb','paywallSchool',
+    'sidebarToggle','sidebarBackdrop','quizSidebar','exitBtn',
+    'sbStudent','sbSubject','sbMode','sbExam',
+    'timerCard','timerDisplay','qhMobileTimer',
+    'progressBar','progressFraction','progressSub',
+    'qPills','submitQuizBtn',
+    'qtypeBanner','qNumBadge','qSubjectTag','qYearTag','qPosIndicator','flagBtn',
+    'objectivePanel','objectiveQuestion','optionsList','explanationArea','keyHint',
+    'theoryPanel','theoryQuestion','markingScheme','toggleAnswerBtn','modelAnswer','examTipBox',
+    'prevBtn','nextBtn','sectionJumpBtn',
+    'resultEmoji','resultScore','resultGrade','resultSummary','resultStatsGrid','resultBreakdown',
+    'reviewBtn','homeBtn','shareBtn','shareSessionBtn',
+    'upgradeBar','upgradeBarBtn','upgradeBarText',
+    'resultUpgradTeaser','rutBtn','rutTitle',
+    'teaserToast','teaserToastText','teaserToastUpgrade','teaserToastClose',
+    'aiExplainBtn','aiExplainTheoryBtn','aiExplainTeaser','meaAiPanel','meaAiClose','meaAiCredits','meaAiLoading','meaAiResponse','meaAiContent',
+    'snapBtn','snapFileInput','snapCreditsBadge','snapActionRow','snapTip',
+    'snapResultModal','snapResultClose','snapResultScore','snapResultGrade','snapResultPct',
+    'snapHwWarning','snapFeedback','snapBreakdown','snapExaminerNote','snapResultDone',
+    'snapProcessing',
+  ].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.classList.add('active');
-    window.scrollTo(0, 0);
+    if (!el) console.warn('Missing element:', id);
+    E[id] = el;
+  });
+
+  /* ════════ INIT ════════ */
+  function init() {
+    buildSubjectGrid();
+    bindEvents();
+    restoreUser();
+    refreshStats();
+    renderHistory();
+    renderStreak();
+    countQuestions();
+    initCommunityQuiz();
+    initContestNotify();
+    checkForSharedSession();
+    refreshUpgradeBar();
+    renderPlanBadge();
+    // Clear any stale hash on load
+    if (window.location.hash) {
+      history.replaceState(null, '', window.location.pathname);
+    }
+
+    // Without this, a student who creates or joins a scheduled/ready
+    // challenge and then just sits on some other screen would never find
+    // out it started until they happened to reopen the modal or log in
+    // again. This catches that regardless of which screen they're on.
+    setInterval(() => {
+      if (!S.currentUser) return;
+      checkForStartedChallenges();
+      checkScheduledChallengeReminders();
+    }, 45000);
+
+    // School & Class nav card + back buttons for the new dashboard screens
+    const classNav = document.getElementById('dashTopBanner');
+    if (classNav) classNav.addEventListener('click', () => openClassScreen());
+    const cbb = document.getElementById('classBackBtn');
+    if (cbb) cbb.addEventListener('click', () => showScreen('home'));
+    const tbb = document.getElementById('teacherDashBackBtn');
+    if (tbb) tbb.addEventListener('click', () => showScreen('home'));
+    const pbb = document.getElementById('parentDashBackBtn');
+    if (pbb) pbb.addEventListener('click', () => showScreen('home'));
+
+    // Games
+    const gamesNav = document.getElementById('gamesNavCard');
+    if (gamesNav) gamesNav.addEventListener('click', openGamesHub);
+    const ghb = document.getElementById('gamesHubBackBtn');
+    if (ghb) ghb.addEventListener('click', () => showScreen('home'));
+
+    // Direct-link entry points for teacher/parent dashboards — e.g.
+    // ?dash=teacher (this device's saved admin credentials, from Create
+    // Class) or ?dash=parent&code=P-XXXXXXXX (works on ANY device — the
+    // parent code itself is the credential).
+    const dashParams = new URLSearchParams(location.search);
+    const dashParam = dashParams.get('dash');
+    if (dashParam === 'teacher') {
+      const admin = loadSafe(SK.classAdmin);
+      if (admin) openTeacherDashboard(admin.classCode, admin.adminSecret);
+      else openClassScreen('teacher');
+    } else if (dashParam === 'parent') {
+      openParentDashboard(dashParams.get('code'));
+    }
   }
 
-  function goBack(target) {
-    if (target === 'confirm-exit-quiz') {
-      if (S.mode === 'quiz' || S.mode === 'challenge') {
-        if (!confirm('Leave this quiz? Your progress will be lost.')) return;
-        stopTimer();
+  function countQuestions() {
+    let t = 0;
+    Object.values(EXAM_BANK).forEach(s => {
+      t += (s.objective?.length||0) + (s.theory?.length||0);
+    });
+    if (E.hStatQs) E.hStatQs.textContent = t;
+  }
+
+  /* ════════ SUBJECT GRID ════════ */
+  function buildSubjectGrid() {
+    E.subjectGrid.innerHTML = '';
+    Object.entries(SUBJECTS).forEach(([key, meta]) => {
+      if (!EXAM_BANK[key]) return;
+      const btn = document.createElement('button');
+      btn.className = 'subject-btn';
+      btn.dataset.subject = key;
+      btn.innerHTML =
+        `<span class="sub-icon">${meta.icon}</span>` +
+        `<span class="sub-name">${meta.name}</span>` +
+        `<span class="sub-count" data-subject-count="${key}">0Q</span>`;
+      btn.addEventListener('click', () => pickSubject(key, btn));
+      E.subjectGrid.appendChild(btn);
+    });
+    updateSubjectCounts(); // populate counts for current exam
+  }
+
+  function getExamCount(key) {
+    const bank = EXAM_BANK[key];
+    if (!bank) return 0;
+    const examFilter = q => !q.exam || q.exam === S.exam;
+    const obj = (bank.objective||[]).filter(examFilter).length;
+    const th  = (bank.theory||[]).filter(examFilter).length;
+    if (S.type === 'objective') return obj;
+    if (S.type === 'theory')    return th;
+    return obj + th;
+  }
+
+  /* ════════ EVENTS ════════ */
+  function bindEvents() {
+    E.loginBtn.addEventListener('click', loginStudent);
+    E.studentNameInput.addEventListener('keydown', e => { if (e.key==='Enter') loginStudent(); });
+
+    document.querySelectorAll('#examPillsContainer .exam-pill').forEach(p =>
+      p.addEventListener('click', () => {
+        document.querySelectorAll('#examPillsContainer .exam-pill').forEach(x => x.classList.remove('active'));
+        p.classList.add('active');
+        S.exam = p.dataset.exam;
+        updateSubjectCounts();
+      })
+    );
+
+    // Year pills
+    document.querySelectorAll('#yearPillsContainer .year-pill').forEach(p =>
+      p.addEventListener('click', () => {
+        document.querySelectorAll('#yearPillsContainer .year-pill').forEach(x => x.classList.remove('active'));
+        p.classList.add('active');
+        S.year = p.dataset.year === 'random' ? 'random' : Number(p.dataset.year);
+        updateSubjectCounts();
+      })
+    );
+
+    E.modeToggle.querySelectorAll('.mode-btn').forEach(b =>
+      b.addEventListener('click', () => {
+        E.modeToggle.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        S.mode = b.dataset.mode || '';
+        E.durationSelect.disabled = (S.mode !== 'exam');
+        refreshStartBtn();
+      })
+    );
+
+    E.typeToggle.querySelectorAll('.mode-btn').forEach(b =>
+      b.addEventListener('click', () => {
+        E.typeToggle.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        S.type = b.dataset.type || '';
+        if (E.bothModeGroup) E.bothModeGroup.classList.toggle('hidden', S.type !== 'both');
+        updateSubjectCounts();
+        refreshStartBtn();
+      })
+    );
+
+    E.qCountSelect.addEventListener('change', () => {
+      S.count = E.qCountSelect.value === 'all' ? 'all' : Number(E.qCountSelect.value);
+    });
+
+    E.startBtn.addEventListener('click', startSession);
+    E.clearHistoryBtn.addEventListener('click', clearHistory);
+
+    E.payBtn.addEventListener('click', () => handlePayment('student', 'quarterly'));
+    if (E.payBtnYear)     E.payBtnYear.addEventListener('click',     () => handlePayment('student', 'yearly'));
+    if (E.payBtnPlus)     E.payBtnPlus.addEventListener('click',     () => handlePayment('plus', 'quarterly'));
+    if (E.payBtnPlusYear) E.payBtnPlusYear.addEventListener('click', () => handlePayment('plus', 'yearly'));
+    if (E.payBtnJamb)     E.payBtnJamb.addEventListener('click',     () => handlePayment('jamb', 'quarterly'));
+    if (E.payBtnSchool)   E.payBtnSchool.addEventListener('click',   () => handleSchoolEnquiry());
+    E.redeemBtn.addEventListener('click', redeemCode);
+    E.closePaywall.addEventListener('click', () => E.paywallOverlay.classList.add('hidden'));
+
+    E.exitBtn.addEventListener('click', confirmExit);
+    E.submitQuizBtn.addEventListener('click', confirmSubmit);
+    E.prevBtn.addEventListener('click', () => navigate(-1));
+    E.nextBtn.addEventListener('click', () => navigate(1));
+    if (E.sectionJumpBtn) E.sectionJumpBtn.addEventListener('click', () => {
+      if (S.type === 'both' && S.bothMode === 'sections') {
+        switchSection(S.section === 'A' ? 'B' : 'A');
       }
-      if (S.mode === 'game' || S.mode === 'tf' || S.mode === 'sort' || S.mode === 'scramble' || S.mode === 'formula' || S.mode === 'sequence' || S.mode === 'equation') {
-        if (!confirm('Leave the game? Your score will be lost.')) return;
-        stopGameTimer();
-      }
-      if (S.mode === 'memory') {
-        if (!confirm('Leave Memory Match? Your progress will be lost.')) return;
-        stopMemoryTimer();
-      }
-      // Sort/Sequence/Equation Builder skip the subject picker entirely
-      // (mixed-subject or content-free games) — sending them "back" to
-      // subjectScreen would land on a screen they never actually visited.
-      // Games Hub is their real previous screen.
-      const skippedPicker = S.mode === 'sort' || S.mode === 'sequence' || S.mode === 'equation';
-      showScreen(skippedPicker ? 'gamesHubScreen' : 'subjectScreen');
-      return;
-    }
-    const map = { home: 'homeScreen', subject: 'subjectScreen' };
-    showScreen(map[target] || 'homeScreen');
-    if ((map[target] || 'homeScreen') === 'homeScreen') {
-      renderDashboardNudge();
-      updateStudyPlanBanner();
-    }
-  }
-
-  /* ────────────────────────────────
-     NAME / USER
-  ──────────────────────────────── */
-  function ensureUser(cb) {
-    const saved = loadSafe(USER_KEY, null);
-    if (saved) { S.currentUser = saved; cb(); return; }
-    const modal = document.getElementById('namePromptModal');
-    modal.classList.remove('hidden');
-    document.getElementById('nameConfirmBtn').onclick = () => {
-      const name = document.getElementById('nameInput').value.trim();
-      if (!name) { showToast('Please enter a name.'); return; }
-      S.currentUser = name;
-      saveSafe(USER_KEY, name);
-      modal.classList.add('hidden');
-      cb();
-    };
-  }
-
-  /* ────────────────────────────────
-     GAME EXPLAINER
-     Shown once before entering any of the 4 games, so a first-time
-     player knows the rules before the clock starts. Skipped on
-     "Play Again" and "Continue where you left off" — only shown on
-     first entry via the picker/hub.
-  ──────────────────────────────── */
-  const GAME_EXPLAINERS = {
-    game: {
-      icon: '⚡', title: 'Speed Round',
-      rules: [
-        '60 seconds on the clock — answer as many as you can.',
-        'Tap the correct option out of 4 choices.',
-        'Build a streak for bonus points: 3+ in a row = 2×, 5+ = 3×.',
-      ],
-    },
-    tf: {
-      icon: '✓✗', title: 'True or False Blitz',
-      rules: [
-        '60 seconds — read the statement, tap True or False.',
-        'Statements are pulled from real past questions.',
-        'Same streak bonus scoring as Speed Round.',
-      ],
-    },
-    memory: {
-      icon: '🧠', title: 'Memory Match',
-      rules: [
-        'Flip two tiles at a time to find matching term + definition pairs.',
-        'No pressure — the clock just tracks your time, it doesn\'t count down.',
-        'Fewer moves means a better memory score.',
-      ],
-    },
-    sort: {
-      icon: '🗂', title: 'Category Sort',
-      rules: [
-        'A term appears — tap the subject bucket it belongs to.',
-        'Terms are mixed from up to 4 subjects at once.',
-        '60 seconds, same streak bonus scoring as the other games.',
-      ],
-    },
-    sequence: {
-      icon: '🔢', title: 'Sequence',
-      rules: [
-        '60 seconds — a pattern of numbers appears with one missing.',
-        'Tap the option that continues the pattern correctly.',
-        'Patterns range from simple counting to multiplying, squares, and Fibonacci-style — same streak bonus scoring.',
-      ],
-    },
-    scramble: {
-      icon: '🔤', title: 'Word Scramble',
-      rules: [
-        '60 seconds — unscramble the letters to spell an academic term.',
-        'Tap letters in order to build your answer — tap again to remove one.',
-        'A short meaning is shown after each word, right or wrong.',
-      ],
-    },
-    formula: {
-      icon: '🔢', title: 'Formula Rush',
-      rules: [
-        '60 seconds — a formula name appears, e.g. "Area of a Circle".',
-        'Tap the matching formula out of 4 choices.',
-        'Pulled straight from your Study Library formula sheets — same streak bonus scoring.',
-      ],
-    },
-    equation: {
-      icon: '🧩', title: 'Equation Builder',
-      rules: [
-        '60 seconds — a simple equation appears, like "3x + 4 = 19".',
-        'Work out x and tap the correct value from 4 options.',
-        'Watch out — some wrong options are common mistakes, not random numbers.',
-      ],
-    },
-  };
-
-  let _pendingGame = null;
-
-  function initGameExplainer() {
-    const modal = document.getElementById('gameExplainerModal');
-    document.getElementById('geClose').addEventListener('click', () => {
-      modal.classList.add('hidden');
     });
-    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
-    document.getElementById('geStartBtn').addEventListener('click', () => {
-      document.getElementById('gameExplainerModal').classList.add('hidden');
-      if (!_pendingGame) return;
-      const { mode, subject } = _pendingGame;
-      if (mode === 'game') startSpeedRound(subject);
-      else if (mode === 'tf') startTrueFalseBlitz(subject);
-      else if (mode === 'memory') startMemoryMatch(subject);
-      else if (mode === 'sort') startCategorySort();
-      else if (mode === 'sequence') startSequenceGame();
-      else if (mode === 'scramble') startWordScramble(subject);
-      else if (mode === 'formula') startFormulaRush(subject);
-      else if (mode === 'equation') startEquationBuilder();
+    E.toggleAnswerBtn.addEventListener('click', toggleAnswer);
+    E.flagBtn.addEventListener('click', toggleFlag);
+
+    E.sidebarToggle.addEventListener('click', openSidebar);
+    E.sidebarBackdrop.addEventListener('click', closeSidebar);
+
+    E.reviewBtn.addEventListener('click', enterReview);
+    E.homeBtn.addEventListener('click', goHome);
+    E.shareBtn.addEventListener('click', shareApp);
+    if (E.shareSessionBtn) E.shareSessionBtn.addEventListener('click', shareSession);
+
+    // Upgrade bar
+    if (E.upgradeBarBtn) E.upgradeBarBtn.addEventListener('click', () => showPaywall('upgrade'));
+
+    // Results screen upgrade teaser
+    if (E.rutBtn) E.rutBtn.addEventListener('click', () => showPaywall('upgrade'));
+
+    // Teaser toast
+    if (E.teaserToastUpgrade) E.teaserToastUpgrade.addEventListener('click', () => {
+      hideTeaserToast();
+      showPaywall('upgrade');
     });
-    document.getElementById('geMultiplayerBtn').addEventListener('click', () => {
-      document.getElementById('gameExplainerModal').classList.add('hidden');
-      if (!_pendingGame) return;
-      if (_pendingGame.mode === 'sort') openCategorySortChallengeSetup();
-      else if (_pendingGame.mode === 'formula') openFormulaRushChallengeSetup(_pendingGame.subject);
-      else if (_pendingGame.mode === 'sequence') openSequenceChallengeSetup();
-      else openWordScrambleChallengeSetup(_pendingGame.subject);
+    if (E.teaserToastClose) E.teaserToastClose.addEventListener('click', hideTeaserToast);
+
+    // AI explain
+    if (E.aiExplainBtn)       E.aiExplainBtn.addEventListener('click', () => triggerMeaAI('objective'));
+    if (E.aiExplainTheoryBtn) E.aiExplainTheoryBtn.addEventListener('click', () => triggerMeaAI('theory'));
+    if (E.aiExplainTeaser)    E.aiExplainTeaser.addEventListener('click', () => {
+      showInfoToast('Teach Me is only available in Practice Mode or when reviewing your results.');
     });
-  }
+    if (E.meaAiClose)         E.meaAiClose.addEventListener('click', () => E.meaAiPanel?.classList.add('hidden'));
 
-  function showGameExplainer(mode, subject) {
-    const info = GAME_EXPLAINERS[mode];
-    if (!info) return;
-    _pendingGame = { mode, subject };
-    document.getElementById('geIcon').textContent = info.icon;
-    document.getElementById('geTitle').textContent = info.title;
-    const subjectLine = document.getElementById('geSubjectLine');
-    if (subject) {
-      const meta = subjectMeta(subject);
-      subjectLine.textContent = `${meta.icon} ${SUBJECT_LABELS[subject] || subject}`;
-      subjectLine.classList.remove('hidden');
-    } else {
-      subjectLine.textContent = 'Mixed subjects';
-      subjectLine.classList.remove('hidden');
-    }
-    document.getElementById('geRules').innerHTML = info.rules.map(r => `<li>${r}</li>`).join('');
-    // Multiplayer is wired up for Word Scramble, Category Sort, Formula
-    // Rush, and Sequence — hidden for the remaining modes until the same
-    // pattern extends to them too.
-    document.getElementById('geMultiplayerBtn').style.display = ['scramble', 'sort', 'formula', 'sequence'].includes(mode) ? '' : 'none';
-    document.getElementById('gameExplainerModal').classList.remove('hidden');
-  }
+    // Snap and mark
+    if (E.snapBtn)        E.snapBtn.addEventListener('click', triggerSnap);
+    if (E.snapFileInput)  E.snapFileInput.addEventListener('change', handleSnapFile);
+    if (E.snapResultClose) E.snapResultClose.addEventListener('click', () => E.snapResultModal.classList.add('hidden'));
+    if (E.snapResultDone)  E.snapResultDone.addEventListener('click', () => E.snapResultModal.classList.add('hidden'));
 
-  /* ────────────────────────────────
-     STATS
-  ──────────────────────────────── */
-  function loadStats() {
-    S.stats = loadSafe(STATS_KEY, { sessions: 0, totalPct: 0, streak: 0, lastActiveDate: null });
-    renderHomeStats();
-  }
-  function recordSession(pct) {
-    S.stats.sessions++;
-    S.stats.totalPct += pct;
-    const today = new Date().toDateString();
-    const yesterday = new Date(Date.now() - 86400000).toDateString();
-    if (S.stats.lastActiveDate === yesterday) S.stats.streak++;
-    else if (S.stats.lastActiveDate !== today) S.stats.streak = 1;
-    S.stats.lastActiveDate = today;
-    saveSafe(STATS_KEY, S.stats);
-    renderHomeStats();
-  }
-  /** For non-scored activities (e.g. Memory Match) — keeps the day-streak
-   * alive without skewing the "Average" stat, which is score-based. */
-  function recordActivity() {
-    const today = new Date().toDateString();
-    const yesterday = new Date(Date.now() - 86400000).toDateString();
-    if (S.stats.lastActiveDate === yesterday) S.stats.streak++;
-    else if (S.stats.lastActiveDate !== today) S.stats.streak = 1;
-    S.stats.lastActiveDate = today;
-    saveSafe(STATS_KEY, S.stats);
-    renderHomeStats();
-  }
-  function renderHomeStats() {
-    document.getElementById('hStatSessions').textContent = S.stats.sessions;
-    document.getElementById('hStatAvg').textContent = S.stats.sessions
-      ? Math.round(S.stats.totalPct / S.stats.sessions) + '%' : '—';
-    document.getElementById('hStatStreak').textContent = S.stats.streak;
-  }
-
-  /* ────────────────────────────────
-     RESUMPTION COUNTDOWN
-     (Nigerian schools typically resume early-to-mid September;
-      adjust RESUMPTION_DATE if your actual resumption date differs.)
-  ──────────────────────────────── */
-  function renderCountdown() {
-    const RESUMPTION_DATE = new Date('2026-09-14T00:00:00');
-    const now = new Date();
-    const days = Math.max(0, Math.ceil((RESUMPTION_DATE - now) / 86400000));
-    document.getElementById('daysLeft').textContent = days;
-  }
-
-  /* ────────────────────────────────
-     CATEGORY TABS
-  ──────────────────────────────── */
-  function initCategoryTabs() {
-    document.querySelectorAll('.cat-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        S.category = tab.dataset.cat;
-        renderDashboardNudge();
-        updateStudyPlanBanner();
-      });
-    });
-  }
-
-  /* ────────────────────────────────
-     FEATURE GRID ACTIONS
-  ──────────────────────────────── */
-  function initFeatureGrid() {
-    document.querySelectorAll('.feature-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const action = card.dataset.action;
-        ensureUser(() => handleFeature(action));
-      });
-    });
-    document.querySelectorAll('.game-choice-card').forEach(card => {
-      if (card.id === 'lastManStandingBtn' || card.id === 'recentGamesBtn') return; // wired separately below
-      card.addEventListener('click', () => {
-        const game = card.dataset.game;
-        if (game === 'sort' || game === 'sequence' || game === 'equation') showGameExplainer(game, null);
-        else openSubjectPicker(game);
-      });
-    });
-    document.getElementById('lastManStandingBtn').addEventListener('click', openLastManStandingPicker);
-    document.getElementById('recentGamesBtn').addEventListener('click', openGamesDashboard);
-  }
-
-  function handleFeature(action) {
-    if (action === 'revision') openSubjectPicker('revision');
-    else if (action === 'quiz') openSubjectPicker('quiz');
-    else if (action === 'challenge') openQuizChallenge();
-    else if (action === 'project') openProjectHelper();
-    else if (action === 'games') { showScreen('gamesHubScreen'); checkForActiveMatchRejoin(); }
-    else if (action === 'library') openSubjectPicker('library');
-  }
-
-  /* ────────────────────────────────
-     HOME DASHBOARD NUDGE
-     Shows up to two small cards above the feature grid: "Continue
-     where you left off" and/or "Focus area" (weakest tracked subject).
-     Both are silent — they only appear once there's real data, so a
-     brand-new user just sees the plain feature grid.
-  ──────────────────────────────── */
-  function renderDashboardNudge() {
-    updateAICreditBadges();
-    maybeShowBoostExpiryReminder();
-    const wrap = document.getElementById('dashboardNudge');
-    if (!wrap) return;
-    const cards = [];
-
-    const last = getLastActivity();
-    if (last && last.category === S.category && CONTENT_MANIFEST[S.category].subjects.includes(last.subject)) {
-      const meta = subjectMeta(last.subject);
-      const label = SUBJECT_LABELS[last.subject] || last.subject;
-      const modeLabel = { revision: 'Study Mode', quiz: 'Quiz', game: 'Speed Round', library: 'Study Library', tf: 'True or False Blitz', memory: 'Memory Match' }[last.mode] || 'practice';
-      cards.push(`
-        <button class="nudge-card nudge-continue" data-nudge="continue">
-          <span class="nudge-icon">${meta.icon}</span>
-          <span class="nudge-text"><h4>Continue where you left off</h4><p>${label} · ${modeLabel}</p></span>
-          <span class="nudge-arrow">→</span>
-        </button>`);
-    }
-
-    const weak = getWeakestSubject(S.category);
-    if (weak && (!last || weak.subject !== last.subject)) {
-      const meta = subjectMeta(weak.subject);
-      const label = SUBJECT_LABELS[weak.subject] || weak.subject;
-      const pct = Math.round(weak.pct * 100);
-      cards.push(`
-        <button class="nudge-card" data-nudge="focus" data-subject="${weak.subject}">
-          <span class="nudge-icon">${meta.icon}</span>
-          <span class="nudge-text"><h4>Focus area: ${label}</h4><p>Averaging ${pct}% — a bit more practice here would help</p></span>
-          <span class="nudge-arrow">→</span>
-        </button>`);
-    }
-
-    // General, always-available awareness card — not tied to any specific
-    // "you've run out" moment like the other nudges elsewhere, just a
-    // standing reminder that the option exists. Dismissible, but not gone
-    // forever — reappears after a few days rather than nagging daily.
-    if (shouldShowGeneralAICard()) {
-      cards.push(`
-        <div class="nudge-card nudge-ai-promo" data-nudge="ai-promo">
-          <button class="nudge-ai-promo-close" aria-label="Dismiss">✕</button>
-          <span class="nudge-icon">✨</span>
-          <span class="nudge-text"><h4>Want more practice material?</h4><p>Unlock extra AI-generated questions & flashcards for ₦500</p></span>
-          <span class="nudge-arrow">→</span>
-        </div>`);
-    }
-
-    wrap.innerHTML = cards.join('');
-    const continueBtn = wrap.querySelector('[data-nudge="continue"]');
-    if (continueBtn) continueBtn.addEventListener('click', () => {
-      ensureUser(() => {
-        if (last.mode === 'revision') startRevision(last.subject);
-        else if (last.mode === 'game') startSpeedRound(last.subject, getLastSpeedLevel());
-        else if (last.mode === 'tf') startTrueFalseBlitz(last.subject);
-        else if (last.mode === 'memory') startMemoryMatch(last.subject);
-        else if (last.mode === 'library') openLibrary(last.subject);
-        else startQuizSetup(last.subject);
-      });
-    });
-    const focusBtn = wrap.querySelector('[data-nudge="focus"]');
-    if (focusBtn) focusBtn.addEventListener('click', () => {
-      ensureUser(() => startQuizSetup(focusBtn.dataset.subject));
-    });
-    const aiPromoCard = wrap.querySelector('[data-nudge="ai-promo"]');
-    if (aiPromoCard) {
-      aiPromoCard.querySelector('.nudge-ai-promo-close').addEventListener('click', (e) => {
-        e.stopPropagation();
-        dismissGeneralAICard();
-        aiPromoCard.remove();
-      });
-      aiPromoCard.addEventListener('click', () => showAIPaywall());
-    }
-  }
-
-  const AI_PROMO_DISMISSED_KEY = 'hh-ai-promo-dismissed-v1';
-  const AI_PROMO_COOLDOWN_DAYS = 4;
-  function shouldShowGeneralAICard() {
-    const dismissedAt = loadSafe(AI_PROMO_DISMISSED_KEY, null);
-    if (!dismissedAt) return true;
-    const daysSince = (Date.now() - dismissedAt) / 86400000;
-    return daysSince >= AI_PROMO_COOLDOWN_DAYS;
-  }
-  function dismissGeneralAICard() {
-    saveSafe(AI_PROMO_DISMISSED_KEY, Date.now());
-  }
-
-  /* ────────────────────────────────
-     STUDY PLAN
-     A lightweight, locally-generated day-by-day checklist for the
-     rest of the term — the thing that makes this feel like a study
-     companion rather than a stack of quiz modes. Not AI-generated
-     (deterministic round-robin scheduling); simple on purpose so it's
-     instant and never fails.
-  ──────────────────────────────── */
-  function daysUntilResumption() {
-    const RESUMPTION_DATE = new Date('2026-09-14T00:00:00');
-    return Math.max(1, Math.ceil((RESUMPTION_DATE - new Date()) / 86400000));
-  }
-
-  function getPlan(category) {
-    const all = loadSafe(PLAN_KEY, {});
-    return all[category] || null;
-  }
-  function savePlan(category, plan) {
-    const all = loadSafe(PLAN_KEY, {});
-    all[category] = plan;
-    saveSafe(PLAN_KEY, all);
-  }
-  function clearPlan(category) {
-    const all = loadSafe(PLAN_KEY, {});
-    delete all[category];
-    saveSafe(PLAN_KEY, all);
-  }
-
-  function updateStudyPlanBanner() {
-    const sub = document.getElementById('spbSub');
-    if (!sub) return;
-    const plan = getPlan(S.category);
-    if (plan) {
-      const total = plan.days.reduce((n, d) => n + d.tasks.length, 0);
-      const done = plan.days.reduce((n, d) => n + d.tasks.filter(t => t.done).length, 0);
-      sub.textContent = `${done}/${total} tasks done — tap to continue your plan`;
-    } else {
-      sub.textContent = 'Build a simple day-by-day plan for the rest of the term.';
-    }
-  }
-
-  function openStudyPlan() {
-    ensureUser(() => {
-      const plan = getPlan(S.category);
-      if (plan) renderPlanView(plan); else renderPlanSetup();
-      showScreen('planScreen');
-    });
-  }
-
-  function renderPlanSetup() {
-    document.getElementById('planScreenTitle').textContent = '🗓 Build Your Study Plan';
-    const manifest = CONTENT_MANIFEST[S.category];
-    const suggestedWeeks = Math.max(1, Math.round(daysUntilResumption() / 7));
-    const body = document.getElementById('planBody');
-    body.innerHTML = `
-      <p style="font-size:.85rem; color:var(--text-mid); margin-bottom:1rem;">
-        Pick the subjects you want to focus on. We'll spread them across the days you have left
-        so you're not cramming everything at once.
-      </p>
-      <div class="plan-setup-subjects" id="planSubjectChips">
-        ${manifest.subjects.map(key => {
-          const meta = subjectMeta(key);
-          return `<button class="plan-subject-chip" data-subject="${key}">${meta.icon} ${SUBJECT_LABELS[key] || key}</button>`;
-        }).join('')}
-      </div>
-      <div class="form-group">
-        <label>How many weeks should this plan cover?</label>
-        <select id="planWeeks">
-          ${[1,2,3,4,5,6,7,8].map(w => `<option value="${w}" ${w === suggestedWeeks ? 'selected' : ''}>${w} week${w > 1 ? 's' : ''}</option>`).join('')}
-        </select>
-      </div>
-      <button class="btn btn-primary btn-block" id="planCreateBtn" style="margin-top:.5rem;">Create My Plan →</button>
-    `;
-
-    const selected = new Set();
-    body.querySelectorAll('.plan-subject-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        const s = chip.dataset.subject;
-        if (selected.has(s)) { selected.delete(s); chip.classList.remove('active'); }
-        else { selected.add(s); chip.classList.add('active'); }
-      });
-    });
-
-    document.getElementById('planCreateBtn').addEventListener('click', () => {
-      if (selected.size === 0) { showToast('Pick at least one subject to build a plan.'); return; }
-      const weeks = parseInt(document.getElementById('planWeeks').value, 10);
-      const plan = generatePlan(Array.from(selected), weeks);
-      savePlan(S.category, plan);
-      updateStudyPlanBanner();
-      renderPlanView(plan);
-    });
-  }
-
-  function generatePlan(subjects, weeks) {
-    const totalDays = weeks * 7;
-    const days = [];
-    const today = new Date();
-    let taskCounter = 0;
-    for (let d = 0; d < totalDays; d++) {
-      const date = new Date(today.getTime() + d * 86400000);
-      const subject = subjects[d % subjects.length];
-      const mode = d % 3 === 2 ? 'game' : 'quiz'; // every 3rd day, mix in a Speed Round for variety
-      days.push({
-        dateLabel: date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }),
-        isToday: d === 0,
-        tasks: [{
-          id: `t${taskCounter++}`,
-          subject, mode,
-          count: mode === 'game' ? null : 10,
-          done: false,
-        }],
-      });
-    }
-    return { category: S.category, subjects, weeks, createdAt: Date.now(), days };
-  }
-
-  function renderPlanView(plan) {
-    document.getElementById('planScreenTitle').textContent = '🗓 Study Plan';
-    const total = plan.days.reduce((n, d) => n + d.tasks.length, 0);
-    const doneCount = plan.days.reduce((n, d) => n + d.tasks.filter(t => t.done).length, 0);
-    const pct = total ? Math.round((doneCount / total) * 100) : 0;
-
-    const body = document.getElementById('planBody');
-    body.innerHTML = `
-      <div class="plan-progress-card">
-        <div class="plan-progress-pct">${pct}%</div>
-        <div style="font-size:.78rem; color:var(--text-dim); margin-top:.2rem;">${doneCount} of ${total} tasks complete</div>
-        <div class="plan-progress-track"><div class="plan-progress-fill" style="width:${pct}%;"></div></div>
-      </div>
-      <div id="planDaysList"></div>
-      <button class="btn btn-ghost btn-block" id="planResetBtn" style="margin-top:.5rem;">Start a New Plan</button>
-    `;
-
-    const list = document.getElementById('planDaysList');
-    list.innerHTML = plan.days.map(day => {
-      const meta = day.tasks[0] ? subjectMeta(day.tasks[0].subject) : null;
-      return `
-      <div class="plan-day-group">
-        <div class="plan-day-label ${day.isToday ? 'is-today' : ''}">${day.isToday ? 'Today · ' : ''}${day.dateLabel}</div>
-        ${day.tasks.map(t => {
-          const tm = subjectMeta(t.subject);
-          const modeLabel = t.mode === 'game' ? 'Speed Round' : `Quiz · ${t.count} questions`;
-          return `
-          <div class="plan-task ${t.done ? 'done' : ''}" data-task="${t.id}">
-            <button class="plan-check" data-toggle="${t.id}">${t.done ? '✓' : ''}</button>
-            <div class="plan-task-body">
-              <div class="plan-task-title">${tm.icon} ${SUBJECT_LABELS[t.subject] || t.subject}</div>
-              <div class="plan-task-sub">${modeLabel}</div>
-            </div>
-            <button class="plan-task-go" data-start="${t.id}">Start →</button>
-          </div>`;
-        }).join('')}
-      </div>`;
-    }).join('');
-
-    list.querySelectorAll('[data-toggle]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.toggle;
-        plan.days.forEach(d => d.tasks.forEach(t => { if (t.id === id) t.done = !t.done; }));
-        savePlan(S.category, plan);
-        updateStudyPlanBanner();
-        renderPlanView(plan);
-      });
-    });
-    list.querySelectorAll('[data-start]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.start;
-        let task = null;
-        plan.days.forEach(d => d.tasks.forEach(t => { if (t.id === id) task = t; }));
-        if (!task) return;
-        if (task.mode === 'game') startSpeedRound(task.subject, getLastSpeedLevel());
-        else startQuizSetup(task.subject);
-      });
-    });
-
-    document.getElementById('planResetBtn').addEventListener('click', () => {
-      if (!confirm('Start a new plan? Your current plan and its progress will be replaced.')) return;
-      clearPlan(S.category);
-      updateStudyPlanBanner();
-      renderPlanSetup();
-    });
-  }
-
-  /* ────────────────────────────────
-     SUBJECT PICKER
-  ──────────────────────────────── */
-  function getResourceBank(cat) {
-    return cat === 'junior' ? JUNIOR_RESOURCES : SENIOR_RESOURCES;
-  }
-
-  /** AI-generated flashcards/formulas/notes used to only live in memory —
-   * mutating SENIOR_RESOURCES/JUNIOR_RESOURCES directly works fine for
-   * the current tab, but a page reload re-parses the static data files
-   * fresh, so everything a subscriber generated would silently vanish.
-   * For content someone paid credits for, that's a real problem, not
-   * just an inconvenience — it also meant regenerating after every
-   * reload burned MORE credits for content they'd already unlocked.
-   *
-   * Fix: AI-generated items are additionally saved to this localStorage
-   * key, namespaced by category/subject/type, and re-applied on top of
-   * the static banks once at startup — so they become a genuine
-   * permanent part of that device's offline library, not a
-   * session-only bonus. */
-  const AI_RESOURCES_KEY = 'hh-ai-resources-v1';
-
-  function aiResourceOverlayKey(category, subject, type) {
-    return `${category}:${subject}:${type}`;
-  }
-
-  function saveAIGeneratedItems(category, subject, type, items) {
-    if (!items || !items.length) return;
-    const store = loadSafe(AI_RESOURCES_KEY, {});
-    const key = aiResourceOverlayKey(category, subject, type);
-    store[key] = (store[key] || []).concat(items);
-    saveSafe(AI_RESOURCES_KEY, store);
-  }
-
-  /** Called once at startup — merges any previously-generated AI content
-   * back into the in-memory resource banks before anything else reads
-   * from them, so from the app's perspective it's indistinguishable from
-   * content that shipped in the static files. Two different top-level
-   * objects need this: getResourceBank (flashcards/formulas/notes) and
-   * getBank (the MCQ question pool, keyed 'objective') — same overlay
-   * store, routed to the right target by type. */
-  function applyAIResourceOverlay() {
-    const store = loadSafe(AI_RESOURCES_KEY, {});
-    Object.keys(store).forEach(key => {
-      const [category, subject, type] = key.split(':');
-      const target = type === 'objective'
-        ? (getBank(category)[subject] || (getBank(category)[subject] = { objective: [] }))
-        : (getResourceBank(category)[subject] || (getResourceBank(category)[subject] = { flashcards: [], formulas: [], notes: [] }));
-      const existingIds = new Set((target[type] || []).map(item => item.id).filter(Boolean));
-      const toAdd = (store[key] || []).filter(item => !item.id || !existingIds.has(item.id));
-      target[type] = (target[type] || []).concat(toAdd);
-    });
-  }
-
-  const MIXED_POOL_MODES = ['scramble', 'formula']; // these two have a genuine standalone mixed-subject mode, not a disguised fallback
-
-  function openSubjectPicker(mode) {
-    S.mode = mode;
-    const manifest = CONTENT_MANIFEST[S.category];
-    const bank = getBank(S.category);
-    const resBank = getResourceBank(S.category);
-    const titles = {
-      quiz: 'Quiz — pick a subject', revision: 'Revision — pick a subject',
-      game: '⚡ Speed Round — pick a subject', library: '📚 Study Library — pick a subject',
-      tf: '✓✗ True or False — pick a subject', memory: '🧠 Memory Match — pick a subject',
-      scramble: '🔤 Word Scramble — pick a subject',
-      formula: '🔢 Formula Rush — pick a subject',
-    };
-    document.getElementById('subjectScreenTitle').textContent = titles[mode] || 'Pick a subject';
-
-    // AI Live toggle — only for the two MCQ-shaped games where a single
-    // batch-generated round genuinely makes sense (Speed Round, True/
-    // False). Deliberately a toggle above the list rather than a second
-    // button per subject row (would double the list's visual weight for
-    // 16+ subjects) — default is off, so nothing changes for anyone who
-    // doesn't touch it.
-    S.aiLiveMode = false;
-    const liveToggleHtml = (mode === 'game' || mode === 'tf') ? `
-      <button class="ai-live-toggle" id="aiLiveToggle">
-        <span id="aiLiveToggleIcon">📚</span>
-        <span id="aiLiveToggleLabel">Playing from the offline bank — tap for an AI Live round instead</span>
-      </button>` : '';
-
-    // Explicit "Mixed Subjects" entry — its own honest, always-available
-    // option, not something a specific named subject silently turns into.
-    const mixedRowHtml = MIXED_POOL_MODES.includes(mode) ? `
-      <button class="subject-row subject-row-mixed" data-subject="__mixed__">
-        <div class="subject-row-icon" style="background:var(--coral-pale); color:var(--coral);">🔀</div>
-        <div class="subject-row-text">
-          <div class="subject-row-name">Mixed Subjects</div>
-          <div class="subject-row-count">All subjects together</div>
-        </div>
-        <span class="subject-row-arrow">→</span>
-      </button>` : '';
-
-    const list = document.getElementById('subjectList');
-    list.innerHTML = liveToggleHtml + mixedRowHtml + manifest.subjects.map(key => {
-      const label = SUBJECT_LABELS[key] || key;
-      const meta = subjectMeta(key);
-      let countText, disabled = false;
-      if (mode === 'library') {
-        const r = resBank[key] || { flashcards: [], formulas: [], notes: [] };
-        const total = (r.flashcards || []).length + (r.formulas || []).length + (r.notes || []).length;
-        countText = total ? `${total} resources` : 'Coming soon';
-        disabled = !total;
-      } else if (mode === 'memory') {
-        const r = resBank[key] || { flashcards: [] };
-        const pairCount = (r.flashcards || []).length;
-        countText = pairCount >= 4 ? `${pairCount} card pairs` : 'Coming soon';
-        disabled = pairCount < 4;
-      } else if (mode === 'scramble') {
-        const words = scrambleWordsFor(S.category, key);
-        countText = words.length >= 6 ? `${words.length} words` : 'Not enough yet';
-        disabled = words.length < 6;
-      } else if (mode === 'formula') {
-        const formulas = formulasFor(S.category, key);
-        countText = formulas.length >= 6 ? `${formulas.length} formulas` : 'Not enough yet';
-        disabled = formulas.length < 6;
-      } else {
-        const subj = bank[key];
-        const count = subj && subj.objective ? subj.objective.length : 0;
-        countText = `${count} questions`;
-      }
-      return `<button class="subject-row ${disabled ? 'subject-row-disabled' : ''}" data-subject="${key}" ${disabled ? 'disabled' : ''}>
-        <div class="subject-row-icon" style="background:${meta.color}1a; color:${meta.color};">${meta.icon}</div>
-        <div class="subject-row-text">
-          <div class="subject-row-name">${label}</div>
-          <div class="subject-row-count">${countText}</div>
-        </div>
-        <span class="subject-row-arrow">→</span>
-      </button>`;
-    }).join('');
-
-    list.querySelectorAll('.subject-row:not(.subject-row-disabled)').forEach(row => {
-      row.addEventListener('click', () => {
-        S.subject = row.dataset.subject === '__mixed__' ? null : row.dataset.subject;
-        // AI Live skips the normal rules-explainer step entirely — the
-        // toggle itself already explained what's about to happen, and
-        // this is a deliberate, explicit opt-in rather than the default
-        // path, so an extra confirmation screen would just be friction.
-        if (S.aiLiveMode && mode === 'game') startSpeedRoundLive(S.subject);
-        else if (S.aiLiveMode && mode === 'tf') startTrueFalseLive(S.subject);
-        else if (mode === 'quiz') startQuizSetup(S.subject);
-        else if (mode === 'game') showGameExplainer('game', S.subject);
-        else if (mode === 'tf') showGameExplainer('tf', S.subject);
-        else if (mode === 'memory') showGameExplainer('memory', S.subject);
-        else if (mode === 'scramble') showGameExplainer('scramble', S.subject);
-        else if (mode === 'formula') showGameExplainer('formula', S.subject);
-        else if (mode === 'library') openLibrary(S.subject);
-        else startRevision(S.subject);
-      });
-    });
-
-    const liveToggle = document.getElementById('aiLiveToggle');
-    if (liveToggle) {
-      liveToggle.addEventListener('click', () => {
-        S.aiLiveMode = !S.aiLiveMode;
-        liveToggle.classList.toggle('active', S.aiLiveMode);
-        document.getElementById('aiLiveToggleIcon').textContent = S.aiLiveMode ? '✨' : '📚';
-        document.getElementById('aiLiveToggleLabel').textContent = S.aiLiveMode
-          ? 'AI Live round — fresh questions generated just for you (uses 1 AI credit + 1 game round)'
-          : 'Playing from the offline bank — tap for an AI Live round instead';
-      });
-    }
-
-    showScreen('subjectScreen');
-  }
-
-  /* ────────────────────────────────
-     REVISION MODE
-  ──────────────────────────────── */
-  function startRevision(subjectKey) {
-    const bank = getBank(S.category);
-    const subj = bank[subjectKey];
-    if (!subj || !subj.objective || !subj.objective.length) {
-      showToast('No questions available for this subject yet.');
-      return;
-    }
-    S.mode = 'revision';
-    S.questions = subj.objective.slice();
-    S.idx = 0;
-    setLastActivity(S.category, subjectKey, 'revision');
-    document.getElementById('revisionTitle').textContent = SUBJECT_LABELS[subjectKey] || subjectKey;
-    renderRevisionQuestion();
-    showScreen('revisionScreen');
-    if (wasCompletedBefore(S.category, subjectKey, 'revision')) {
-      showCompletedModal(
-        `You've already been through ${SUBJECT_LABELS[subjectKey] || subjectKey}'s revision questions before.`,
-        () => { if (!hasAICredit()) { showAIPaywall(); return; } generateExtraContentForSubject(S.category, subjectKey); }
-      );
-    } else {
-      maybeShowCoverageNudge(S.category, subjectKey, 'of the offline questions');
-    }
-  }
-
-  function renderRevisionQuestion() {
-    const q = S.questions[S.idx];
-    const body = document.getElementById('revisionBody');
-    const meta = subjectMeta(S.subject);
-    document.getElementById('revisionProgress').textContent = `${S.idx + 1} / ${S.questions.length}`;
-    document.getElementById('studyProgressFill').style.width = `${((S.idx + 1) / S.questions.length) * 100}%`;
-    document.getElementById('studyProgressFill').style.background = meta.color;
-
-    const letters = ['A', 'B', 'C', 'D', 'E'];
-    body.innerHTML = `
-      <div class="study-card">
-        <span class="study-subject-tag" style="background:${meta.color}1a; color:${meta.color};">${meta.icon} ${SUBJECT_LABELS[S.subject] || S.subject}</span>
-        <div class="study-q-text">${safe(q.question)}</div>
-        <div id="revOptions">
-          ${q.options.map((opt, i) => `
-            <button class="study-option" data-i="${i}">
-              <span class="study-option-letter">${letters[i]}</span>
-              <span>${safe(opt)}</span>
-            </button>`).join('')}
-        </div>
-        <div id="revExplanation" class="study-explanation hidden">
-          <div class="study-explanation-label">Why</div>
-          <div id="revExplanationText"></div>
-          <button class="explain-differently-btn" id="explainDifferentlyBtn">✨ Still confused? Explain this differently</button>
-          <div id="explainDifferentlyResult"></div>
-        </div>
-        <div class="self-rate-row hidden" id="selfRateRow">
-          <button class="self-rate-btn self-rate-no" data-rate="no">😕 Still learning this</button>
-          <button class="self-rate-btn self-rate-yes" data-rate="yes">😊 I knew it</button>
-        </div>
-        <div class="q-nav-row">
-          <button class="btn btn-ghost" id="revPrev" ${S.idx === 0 ? 'disabled' : ''}>← Previous</button>
-          <button class="btn btn-primary" id="revNext">Next →</button>
-        </div>
-      </div>`;
-
-    body.querySelectorAll('.study-option').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const i = parseInt(btn.dataset.i, 10);
-        body.querySelectorAll('.study-option').forEach((b, bi) => {
-          b.disabled = true;
-          b.classList.remove('s-correct', 's-incorrect');
-          if (bi === q.answer) b.classList.add('s-correct');
-          else if (bi === i) b.classList.add('s-incorrect');
-        });
-        const exp = document.getElementById('revExplanation');
-        document.getElementById('revExplanationText').textContent = q.explanation || 'No explanation available for this question.';
-        exp.classList.remove('hidden');
-        document.getElementById('selfRateRow').classList.remove('hidden');
-        document.getElementById('explainDifferentlyBtn').onclick = () => explainDifferently(q);
-      });
-    });
-
-    document.querySelectorAll('.self-rate-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.self-rate-btn').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-      });
-    });
-
-    document.getElementById('revPrev').addEventListener('click', () => { S.idx--; renderRevisionQuestion(); });
-    document.getElementById('revNext').addEventListener('click', () => {
-      if (S.idx === S.questions.length - 1) {
-        // Same escalation pattern as Flashcards (see renderFlashcards): the
-        // dismissible banner already offered this once below; pushing past
-        // the last question anyway is a stronger signal and earns the
-        // blocking ask instead of silently doing nothing (this button used
-        // to just be disabled here).
-        showCompletedModal(
-          `You've reached the end of ${SUBJECT_LABELS[S.subject] || S.subject}'s revision questions.`,
-          () => { if (!hasAICredit()) { showAIPaywall(); return; } generateExtraContentForSubject(S.category, S.subject); },
-          { title: 'That\'s all for now!', icon: '🎉', continueLabel: 'Stay here' }
-        );
-        return;
-      }
-      S.idx++; renderRevisionQuestion();
-    });
-
-    if (S.idx === S.questions.length - 1) {
-      markCompleted(S.category, S.subject, 'revision');
-      renderExpandBanner(
-        body,
-        `That's the last of ${S.questions.length} ${SUBJECT_LABELS[S.subject] || S.subject} questions for now.`,
-        hasAICredit() ? 'Generate more with AI →' : 'Unlock more with AI →',
-        () => { hasAICredit() ? generateExtraContentForSubject(S.category, S.subject) : showAIPaywall(); }
+    // Both mode toggle
+    if (E.bothModeToggle) {
+      E.bothModeToggle.querySelectorAll('.mode-btn').forEach(b =>
+        b.addEventListener('click', () => {
+          E.bothModeToggle.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
+          b.classList.add('active');
+          S.bothMode = b.dataset.bothmode;
+        })
       );
     }
-  }
 
-  /* ────────────────────────────────
-     QUIZ MODE
-  ──────────────────────────────── */
-  function startQuizSetup(subjectKey) {
-    const bank = getBank(S.category);
-    const subj = bank[subjectKey];
-    if (!subj || !subj.objective || !subj.objective.length) {
-      showToast('No questions available for this subject yet.');
-      return;
-    }
-    const available = subj.objective.length;
-    const countOptions = [10, 20, 30].filter(n => n <= available);
-    if (!countOptions.length) countOptions.push(available);
+    // Section tab clicks
+    if (E.sectionTabA) E.sectionTabA.addEventListener('click', () => switchSection('A'));
+    if (E.sectionTabB) E.sectionTabB.addEventListener('click', () => switchSection('B'));
 
-    const body = document.getElementById('subjectList');
-    body.innerHTML = `
-      <div class="card" style="padding:1.25rem;">
-        <h3 style="font-family:var(--serif); font-size:1.1rem; margin-bottom:1rem;">${SUBJECT_LABELS[subjectKey] || subjectKey}</h3>
-        <div class="form-group">
-          <label>Number of questions</label>
-          <select id="quizSetupCount">
-            ${countOptions.map(n => `<option value="${n}">${n} questions</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Time limit</label>
-          <select id="quizSetupTime">
-            <option value="0">No time limit</option>
-            <option value="10">10 minutes</option>
-            <option value="20" selected>20 minutes</option>
-            <option value="30">30 minutes</option>
-          </select>
-        </div>
-        <button class="btn btn-primary btn-block" id="quizSetupStart">Start Quiz →</button>
-      </div>`;
+    document.addEventListener('keydown', onKey);
 
-    document.getElementById('quizSetupStart').addEventListener('click', () => {
-      const count = parseInt(document.getElementById('quizSetupCount').value, 10);
-      const mins = parseInt(document.getElementById('quizSetupTime').value, 10);
-      launchQuiz(subjectKey, count, mins);
+    window.addEventListener('beforeunload', e => {
+      if (S.inSession && S.mode === 'exam' && !S.reviewMode) {
+        e.preventDefault(); e.returnValue = '';
+      }
     });
 
-    // Reliably triggerable, unlike the old coverage-percentage version:
-    // fires the moment they've quizzed this exact subject to completion
-    // once before, not after grinding through 90% of a huge bank.
-    if (wasCompletedBefore(S.category, subjectKey, 'quiz')) {
-      showCompletedModal(
-        `You've already been through ${SUBJECT_LABELS[subjectKey] || subjectKey}'s question set before.`,
-        () => { if (!hasAICredit()) { showAIPaywall(); return; } generateExtraContentForSubject(S.category, subjectKey); }
-      );
-    }
-  }
+    // Back button — clean single implementation
+    // Back button — hash-based approach works reliably on Chrome mobile/PC and Firefox
+    let _backLastPress = 0;
 
-  function launchQuiz(subjectKey, count, mins) {
-    const bank = getBank(S.category);
-    const pool = bank[subjectKey].objective.slice();
-    const { questions, recycled } = pickQuestions(S.category, subjectKey, pool, count);
-    S.mode = 'quiz';
-    S.subject = subjectKey;
-    S.questions = questions;
-    S.idx = 0;
-    S.answers = new Array(S.questions.length).fill(null);
-    S._challengeCode = null;
-    setLastActivity(S.category, subjectKey, 'quiz');
-    document.getElementById('quizTitle').textContent = SUBJECT_LABELS[subjectKey] || subjectKey;
-
-    if (recycled) {
-      showToast("You've seen most of these before — mixing in some repeats to fill out the set.", 3400);
-    }
-
-    if (mins > 0) startTimer(mins * 60); else stopTimer(true);
-    renderQuizQuestion();
-    showScreen('quizScreen');
-  }
-
-  function startTimer(secs) {
-    S.timerSecs = secs;
-    updateTimerDisplay();
-    stopTimer();
-    S.timerInterval = setInterval(() => {
-      S.timerSecs--;
-      updateTimerDisplay();
-      if (S.timerSecs <= 0) { stopTimer(); finishQuiz(); }
-    }, 1000);
-  }
-  function stopTimer(hide) {
-    if (S.timerInterval) clearInterval(S.timerInterval);
-    S.timerInterval = null;
-    if (hide) document.getElementById('quizTimer').textContent = '';
-  }
-  function updateTimerDisplay() {
-    const m = Math.floor(S.timerSecs / 60);
-    const sec = S.timerSecs % 60;
-    document.getElementById('quizTimer').textContent = `${m}:${String(sec).padStart(2, '0')}`;
-  }
-
-  function renderQuizQuestion() {
-    const q = S.questions[S.idx];
-    const body = document.getElementById('quizBody');
-    const letters = ['A', 'B', 'C', 'D', 'E'];
-    const selected = S.answers[S.idx];
-
-    const fill = document.getElementById('examProgressFill');
-    if (fill) fill.style.width = `${((S.idx + 1) / S.questions.length) * 100}%`;
-
-    body.innerHTML = `
-      <div class="exam-card">
-        <div class="exam-q-number">${S.idx + 1}</div>
-        <div class="exam-q-text">${safe(q.question)}</div>
-        <div class="exam-options" id="quizOptions">
-          ${q.options.map((opt, i) => `
-            <button class="exam-opt ${selected === i ? 'selected' : ''}" data-i="${i}">
-              <span class="exam-opt-bubble">${letters[i]}</span>
-              <span>${safe(opt)}</span>
-            </button>`).join('')}
-        </div>
-        <div class="exam-nav-row">
-          <button class="btn btn-ghost" id="quizPrev" ${S.idx === 0 ? 'disabled' : ''}>← Previous</button>
-          <button class="btn btn-primary" id="quizNext">${S.idx === S.questions.length - 1 ? 'Finish' : 'Next →'}</button>
-        </div>
-      </div>`;
-
-    body.querySelectorAll('.exam-opt').forEach(btn => {
-      btn.addEventListener('click', () => {
-        S.answers[S.idx] = parseInt(btn.dataset.i, 10);
-        body.querySelectorAll('.exam-opt').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-      });
-    });
-    document.getElementById('quizPrev').addEventListener('click', () => { S.idx--; renderQuizQuestion(); });
-    document.getElementById('quizNext').addEventListener('click', () => {
-      if (S.idx === S.questions.length - 1) finishQuiz();
-      else { S.idx++; renderQuizQuestion(); }
-    });
-  }
-
-  function finishQuiz() {
-    stopTimer(true);
-    let correct = 0;
-    S.questions.forEach((q, i) => { if (S.answers[i] === q.answer) correct++; });
-    const total = S.questions.length;
-    const pct = total ? Math.round((correct / total) * 100) : 0;
-
-    recordSession(pct);
-    if (S.subject) {
-      markSeen(S.category, S.subject, S.questions.map(q => q.id));
-      recordMastery(S.category, S.subject, correct, total);
-      if (S.mode === 'quiz') markCompleted(S.category, S.subject, 'quiz');
-    }
-    if (S._challengeCode) saveChallengeScore(correct, total, S.answers);
-
-    renderResults(correct, total, pct);
-    showScreen('resultsScreen');
-  }
-
-  function renderResults(correct, total, pct) {
-    const body = document.getElementById('resultsBody');
-    const verdict = pct >= 80 ? "Excellent work! 🎉" : pct >= 60 ? "Good effort — keep going!" : "Keep practicing, you'll get there.";
-    body.innerHTML = `
-      <div class="result-hero">
-        <div class="result-score">${pct}%</div>
-        <div class="result-score-sub">${correct} out of ${total} correct</div>
-        <p style="margin-top:1rem; font-size:.95rem; color:var(--text-mid);">${verdict}</p>
-      </div>
-      <div class="result-actions">
-        <button class="btn btn-primary btn-block" id="resReview">Review Answers</button>
-        <button class="btn btn-ghost btn-block" id="resHome">Back to Home</button>
-      </div>`;
-    document.getElementById('resHome').addEventListener('click', () => { showScreen('homeScreen'); renderDashboardNudge(); updateStudyPlanBanner(); });
-    document.getElementById('resReview').addEventListener('click', () => reviewQuizAnswers());
-  }
-
-  function reviewQuizAnswers() {
-    S.mode = 'revision-review';
-    S.idx = 0;
-    const revBody = document.getElementById('revisionBody');
-    document.getElementById('revisionTitle').textContent = 'Review';
-    renderReviewQuestion();
-    showScreen('revisionScreen');
-  }
-
-  function renderReviewQuestion() {
-    const q = S.questions[S.idx];
-    const userAns = S.answers[S.idx];
-    const body = document.getElementById('revisionBody');
-    const meta = subjectMeta(S.subject);
-    document.getElementById('revisionProgress').textContent = `${S.idx + 1} / ${S.questions.length}`;
-    const progFill = document.getElementById('studyProgressFill');
-    if (progFill) { progFill.style.width = `${((S.idx + 1) / S.questions.length) * 100}%`; progFill.style.background = meta.color; }
-    const letters = ['A', 'B', 'C', 'D', 'E'];
-
-    body.innerHTML = `
-      <div class="study-card">
-        <span class="study-subject-tag" style="background:${meta.color}1a; color:${meta.color};">${meta.icon} ${SUBJECT_LABELS[S.subject] || S.subject}</span>
-        <div class="study-q-text">${safe(q.question)}</div>
-        <div>
-          ${q.options.map((opt, i) => {
-            let cls = '';
-            if (i === q.answer) cls = 's-correct';
-            else if (i === userAns) cls = 's-incorrect';
-            return `<div class="study-option ${cls}">
-              <span class="study-option-letter">${letters[i]}</span>
-              <span>${safe(opt)}</span>
-            </div>`;
-          }).join('')}
-        </div>
-        <div class="study-explanation">
-          <div class="study-explanation-label">Why</div>
-          <div>${safe(q.explanation || 'No explanation available.')}</div>
-        </div>
-        <div class="q-nav-row">
-          <button class="btn btn-ghost" id="revwPrev" ${S.idx === 0 ? 'disabled' : ''}>← Previous</button>
-          <button class="btn btn-primary" id="revwNext" ${S.idx === S.questions.length - 1 ? 'disabled' : ''}>Next →</button>
-        </div>
-      </div>`;
-    document.getElementById('revwPrev').addEventListener('click', () => { S.idx--; renderReviewQuestion(); });
-    document.getElementById('revwNext').addEventListener('click', () => { S.idx++; renderReviewQuestion(); });
-  }
-
-  /* ────────────────────────────────
-     STUDY LIBRARY
-     Non-past-question resources: Flashcards (flip to reveal), Formula
-     Sheets, and Concept Notes. Fully offline — static content, no API
-     calls. Only tabs with actual content for the subject are shown.
-  ──────────────────────────────── */
-  let LIB = { subject: null, tab: null, cards: [], idx: 0, flipped: false };
-
-  function openLibrary(subjectKey) {
-    const resBank = getResourceBank(S.category);
-    const res = resBank[subjectKey] || { flashcards: [], formulas: [], notes: [] };
-    const tabs = [];
-    if ((res.flashcards || []).length) tabs.push('flashcards');
-    if ((res.formulas || []).length) tabs.push('formulas');
-    if ((res.notes || []).length) tabs.push('notes');
-
-    if (!tabs.length) {
-      showToast("Study Library content for this subject isn't ready yet — check back soon.");
-      return;
-    }
-
-    LIB = { subject: subjectKey, tab: null, cards: [], idx: 0, flipped: false };
-    setLastActivity(S.category, subjectKey, 'library');
-    document.getElementById('libraryTitle').textContent = SUBJECT_LABELS[subjectKey] || subjectKey;
-    document.getElementById('libraryTabs').innerHTML = ''; // tabs only appear once a segment is chosen
-
-    showScreen('libraryScreen');
-    renderLibraryChooser(subjectKey);
-  }
-
-  const LIBRARY_CHOOSER_META = {
-    flashcards: { icon: '🗂', label: 'Flashcards', noun: 'cards' },
-    formulas:   { icon: '∑',  label: 'Formulas',   noun: 'formulas' },
-    notes:      { icon: '📝', label: 'Notes',       noun: 'notes' },
-  };
-
-  /** The landing view for a subject's Study Library — three large,
-   * equally-weighted tiles a person must deliberately tap one of. Used to
-   * default straight into Flashcards with two small pill tabs alongside,
-   * which made it easy to assume that was the only content on offer
-   * (Formulas and Notes existed the whole time, just easy to miss). This
-   * is the fix: nobody can land here without seeing all three named and
-   * counted up front. */
-  function renderLibraryChooser(subjectKey) {
-    const resBank = getResourceBank(S.category);
-    const res = resBank[subjectKey] || {};
-    const body = document.getElementById('libraryBody');
-    const counts = {
-      flashcards: (res.flashcards || []).length,
-      formulas: (res.formulas || []).length,
-      notes: (res.notes || []).length,
-    };
-
-    body.innerHTML = `
-      <div class="library-chooser">
-        ${Object.keys(LIBRARY_CHOOSER_META).filter(t => counts[t] > 0).map(t => `
-          <button class="library-chooser-tile" data-choose-tab="${t}">
-            <div class="library-chooser-icon">${LIBRARY_CHOOSER_META[t].icon}</div>
-            <div class="library-chooser-label">${LIBRARY_CHOOSER_META[t].label}</div>
-            <div class="library-chooser-count">${counts[t]} ${LIBRARY_CHOOSER_META[t].noun}</div>
-          </button>
-        `).join('')}
-      </div>
-    `;
-    body.querySelectorAll('[data-choose-tab]').forEach(btn => {
-      btn.addEventListener('click', () => enterLibraryTab(subjectKey, btn.dataset.chooseTab));
-    });
-
-    const totalItems = counts.flashcards + counts.formulas + counts.notes;
-    maybeShowThinLibraryNudge(S.category, subjectKey, totalItems);
-  }
-
-  /** Called once a chooser tile is tapped — this is where the pill tab
-   * bar actually appears, so someone already inside can still switch
-   * quickly between segments without dropping back to the chooser every
-   * time; the chooser's job is just to make sure they land on it once,
-   * deliberately, on the way in. */
-  function enterLibraryTab(subjectKey, tab) {
-    const resBank = getResourceBank(S.category);
-    const res = resBank[subjectKey] || { flashcards: [], formulas: [], notes: [] };
-    const tabs = [];
-    if ((res.flashcards || []).length) tabs.push('flashcards');
-    if ((res.formulas || []).length) tabs.push('formulas');
-    if ((res.notes || []).length) tabs.push('notes');
-
-    LIB.tab = tab; LIB.idx = 0; LIB.flipped = false; LIB.cards = [];
-
-    const tabLabels = { flashcards: '🗂 Flashcards', formulas: '∑ Formulas', notes: '📝 Notes' };
-    document.getElementById('libraryTabs').innerHTML = tabs.map(t =>
-      `<button class="lib-tab ${t === LIB.tab ? 'active' : ''}" data-tab="${t}">${tabLabels[t]}</button>`).join('');
-    document.querySelectorAll('.lib-tab').forEach(btn => {
-      btn.addEventListener('click', () => {
-        LIB.tab = btn.dataset.tab;
-        LIB.idx = 0; LIB.flipped = false; LIB.cards = [];
-        document.querySelectorAll('.lib-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === LIB.tab));
-        checkAndRenderLibraryTab(subjectKey);
-      });
-    });
-
-    checkAndRenderLibraryTab(subjectKey);
-  }
-
-  function backToLibraryChooser(subjectKey) {
-    LIB.tab = null; LIB.idx = 0; LIB.flipped = false; LIB.cards = [];
-    document.getElementById('libraryTabs').innerHTML = '';
-    renderLibraryChooser(subjectKey);
-  }
-
-  /** Shared by openLibrary and the tab-switch handler — checking
-   * completion must happen BEFORE render, since formulas/notes mark
-   * themselves completed synchronously during render (they show as a
-   * full list, no "last card" moment to wait for like flashcards has).
-   * Checking after render would always see that just-set flag and
-   * incorrectly fire on the very first visit. */
-  function checkAndRenderLibraryTab(subjectKey) {
-    const alreadyCompleted = wasCompletedBefore(S.category, subjectKey, 'library-' + LIB.tab);
-    renderLibraryContent();
-    if (alreadyCompleted) {
-      const tabNoun = { flashcards: 'flashcards', formulas: 'formula sheet', notes: 'notes' }[LIB.tab] || 'material';
-      const generators = { flashcards: generateExtraFlashcardsForSubject, formulas: generateExtraFormulasForSubject, notes: generateExtraNotesForSubject };
-      showCompletedModal(
-        `You've already been through these ${SUBJECT_LABELS[subjectKey] || subjectKey} ${tabNoun} before.`,
-        () => {
-          // This path previously skipped the credit check that the other
-          // two AI entry points (the persistent bar, the end-of-list
-          // banner) both correctly enforce — meaning a student with zero
-          // credits could still trigger a real, billed generation for
-          // free through this specific modal. Matched to the same
-          // hasAICredit() gate used everywhere else.
-          if (!hasAICredit()) { showAIPaywall(); return; }
-          generators[LIB.tab](S.category, subjectKey);
+    window.addEventListener('hashchange', () => {
+      // Challenge modal open — back button navigates its panels instead of
+      // whatever the quiz-exit logic below would otherwise do.
+      const modalEl = document.getElementById('quizChallengeModal');
+      if (modalEl && !modalEl.classList.contains('hidden')) {
+        if (_qcModalPanelHistory.length > 0) {
+          window.location.hash = 'mea-challenge'; // stay armed for another back press
+          const prev = _qcModalPanelHistory.pop();
+          showQcPanel(prev, true);
+        } else {
+          clearInterval(_waitingRoomTimer);
+          clearInterval(_waitingRoomCountdownTicker);
+          modalEl.classList.add('hidden');
+          history.replaceState(null, '', window.location.pathname);
         }
-      );
-    }
-  }
-
-  const LIBRARY_TAB_META = {
-    flashcards: { noun: 'flashcards', fn: generateExtraFlashcardsForSubject },
-    formulas:   { noun: 'formulas',   fn: generateExtraFormulasForSubject },
-    notes:      { noun: 'notes',      fn: generateExtraNotesForSubject },
-  };
-
-  function renderLibraryContent() {
-    const resBank = getResourceBank(S.category);
-    const res = resBank[LIB.subject] || {};
-    const body = document.getElementById('libraryBody');
-    const meta = LIBRARY_TAB_META[LIB.tab];
-
-    // A persistent, always-visible AI action — deliberately not hidden
-    // behind reaching the end of a list or a repeat visit. It sits above
-    // the content itself so the option is in reach the moment the tab
-    // opens, on every visit, not just as a late-stage nudge.
-    body.innerHTML = `
-      <button class="library-back-to-chooser" id="libraryBackToChooser">← Study Library</button>
-      <div class="library-ai-bar">
-        <button class="library-ai-bar-btn" id="libraryAIBarBtn">✨ Generate more ${meta.noun} with AI</button>
-      </div>
-      <div id="libraryTabBody"></div>
-    `;
-    document.getElementById('libraryBackToChooser').addEventListener('click', () => backToLibraryChooser(LIB.subject));
-    document.getElementById('libraryAIBarBtn').addEventListener('click', () => {
-      if (!hasAICredit()) { showAIPaywall(); return; }
-      meta.fn(S.category, LIB.subject);
-    });
-
-    const tabBody = document.getElementById('libraryTabBody');
-
-    // One delegated listener, attached exactly once when this fresh
-    // tabBody element is created — not inside renderFormulas/renderNotes
-    // themselves, since those get called again on this SAME element every
-    // time AI generation refreshes in place, which would otherwise stack
-    // up duplicate listeners (and duplicate "Explain" API calls) with
-    // every successful generation. The listener always reads the CURRENT
-    // item list off tabBody._explainItems, kept fresh by whichever render
-    // function last ran, rather than closing over a stale array.
-    tabBody.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-explain-idx]');
-      if (!btn || !tabBody._explainItems) return;
-      const idx = Number(btn.dataset.explainIdx);
-      const item = tabBody._explainItems[idx];
-      if (!item) return;
-      const resultEl = tabBody.querySelector(`[data-explain-result="${idx}"]`);
-      const subjectLabel = SUBJECT_LABELS[LIB.subject] || LIB.subject;
-      const prompt = LIB.tab === 'formulas'
-        ? `I'm studying ${subjectLabel}. Here's a formula I'm reviewing:\n"${item.title}": ${item.formula}\n${item.note ? 'Note: ' + item.note : ''}\nCan you explain when and why this formula is used, and give a simple way to remember it? Keep it short.`
-        : `I'm studying ${subjectLabel}. Here's a study note I'm reviewing:\n"${item.topic}": ${item.summary}\nCan you expand on this with more detail or a worked example? Keep it short.`;
-      explainLibraryItem(prompt, btn, resultEl);
-    });
-
-    if (LIB.tab === 'flashcards') {
-      renderFlashcards(tabBody, res.flashcards || []);
-    } else if (LIB.tab === 'formulas') {
-      renderFormulas(tabBody, res.formulas || []);
-    } else if (LIB.tab === 'notes') {
-      renderNotes(tabBody, res.notes || []);
-    }
-  }
-
-  function renderFlashcards(body, cards) {
-    if (!LIB.cards.length) LIB.cards = shuffleArray(cards);
-    if (!LIB.cards.length) { body.innerHTML = '<div class="lib-empty">No flashcards for this subject yet.</div>'; return; }
-    const card = LIB.cards[LIB.idx];
-
-    body.innerHTML = `
-      <div class="flashcard-progress">Card ${LIB.idx + 1} of ${LIB.cards.length}</div>
-      <div class="flashcard-hint">Tap the card to flip it</div>
-      <div class="flashcard-stage">
-        <div class="flashcard ${LIB.flipped ? 'flipped' : ''}" id="flashcardEl">
-          <div class="flashcard-inner">
-            <div class="flashcard-face flashcard-front">
-              <div class="flashcard-label">Term</div>
-              <div class="flashcard-term">${card.term}</div>
-            </div>
-            <div class="flashcard-face flashcard-back">
-              <div class="flashcard-label">Definition</div>
-              <div class="flashcard-def">${card.definition}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <button class="explain-differently-btn" id="flExplainBtn">✨ Explain this differently</button>
-      <div id="flExplainResult"></div>
-      <div class="flashcard-nav-row">
-        <button class="btn btn-ghost" id="flPrev" ${LIB.idx === 0 ? 'disabled' : ''}>← Previous</button>
-        <button class="btn btn-primary" id="flNext">Next →</button>
-      </div>
-      <button class="flashcard-shuffle-btn" id="flShuffle">🔀 Shuffle cards</button>
-    `;
-
-    document.getElementById('flashcardEl').addEventListener('click', () => {
-      LIB.flipped = !LIB.flipped;
-      document.getElementById('flashcardEl').classList.toggle('flipped', LIB.flipped);
-    });
-    document.getElementById('flPrev').addEventListener('click', () => { LIB.idx--; LIB.flipped = false; renderFlashcards(body, cards); });
-    document.getElementById('flNext').addEventListener('click', () => {
-      if (LIB.idx === LIB.cards.length - 1) {
-        // Pushed past the end on purpose — the dismissible banner already
-        // offered this once (below); trying to continue anyway is a much
-        // stronger signal, so it earns the harder, blocking ask instead of
-        // being silently ignored (this button used to just be disabled here).
-        showCompletedModal(
-          `You've reached the end of these ${SUBJECT_LABELS[LIB.subject] || LIB.subject} flashcards.`,
-          () => { if (!hasAICredit()) { showAIPaywall(); return; } generateExtraFlashcardsForSubject(S.category, LIB.subject); },
-          { title: 'That\'s all for now!', icon: '🎉', continueLabel: 'Stay here' }
-        );
         return;
       }
-      LIB.idx++; LIB.flipped = false; renderFlashcards(body, cards);
-    });
-    document.getElementById('flShuffle').addEventListener('click', () => {
-      LIB.cards = shuffleArray(LIB.cards); LIB.idx = 0; LIB.flipped = false;
-      showToast('Shuffled!', 1200);
-      renderFlashcards(body, cards);
-    });
-    document.getElementById('flExplainBtn').addEventListener('click', () => {
-      const subjectLabel = SUBJECT_LABELS[LIB.subject] || LIB.subject;
-      const prompt = `I'm studying ${subjectLabel}. Here's a flashcard I'm reviewing:\nTerm: "${card.term}"\nDefinition: "${card.definition}"\nCan you explain this a different way — maybe with a simpler analogy or a worked example? Keep it short.`;
-      explainLibraryItem(prompt, document.getElementById('flExplainBtn'), document.getElementById('flExplainResult'));
-    });
 
-    if (LIB.idx === LIB.cards.length - 2 && LIB.cards.length >= 2) {
-      renderExpandBanner(
-        body,
-        `Only 1 more ${SUBJECT_LABELS[LIB.subject] || LIB.subject} flashcard after this one.`,
-        hasAICredit() ? 'Add more with AI →' : 'Unlock more with AI →',
-        () => { hasAICredit() ? generateExtraFlashcardsForSubject(S.category, LIB.subject) : showAIPaywall(); }
-      );
-    }
+      const quizActive   = document.getElementById('quizScreen')?.classList.contains('active');
+      const resultActive = document.getElementById('resultScreen')?.classList.contains('active');
 
-    if (LIB.idx === LIB.cards.length - 1) {
-      markCompleted(S.category, LIB.subject, 'library-flashcards');
-      renderExpandBanner(
-        body,
-        `That's all ${LIB.cards.length} ${SUBJECT_LABELS[LIB.subject] || LIB.subject} flashcards for now.`,
-        hasAICredit() ? 'Generate more with AI →' : 'Unlock more with AI →',
-        () => { hasAICredit() ? generateExtraFlashcardsForSubject(S.category, LIB.subject) : showAIPaywall(); }
-      );
+      if (!quizActive && !resultActive) return;
+
+      // Immediately restore the hash so back button stays active
+      if (quizActive)   window.location.hash = 'quiz';
+      if (resultActive) window.location.hash = 'result';
+
+      if (resultActive) {
+        goHome();
+        return;
+      }
+
+      // Double-back to exit
+      const now = Date.now();
+      if (now - _backLastPress < 3000) {
+        _backLastPress = 0;
+        hideBackWarningToast();
+        confirmExit();
+      } else {
+        _backLastPress = now;
+        showBackWarningToast();
+      }
+    });
+  }
+
+  /* ════════ KEYBOARD ════════ */
+  function onKey(e) {
+    if (!E.quizScreen.classList.contains('active')) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const q = S.questions[S.idx];
+    switch(e.key) {
+      case 'ArrowRight': case 'ArrowDown': e.preventDefault(); navigate(1); break;
+      case 'ArrowLeft':  case 'ArrowUp':   e.preventDefault(); navigate(-1); break;
+      case '1': case '2': case '3': case '4':
+        if (!S.reviewMode && q?._type==='objective' && S.answers[S.idx]===null) {
+          const i = Number(e.key)-1;
+          if (i < (q.options?.length||0)) { S.answers[S.idx]=i; renderQ(); }
+        }
+        break;
+      case 'f': case 'F': toggleFlag(); break;
+      case 'Escape':
+        if (E.quizSidebar.classList.contains('sidebar-open')) closeSidebar();
+        else confirmExit();
+        break;
     }
   }
 
-  function renderFormulas(body, formulas) {
-    if (!formulas.length) {
-      body.innerHTML = '<div class="lib-empty">No formula sheet for this subject yet.</div>';
-      renderExpandBanner(
-        body,
-        `No formulas here yet.`,
-        hasAICredit() ? 'Try generating some with AI →' : 'Unlock AI to try →',
-        () => { hasAICredit() ? generateExtraFormulasForSubject(S.category, LIB.subject) : showAIPaywall(); }
-      );
+  /* ════════ LOGIN / USER ════════ */
+  function loginStudent() {
+    const name = E.studentNameInput.value.trim().replace(/\s+/g,' ');
+    if (!name) {
+      E.studentNameInput.focus();
+      E.studentNameInput.style.borderColor = 'var(--red)';
+      setTimeout(() => { E.studentNameInput.style.borderColor = ''; }, 1500);
       return;
     }
-    const shuffled = shuffleArray(formulas);
-    // Shuffled per render so a student who habitually reads top-to-bottom
-    // and stops partway sees different formulas first each visit, even
-    // though the full list still renders every time either way.
-    body.innerHTML = shuffled.map((f, i) => `
-      <div class="formula-card">
-        <div class="formula-title">${f.title}</div>
-        <div class="formula-expr">${f.formula}</div>
-        <div class="formula-note">${f.note || ''}</div>
-        <button class="explain-differently-btn" data-explain-idx="${i}">✨ Explain this</button>
-        <div data-explain-result="${i}"></div>
-      </div>`).join('');
-    // Read by the single delegated click listener attached once in
-    // renderLibraryContent — kept fresh here on every render (including
-    // in-place AI refreshes) without ever re-registering a listener.
-    body._explainItems = shuffled;
-
-    // Shown as a full list, not stepped through card-by-card like
-    // flashcards — so "viewed this tab" is the honest equivalent of
-    // "reached the end" for this particular layout.
-    markCompleted(S.category, LIB.subject, 'library-formulas');
-    renderExpandBanner(
-      body,
-      `That's ${formulas.length} ${SUBJECT_LABELS[LIB.subject] || LIB.subject} formulas for now.`,
-      hasAICredit() ? 'Add more formulas with AI →' : 'Unlock more with AI →',
-      () => { hasAICredit() ? generateExtraFormulasForSubject(S.category, LIB.subject) : showAIPaywall(); }
-    );
+    if (!S.users[name]) S.users[name] = { history:[] };
+    S.currentUser = name;
+    saveSafe(SK.users, S.users);
+    saveSafe(SK.current, name);
+    tickStreak();
+    renderUser();
+    refreshStats();
+    renderHistory();
+    refreshStartBtn();
+    refreshUpgradeBar();
+    checkForStartedChallenges();
+    checkScheduledChallengeReminders();
   }
 
-  function renderNotes(body, notes) {
-    if (!notes.length) {
-      body.innerHTML = '<div class="lib-empty">No concept notes for this subject yet.</div>';
-      renderExpandBanner(
-        body,
-        `No notes here yet.`,
-        hasAICredit() ? 'Try generating some with AI →' : 'Unlock AI to try →',
-        () => { hasAICredit() ? generateExtraNotesForSubject(S.category, LIB.subject) : showAIPaywall(); }
-      );
+  function restoreUser() {
+    if (S.currentUser) {
+      E.studentNameInput.value = S.currentUser;
+      renderUser();
+      renderHistory();
+    }
+    refreshStats();
+    refreshUpgradeBar();
+    checkForStartedChallenges();
+    checkScheduledChallengeReminders();
+  }
+
+  function renderUser() {
+    if (S.currentUser) {
+      E.studentPill.textContent = '✓  ' + S.currentUser;
+      E.studentPill.className = 'student-status active';
+      updateFreeTrialIndicator();
+    } else {
+      E.studentPill.textContent = 'No student logged in';
+      E.studentPill.className = 'student-status';
+    }
+  }
+
+  /* ════════ STREAK ════════ */
+  function tickStreak() {
+    const today = todayStr();
+    const prev  = new Date(Date.now()-86400000).toISOString().slice(0,10);
+    if (S.streak.lastDate === today) return;
+    S.streak.count = S.streak.lastDate === prev ? S.streak.count+1 : 1;
+    S.streak.lastDate = today;
+    saveSafe(SK.streak, S.streak);
+    renderStreak();
+  }
+
+  function renderStreak() {
+    if (!E.streakDisplay) return;
+    const c = S.streak.count||0;
+    if (c > 0) {
+      E.streakDisplay.textContent = `🔥 ${c} day${c>1?'s':''}`;
+      E.streakDisplay.style.display = 'inline-flex';
+    } else {
+      E.streakDisplay.style.display = 'none';
+    }
+  }
+
+  /* ════════ SUBJECT SELECTION ════════ */
+  function pickSubject(key, btn) {
+    document.querySelectorAll('.subject-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    S.subject = key;
+    refreshStartBtn();
+  }
+
+  function updateSubjectCounts() {
+    document.querySelectorAll('.subject-btn').forEach(btn => {
+      const key  = btn.dataset.subject;
+      const bank = EXAM_BANK[key];
+      if (!bank) { btn.disabled=true; return; }
+      const hasObj = (bank.objective?.length||0) > 0;
+      const hasTh  = (bank.theory?.length||0) > 0;
+      const ok = S.type==='objective' ? hasObj
+               : S.type==='theory'    ? hasTh
+               : hasObj||hasTh;
+      btn.disabled = !ok;
+      btn.style.opacity = ok ? '' : '0.35';
+      const n = getExamCount(key);
+      const c = btn.querySelector('.sub-count');
+      if (c) c.textContent = (n||'0')+'Q';
+    });
+    if (S.subject) {
+      const active = document.querySelector('.subject-btn.active');
+      if (!active || active.disabled) { S.subject=''; refreshStartBtn(); }
+    }
+  }
+
+  function refreshStartBtn() {
+    const hasSubject = Boolean(S.subject);
+    const hasUser    = Boolean(S.currentUser);
+
+    if (!hasUser) {
+      E.startBtn.disabled = false; // keep enabled — clicking will prompt to login
+      E.startBtnText.textContent = 'Login above to start';
+    } else if (!hasSubject) {
+      E.startBtn.disabled = true;
+      E.startBtnText.textContent = 'Select a subject to begin';
+    } else {
+      E.startBtn.disabled = false;
+      E.startBtnText.textContent =
+        `${S.mode==='exam' ? 'Start Exam' : 'Start Practice'} — ${SUBJECTS[S.subject]?.name||S.subject}`;
+    }
+  }
+
+  /* ════════ START SESSION ════════ */
+  function startSession() {
+    // Must be logged in — give clear feedback if not
+    if (!S.currentUser) {
+      E.studentNameInput.focus();
+      E.studentNameInput.style.borderColor = 'var(--red)';
+      setTimeout(() => { E.studentNameInput.style.borderColor = ''; }, 2000);
+      E.studentPill.textContent = '⚠ Please enter your name above first';
+      E.studentPill.style.color = 'var(--red)';
+      setTimeout(() => {
+        E.studentPill.style.color = '';
+        renderUser();
+      }, 2500);
       return;
     }
-    const shuffled = shuffleArray(notes);
-    // Same reasoning as renderFormulas — shuffled per render for freshness.
-    body.innerHTML = shuffled.map((n, i) => `
-      <div class="note-card">
-        <div class="note-topic">${n.topic}</div>
-        <div class="note-summary">${n.summary}</div>
-        <button class="explain-differently-btn" data-explain-idx="${i}">✨ Explain this further</button>
-        <div data-explain-result="${i}"></div>
-      </div>`).join('');
-    // Read by the single delegated click listener attached once in
-    // renderLibraryContent — see the matching comment in renderFormulas.
-    body._explainItems = shuffled;
 
-    markCompleted(S.category, LIB.subject, 'library-notes');
+    // Validate mode and type with gentle popups
+    if (!S.mode) {
+      showGentleInlinePopup('👇 Please select a Mode first', document.getElementById('modeToggle'));
+      return;
+    }
+    if (!S.type) {
+      showGentleInlinePopup('👇 Please select a Type first', document.getElementById('typeToggle'));
+      return;
+    }
 
-    // Notes previously had no AI entry point at all — this is the
-    // equivalent of flashcards' end-of-list banner, now that
-    // generateExtraNotesForSubject actually exists.
-    renderExpandBanner(
-      body,
-      `That's ${notes.length} ${SUBJECT_LABELS[LIB.subject] || LIB.subject} notes for now.`,
-      hasAICredit() ? 'Add more notes with AI →' : 'Unlock more with AI →',
-      () => { hasAICredit() ? generateExtraNotesForSubject(S.category, LIB.subject) : showAIPaywall(); }
-    );
+    // Must have subject
+    if (!S.subject) {
+      showGentleInlinePopup('👇 Please select a Subject first', document.getElementById('subjectGrid'));
+      return;
+    }
+
+    // Paywall — lifetime trial check
+    if (!S.hasAccess && S.freeUsed >= FREE_TRIAL_LIMIT) {
+      showPaywall('trial');
+      return;
+    }
+
+    const bank = EXAM_BANK[S.subject];
+    if (!bank) { alert('Subject data not found. Please try another.'); return; }
+
+    // Filter by exam AND year (random = all years)
+    const examFilter = q => (!q.exam || q.exam === S.exam) &&
+                            (S.year === 'random' || !q.year || q.year === S.year);
+
+    // Helper to get filtered pool for a type
+    const getPool = (type) => {
+      const raw = (bank[type]||[]);
+      let qs = raw.filter(examFilter);
+      if (!qs.length) qs = raw.filter(q => !q.exam || q.exam === S.exam);
+      if (!qs.length) qs = [...raw];
+      return shuffle(qs).map(q => ({...q, _type: type === 'objective' ? 'objective' : 'theory'}));
+    };
+
+    let pool = [];
+    if (S.type === 'objective') {
+      pool = getPool('objective');
+    } else if (S.type === 'theory') {
+      pool = getPool('theory');
+    } else if (S.type === 'both' && S.bothMode === 'sections') {
+      // Sections mode — keep pools separate, start with Section A
+      S.sectionA = getPool('objective').slice(0, S.count);
+      S.sectionB = getPool('theory').slice(0, Math.max(3, Math.ceil(S.count * 0.2)));
+      S.section  = 'A';
+      pool = [...S.sectionA];
+    } else {
+      // Mixed mode — interleave objectives and theory
+      const objQs = getPool('objective');
+      const thQs  = getPool('theory');
+      pool = [...objQs, ...thQs];
+    }
+
+    if (!pool.length) {
+      alert('No questions available for this selection. Try a different subject or type.');
+      return;
+    }
+
+    const n = S.count === 'all' ? pool.length : Math.min(Number(S.count), pool.length);
+    S.questions  = pool.slice(0, n);
+    S.answers    = new Array(n).fill(null);
+    S.flagged    = new Array(n).fill(false);
+    S.qTimings   = new Array(n).fill(null);
+    S.idx        = 0;
+    S.reviewMode = false;
+    S.showAnswer = false;
+    S.inSession  = true;
+
+    // Timer — read from E.durationSelect (was the v1 bug)
+    if (S.timerId) { clearInterval(S.timerId); S.timerId = null; }
+    if (S.mode === 'exam') {
+      const raw  = E.durationSelect.value;
+      const mins = raw === 'auto' ? n : (parseInt(raw) || n);
+      S.timerSecs = mins * 60;
+      E.timerCard.style.display = 'block';
+      if (E.qhMobileTimer) E.qhMobileTimer.classList.remove('hidden');
+      runTimer();
+    } else {
+      S.timerSecs = 0;
+      E.timerCard.style.display = 'none';
+      if (E.qhMobileTimer) E.qhMobileTimer.classList.add('hidden');
+    }
+
+    // Count free usage — lifetime, per session start
+    if (!S.hasAccess) {
+      S.freeUsed++;
+      saveSafe(SK.free, { n: S.freeUsed });
+      updateFreeTrialIndicator();
+    }
+
+    E.sbStudent.textContent = S.currentUser;
+    E.sbSubject.textContent = SUBJECTS[S.subject]?.name || S.subject;
+    E.sbMode.textContent    = S.mode === 'exam' ? 'Exam Mode' : 'Practice';
+    E.sbExam.textContent    = S.exam;
+
+    buildPills();
+    renderQ();
+    showScreen('quiz');
+    if (window._collapseContest) window._collapseContest();
+  }
+  function runTimer() {
+    tickClock();
+    S.timerId = setInterval(() => {
+      S.timerSecs--;
+      tickClock();
+      if (S.timerSecs <= 0) {
+        clearInterval(S.timerId); S.timerId = null;
+        finishSession(true);
+      }
+    }, 1000);
   }
 
-  /* ────────────────────────────────
-     SPEED ROUND (EDU GAME)
-     60-second rapid-fire quiz: tap an answer, get instant feedback,
-     auto-advance. Streak bonus scoring. Pulls from the anti-repeat
-     pool first, tops up with AI-generated questions when the static
-     pool is thin so a fast player doesn't run out mid-round.
-  ──────────────────────────────── */
-  const GAME_DURATION_SECS = 60;
-  const GAME_MIN_QUEUE = 8;      // fetch more AI questions when queue drops below this
-  const GAME_LOCK_MS = 550;      // pause after tap to show correct/incorrect before advancing
+  function tickClock() {
+    const t = Math.max(S.timerSecs, 0);
+    const display = `${pad(Math.floor(t/60))}:${pad(t%60)}`;
+    const urgent = S.mode==='exam' && S.timerSecs>0 && S.timerSecs<300;
+    E.timerDisplay.textContent = display;
+    E.timerDisplay.classList.toggle('urgent', urgent);
+    if (E.qhMobileTimer) {
+      E.qhMobileTimer.textContent = '⏱ ' + display;
+      E.qhMobileTimer.classList.toggle('urgent', urgent);
+    }
+  }
 
-  const SPEED_LEVELS = {
-    quick:    { id: 'quick',    label: 'Quick Fire', secs: 30,  icon: '⚡', detail: '30 seconds — a fast burst.' },
-    standard: { id: 'standard', label: 'Standard',   secs: 60,  icon: '🔥', detail: '60 seconds — the classic pace.' },
-    marathon: { id: 'marathon', label: 'Marathon',   secs: 120, icon: '🏃', detail: '120 seconds — go the distance.' },
-  };
-  const SPEED_LEVEL_KEY = 'hh-speed-level-v1';
-  function getLastSpeedLevel() { return loadSafe(SPEED_LEVEL_KEY, 'standard'); }
+  function pad(n) { return String(n).padStart(2,'0'); }
 
-  /** Shown on a fresh entry into Speed Round from the games hub, so a
-   * player picks their pace deliberately every time rather than always
-   * getting the same fixed 60-second round. "Continue where you left
-   * off", study-plan tasks, and "Play Again" all pass a remembered level
-   * straight through instead, so quick replays don't add friction. */
-  function showSpeedLevelPicker(subjectKey) {
-    const meta = subjectMeta(subjectKey);
-    document.getElementById('slSubjectLine').textContent = `${meta.icon} ${SUBJECT_LABELS[subjectKey] || subjectKey}`;
-    const opts = document.getElementById('slOptions');
-    opts.innerHTML = Object.values(SPEED_LEVELS).map(lv => `
-      <button class="speed-level-btn" data-level="${lv.id}">
-        <span class="speed-level-icon">${lv.icon}</span>
-        <span>
-          <div class="speed-level-label">${lv.label}</div>
-          <div class="speed-level-detail">${lv.detail}</div>
-        </span>
-      </button>
-    `).join('');
-    opts.querySelectorAll('[data-level]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.getElementById('speedLevelModal').classList.add('hidden');
-        startSpeedRound(subjectKey, btn.dataset.level);
+  /* ════════ SUBJECT SWITCHER (multi-subject challenges) ════════ */
+  function buildSubjectSwitcher() {
+    if (!E.subjectTabs) return;
+    E.subjectTabs.innerHTML = '';
+    (S.subjects || []).forEach((subject, i) => {
+      const range = (S.subjectRanges || {})[subject];
+      if (!range) return;
+      const btn = document.createElement('button');
+      btn.className = 'section-tab' + (i === 0 ? ' active' : '');
+      btn.dataset.subject = subject;
+      btn.innerHTML = `<span class="section-tab-label">${safe(SUBJECTS[subject]?.name || subject)}</span>`;
+      btn.addEventListener('click', () => jumpToSubject(subject));
+      E.subjectTabs.appendChild(btn);
+    });
+  }
+
+  function jumpToSubject(subject) {
+    const range = (S.subjectRanges || {})[subject];
+    if (!range) return;
+    S.idx = range.start;
+    renderQ();
+  }
+
+  function syncSubjectTabs() {
+    if (!E.subjectTabs || E.subjectSwitcher?.classList.contains('hidden')) return;
+    const q = S.questions[S.idx];
+    const activeSubject = q?.sourceSubject;
+    E.subjectTabs.querySelectorAll('.section-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.subject === activeSubject);
+    });
+  }
+
+  /* ════════ FLAG ════════ */
+  function toggleFlag() {
+    if (S.reviewMode) return;
+    S.flagged[S.idx] = !S.flagged[S.idx];
+    syncFlagBtn();
+    syncPills();
+  }
+
+  function syncFlagBtn() {
+    const on = S.flagged[S.idx];
+    E.flagBtn.textContent = on ? '🚩 Flagged' : '🏳 Flag';
+    E.flagBtn.classList.toggle('flag-on', on);
+  }
+
+  /* ════════ PILLS ════════ */
+  function buildPills() {
+    E.qPills.innerHTML = '';
+    S.questions.forEach((q, i) => {
+      const b = document.createElement('button');
+      b.className = 'qpill' + (q._type==='theory' ? ' theory-pill' : '');
+      b.textContent = i+1;
+      b.title = `Q${i+1} · ${q._type==='theory'?'Theory':'Obj'}${q.year?' · '+q.year:''}`;
+      b.addEventListener('click', () => {
+        S.idx = i;
+        closeSidebar();
+        renderQ();
+        // Trigger teaser if free user has reached question 5
+        if (!S.hasAccess && i >= 4 && !S.reviewMode) {
+          setTimeout(showTeaserToast, 1500);
+        }
       });
+      E.qPills.appendChild(b);
     });
-    document.getElementById('speedLevelModal').classList.remove('hidden');
+    syncPills();
   }
 
-  function initSpeedLevelPicker() {
-    const closeBtn = document.getElementById('slClose');
-    if (closeBtn) closeBtn.addEventListener('click', () => document.getElementById('speedLevelModal').classList.add('hidden'));
+  function syncPills() {
+    E.qPills.querySelectorAll('.qpill').forEach((p, i) => {
+      p.classList.toggle('p-current',  i===S.idx);
+      p.classList.toggle('p-answered', S.answers[i]!==null);
+      p.classList.toggle('p-flagged',  S.flagged[i]);
+    });
+    const done  = S.answers.filter(a => a!==null).length;
+    const total = S.questions.length;
+    E.progressBar.style.width  = total ? `${(done/total)*100}%` : '0%';
+    E.progressFraction.textContent = `${S.idx+1} / ${total}`;
+    E.progressSub.textContent      = `${done} of ${total} answered`;
   }
 
-  let G = { kind: 'speed', subject: null, queue: [], idx: 0, score: 0, streak: 0, bestStreak: 0, correct: 0, attempted: 0, usedIds: [], locked: false, fetchingMore: false };
+  /* ════════ RENDER QUESTION ════════ */
+  function renderQ() {
+    const q   = S.questions[S.idx];
+    const ans = S.answers[S.idx];
+    const obj = q._type === 'objective';
 
-  function stopGameTimer() {
-    if (S.gameTimerInterval) clearInterval(S.gameTimerInterval);
-    S.gameTimerInterval = null;
-  }
+    // Track time student arrives at this question
+    if (!S.qTimings[S.idx]) S.qTimings[S.idx] = { start: Date.now(), answered: null };
+    else if (!S.qTimings[S.idx].start) S.qTimings[S.idx].start = Date.now();
 
-  function startSpeedRound(subjectKey, level) {
-    // Checked (read-only) before even showing the pace picker — no point
-    // letting someone choose a difficulty for a game they can't play.
-    // Actual consumption happens only once the game truly begins (below),
-    // not here, so showing/abandoning the picker never costs a round.
-    if (!hasGamesAccess()) { showGamesPaywall(); return; }
-    if (!level) {
-      showSpeedLevelPicker(subjectKey);
-      return;
+    // Update section tabs if in sections mode
+    if (S.type === 'both' && S.bothMode === 'sections') {
+      if (E.sectionTabs) E.sectionTabs.classList.remove('hidden');
+      if (E.sectionTabA) E.sectionTabA.classList.toggle('active', S.section === 'A');
+      if (E.sectionTabB) E.sectionTabB.classList.toggle('active', S.section === 'B');
+      if (E.sectionACount) E.sectionACount.textContent = S.sectionA.length + 'Q';
+      if (E.sectionBCount) E.sectionBCount.textContent = S.sectionB.length + 'Q';
+    } else {
+      if (E.sectionTabs) E.sectionTabs.classList.add('hidden');
     }
-    saveSafe(SPEED_LEVEL_KEY, level);
-    const levelMeta = SPEED_LEVELS[level] || SPEED_LEVELS.standard;
 
-    const bank = getBank(S.category);
-    const subj = bank[subjectKey];
-    if (!subj || !subj.objective || !subj.objective.length) {
-      showToast('No questions available for this subject yet.');
-      return;
+    syncSubjectTabs();
+
+    // Section jump button — always visible in sections mode
+    if (E.sectionJumpBtn) {
+      const inSections = S.type === 'both' && S.bothMode === 'sections';
+      E.sectionJumpBtn.classList.toggle('hidden', !inSections);
+      if (inSections) {
+        E.sectionJumpBtn.textContent = S.section === 'A' ? '📋 Go to Section B →' : '📋 Go to Section A ←';
+      }
     }
-    consumeGameRound();
 
-    const pool = subj.objective.slice();
-    const { questions } = pickQuestions(S.category, subjectKey, pool, Math.min(pool.length, 25));
+    E.qNumBadge.textContent     = `Q${S.idx+1}`;
+    E.qSubjectTag.textContent   = SUBJECTS[S.subject]?.name || S.subject;
+    E.qYearTag.textContent      = [q.exam||S.exam, q.year].filter(Boolean).join(' · ');
+    E.qPosIndicator.textContent = `${S.idx+1} of ${S.questions.length}`;
 
-    G = { kind: 'speed', subject: subjectKey, level, queue: questions, idx: 0, score: 0, streak: 0, bestStreak: 0, correct: 0, attempted: 0, usedIds: [], locked: false, fetchingMore: false };
-    S.mode = 'game';
-    S.gameTimerSecs = levelMeta.secs;
-    setLastActivity(S.category, subjectKey, 'game');
+    E.qtypeBanner.textContent = obj ? 'Objective Question' : 'Theory / Essay Question';
+    E.qtypeBanner.className   = `qtype-banner ${obj?'obj':'theory'}`;
 
-    document.getElementById('gameScore').textContent = '0';
-    document.getElementById('gameStreak').textContent = '0';
-    updateGameTimerDisplay();
-    const catLabel = CONTENT_MANIFEST[S.category].label;
-    const meta = subjectMeta(subjectKey);
-    document.getElementById('gameSubjectBadge').textContent = `${meta.icon} ${SUBJECT_LABELS[subjectKey] || subjectKey} · ${catLabel} · ${levelMeta.label}`;
+    // Teach Me only during Practice Mode or when reviewing results — never
+    // during a live, timed Exam Mode session (would leak the answer to a
+    // question you're being tested on). During exam mode, show a small,
+    // inert teaser instead that just explains when it'll be available.
+    const inPracticeOrReview = S.mode === 'practice' || S.reviewMode;
+    if (E.aiExplainBtn)       E.aiExplainBtn.classList.toggle('hidden', !S.currentUser || !obj || !inPracticeOrReview);
+    if (E.aiExplainTheoryBtn) E.aiExplainTheoryBtn.classList.toggle('hidden', !S.currentUser || obj || !inPracticeOrReview);
+    if (E.aiExplainTeaser)    E.aiExplainTeaser.classList.toggle('hidden', !S.currentUser || inPracticeOrReview);
+    if (E.meaAiPanel) E.meaAiPanel.classList.add('hidden');
 
-    renderGameQuestion();
-    showScreen('gameScreen');
+    // Show snap button for all paid subscribers on theory questions
+    if (E.snapTip) E.snapTip.classList.toggle('hidden', obj);
+    document.getElementById('snapLockedIndicator')?.remove();
+    if (S.hasAccess && !obj) {
+      // Paid user on theory — show snap button
+      updateSnapCreditsBadge();
+      if (E.snapActionRow) { E.snapActionRow.style.display = 'flex'; E.snapActionRow.classList.remove('hidden'); }
+      if (E.snapBtn) E.snapBtn.style.display = 'flex';
+    } else if (!S.hasAccess && !obj) {
+      // Free trial user on theory — show locked indicator
+      if (E.snapActionRow) E.snapActionRow.style.display = 'none';
+      const locked = document.createElement('div');
+      locked.id = 'snapLockedIndicator';
+      locked.className = 'snap-locked-indicator';
+      locked.innerHTML = '<span class="sli-icon">📸</span><div class="sli-body"><span class="sli-title">Snap & Mark — Subscribe to Unlock</span><span class="sli-sub">Snap your theory answer and get marked by AI against the official scheme</span></div><button class="sli-btn" id="snapLockedBtn">Unlock →</button>';
+      if (E.snapTip?.parentNode) E.snapTip.parentNode.insertBefore(locked, E.snapTip);
+      document.getElementById('snapLockedBtn')?.addEventListener('click', () => showPaywall('upgrade'));
+    } else {
+      // Objective question — hide snap
+      if (E.snapActionRow) E.snapActionRow.style.display = 'none';
+    }
 
-    stopGameTimer();
-    S.gameTimerInterval = setInterval(() => {
-      S.gameTimerSecs--;
-      updateGameTimerDisplay();
-      if (S.gameTimerSecs <= 0) { stopGameTimer(); finishSpeedRound(); }
-    }, 1000);
+    E.objectivePanel.classList.toggle('hidden', !obj);
+    E.theoryPanel.classList.toggle('hidden', obj);
 
-    maybeTopUpQueue();
+    E.flagBtn.style.display = S.reviewMode ? 'none' : '';
+    syncFlagBtn();
+
+    if (obj) renderObjective(q, ans);
+    else     renderTheory(q);
+
+    E.prevBtn.disabled    = S.idx === 0;
+    E.nextBtn.textContent = S.idx === S.questions.length-1
+      ? (S.reviewMode ? '← Back to Results' : 'Finish ✓')
+      : 'Next →';
+
+    if (E.keyHint) {
+      E.keyHint.style.display = obj && !S.reviewMode && ans===null ? 'block' : 'none';
+    }
+
+    syncPills();
   }
 
-  async function startSpeedRoundLive(subjectKey) {
-    if (!hasGamesAccess()) { showGamesPaywall(); return; }
-    showToast('Generating your AI Live round…', 5000);
-    const questions = await fetchLiveMCQBatch(S.category, subjectKey, 15);
-    if (!questions) return; // fetchLiveMCQBatch already showed the right toast/paywall
-    consumeGameRound();
+  /* ════════ OBJECTIVE ════════ */
+  function renderObjective(q, ans) {
+    E.objectiveQuestion.innerHTML = safe(q.question).replace(/\n/g,'<br>');
+    E.optionsList.innerHTML = '';
+    E.explanationArea.innerHTML = '';
+    E.explanationArea.className = 'explanation-area';
 
-    const levelMeta = SPEED_LEVELS[getLastSpeedLevel()] || SPEED_LEVELS.standard;
-    G = { kind: 'speed', subject: subjectKey, level: getLastSpeedLevel(), isLive: true, queue: shuffleArray(questions), idx: 0, score: 0, streak: 0, bestStreak: 0, correct: 0, attempted: 0, usedIds: [], locked: false, fetchingMore: false };
-    S.mode = 'game';
-    S.gameTimerSecs = levelMeta.secs;
-    setLastActivity(S.category, subjectKey, 'game');
+    const locked  = S.reviewMode || (S.mode==='practice' && ans!==null);
+    const showRes = S.reviewMode || (S.mode==='practice' && ans!==null);
 
-    document.getElementById('gameScore').textContent = '0';
-    document.getElementById('gameStreak').textContent = '0';
-    updateGameTimerDisplay();
-    const catLabel = CONTENT_MANIFEST[S.category].label;
-    const meta = subjectMeta(subjectKey);
-    document.getElementById('gameSubjectBadge').textContent = `${meta.icon} ${SUBJECT_LABELS[subjectKey] || subjectKey} · ${catLabel} · ✨ AI Live`;
+    q.options.forEach((opt, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'option-btn';
+      btn.innerHTML =
+        `<span class="opt-letter">${String.fromCharCode(65+i)}.</span>` +
+        `<span class="opt-text">${safe(opt)}</span>`;
 
-    renderGameQuestion();
-    showScreen('gameScreen');
+      if (showRes) {
+        if (i===q.answer)                 btn.classList.add('opt-correct');
+        if (i===ans && ans!==q.answer)    btn.classList.add('opt-wrong');
+        if (i===ans && ans===q.answer)    btn.classList.add('opt-your-right');
+      } else if (i===ans) {
+        btn.classList.add('opt-selected');
+      }
 
-    stopGameTimer();
-    S.gameTimerInterval = setInterval(() => {
-      S.gameTimerSecs--;
-      updateGameTimerDisplay();
-      if (S.gameTimerSecs <= 0) { stopGameTimer(); finishSpeedRound(); }
-    }, 1000);
-  }
-
-  async function startTrueFalseLive(subjectKey) {
-    if (!hasGamesAccess()) { showGamesPaywall(); return; }
-    showToast('Generating your AI Live round…', 5000);
-    const questions = await fetchLiveMCQBatch(S.category, subjectKey, 15);
-    if (!questions) return;
-    consumeGameRound();
-
-    const queue = mcqToTFItems(questions);
-    G = { kind: 'tf', subject: subjectKey, isLive: true, queue, idx: 0, score: 0, streak: 0, bestStreak: 0, correct: 0, attempted: 0, usedIds: [], locked: false, fetchingMore: false };
-    S.mode = 'tf';
-    S.gameTimerSecs = GAME_DURATION_SECS;
-    setLastActivity(S.category, subjectKey, 'tf');
-
-    document.getElementById('gameScore').textContent = '0';
-    document.getElementById('gameStreak').textContent = '0';
-    updateGameTimerDisplay();
-    const catLabel = CONTENT_MANIFEST[S.category].label;
-    const meta = subjectMeta(subjectKey);
-    document.getElementById('gameSubjectBadge').textContent = `${meta.icon} ${SUBJECT_LABELS[subjectKey] || subjectKey} · ${catLabel} · ✨ AI Live`;
-
-    renderGameQuestion();
-    showScreen('gameScreen');
-
-    stopGameTimer();
-    S.gameTimerInterval = setInterval(() => {
-      S.gameTimerSecs--;
-      updateGameTimerDisplay();
-      if (S.gameTimerSecs <= 0) { stopGameTimer(); finishSpeedRound(); }
-    }, 1000);
-  }
-
-
-  /* ────────────────────────────────
-     MULTIPLAYER WORD SCRAMBLE (turn-based prototype)
-     Each participant gets a fixed per-word timer and plays in a fixed
-     order on the SAME shared word list; the server enforces whose turn
-     it is and grades every answer itself (never trusts a client-
-     reported score, same principle as the existing quiz Challenge).
-     State lives entirely in WS below, kept separate from G/S so it can
-     never collide with a normal single-player game in progress.
-  ──────────────────────────────── */
-  const WS_WORD_SECONDS_PRESETS = { quick: 10, standard: 15, marathon: 25 };
-  const WS_SORT_SECONDS_PRESETS = { quick: 5, standard: 8, marathon: 15 };
-  const WS_MCQ_SECONDS_PRESETS = { quick: 8, standard: 12, marathon: 20 };
-  const WS_WORDS_PER_MATCH = 8;
-  const WS_SORT_ITEMS_PER_MATCH = 12;
-  const WS_MCQ_ITEMS_PER_MATCH = 15;
-  const WS_POLL_MS = 2500;
-  const WS_RESCUE_GRACE_MS = 5000; // matches the server's own grace window
-  let WS = null;
-
-  function openWordScrambleChallengeSetup(subjectKey) {
-    openMultiplayerSetup('scramble', subjectKey);
-  }
-
-  function openCategorySortChallengeSetup() {
-    openMultiplayerSetup('categorySort', null);
-  }
-
-  function openFormulaRushChallengeSetup(subjectKey) {
-    openMultiplayerSetup('mcq', subjectKey, false, 'formula');
-  }
-
-  function openSequenceChallengeSetup() {
-    openMultiplayerSetup('mcq', null, false, 'sequence'); // no subject concept — always mixed, matching the single-player game
-  }
-
-  // Standalone "Last Man Standing" category — shows only the games that
-  // currently have real multiplayer built (Category Sort, Word Scramble).
-  // As more games gain multiplayer (see the roadmap notes), they add a
-  // tile here rather than needing their own separate elimination-mode UI.
-  function openLastManStandingPicker() {
-    ensureUser(() => {
-      document.getElementById('wsChallengeBody').innerHTML = `
-        <h3 class="sheet-title" style="text-align:center;">⚔️ Last Man Standing</h3>
-        <p class="sheet-sub" style="text-align:center;">Pick a game — answer wrong or miss the clock and you're out. Last player standing wins.</p>
-        <button class="btn btn-primary btn-block" id="lmsPickSort" style="margin-top:1rem;">🗂 Category Sort</button>
-        <button class="btn btn-primary btn-block" id="lmsPickScramble" style="margin-top:.6rem;">🔤 Word Scramble</button>
-        <button class="btn btn-primary btn-block" id="lmsPickFormula" style="margin-top:.6rem;">🧮 Formula Rush</button>
-        <button class="btn btn-primary btn-block" id="lmsPickSequence" style="margin-top:.6rem;">🔢 Sequence</button>
-        <p class="sheet-sub" style="text-align:center; font-size:.72rem; margin-top:1rem;">More games are joining Last Man Standing soon.</p>
-      `;
-      document.getElementById('wsChallengeModal').classList.remove('hidden');
-      document.getElementById('lmsPickSort').addEventListener('click', () => openMultiplayerSetup('categorySort', null, true));
-      document.getElementById('lmsPickScramble').addEventListener('click', () => openMultiplayerSetup('scramble', null, true));
-      document.getElementById('lmsPickFormula').addEventListener('click', () => openMultiplayerSetup('mcq', null, true, 'formula'));
-      document.getElementById('lmsPickSequence').addEventListener('click', () => openMultiplayerSetup('mcq', null, true, 'sequence'));
-    });
-  }
-
-  const ACTIVE_MATCH_KEY = 'hh-active-match';
-
-  // Saved the instant a match is successfully created or joined, so that
-  // if this device closes mid-match (accidentally or on purpose) and
-  // reopens the app, it can offer to bring the person right back instead
-  // of just losing their spot. hostSecret is only kept when this device
-  // IS the host — 'join' deliberately never issues one to anyone else, so
-  // there's nothing extra being exposed here that this device didn't
-  // already legitimately hold.
-  function saveActiveMatchPointer() {
-    try {
-      localStorage.setItem(ACTIVE_MATCH_KEY, JSON.stringify({
-        code: WS.code, myName: WS.myName, contentMode: WS.contentMode, mcqKind: WS.mcqKind || null,
-        isHost: WS.isHost, hostSecret: WS.isHost ? WS.hostSecret : undefined,
-      }));
-    } catch (err) { /* not fatal — rejoin just won't be offered later if this fails */ }
-  }
-
-  function clearActiveMatchPointer() {
-    try { localStorage.removeItem(ACTIVE_MATCH_KEY); } catch (err) { /* not fatal */ }
-  }
-
-  // Called whenever the Games Hub is opened — cheap enough (one status
-  // fetch, only when a pointer actually exists) to check every time rather
-  // than needing its own polling loop while the person is elsewhere in
-  // the app.
-  async function checkForActiveMatchRejoin() {
-    const existing = document.getElementById('gamesHubRejoinBanner');
-    if (existing) existing.remove();
-    let pointer = null;
-    try { pointer = JSON.parse(localStorage.getItem(ACTIVE_MATCH_KEY) || 'null'); } catch (err) { pointer = null; }
-    if (!pointer || !pointer.code) return;
-    try {
-      const res = await fetch(API_BASE + '/api/challenge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'status', code: pointer.code }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!data.ok || data.ended) { clearActiveMatchPointer(); return; } // match is over — nothing to rejoin
-      const gameNames = { categorySort: 'Category Sort', scramble: 'Word Scramble', formula: 'Formula Rush', sequence: 'Sequence' };
-      const gameLabel = pointer.contentMode === 'mcq' ? gameNames[pointer.mcqKind] : gameNames[pointer.contentMode];
-      const banner = document.createElement('div');
-      banner.id = 'gamesHubRejoinBanner';
-      banner.style.cssText = 'margin:0 0 1rem; padding:.9rem; background:var(--coral-pale); border:1px solid var(--coral); border-radius:var(--r-m);';
-      banner.innerHTML = `
-        <p style="font-weight:700; font-size:.88rem;">🔴 You have a ${safe(gameLabel || 'multiplayer')} match in progress</p>
-        <button class="btn btn-primary btn-block" id="gamesHubRejoinBtn" style="margin-top:.5rem;">Rejoin match</button>
-      `;
-      const container = document.querySelector('#gamesHubScreen .container');
-      if (container) container.prepend(banner);
-      const btn = document.getElementById('gamesHubRejoinBtn');
-      if (btn) btn.addEventListener('click', () => rejoinActiveMatch(pointer));
-    } catch (err) { /* transient — just don't show the banner this time, no real harm */ }
-  }
-
-  // Rebuilds WS state from a saved pointer and drops straight into normal
-  // polling — deliberately skips 'join' entirely (that action is for NEW
-  // participants; this device is already in turnOrder/turnQueue from
-  // before). The very next poll response fills in content, scores, and
-  // whose turn it is, the same way it does for every other device.
-  function rejoinActiveMatch(pointer) {
-    ensureUser(() => {
-      WS = {
-        code: pointer.code, hostSecret: pointer.hostSecret || null, isHost: !!pointer.isHost,
-        myName: pointer.myName || S.currentUser, subjectKey: null, contentMode: pointer.contentMode, mcqKind: pointer.mcqKind || null,
-        pollTimer: null, itemTimer: null, waitCountdownTimer: null, secsLeft: 0,
-        itemSeconds: WS_WORD_SECONDS_PRESETS.standard, // corrected by the first poll below
-        words: [], items: [], bucketSubjects: [],
-        turnOrder: [], scores: {}, itemIndex: 0, totalItems: 0, turnStartedAt: null,
-        answeredThisTurn: false, eliminationMode: false, eliminated: {},
-      };
-      document.getElementById('wsChallengeBody').innerHTML = `<div class="lib-empty">Reconnecting…</div>`;
-      document.getElementById('wsChallengeModal').classList.remove('hidden');
-      startWSPolling();
-    });
-  }
-
-  // A player choosing to deliberately step away — as opposed to the
-  // passive timeout-rescue, which only handles someone going quiet for a
-  // single turn. This removes them from the match's turn rotation
-  // immediately, server-side, rather than making everyone else wait out a
-  // rescue cycle.
-  async function leaveMatch() {
-    if (WS && WS.code) {
-      try {
-        await fetch(API_BASE + '/api/challenge', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'leave_match', code: WS.code, name: WS.myName }),
+      btn.disabled = locked;
+      if (!locked) {
+        btn.addEventListener('click', () => {
+          // Record answer timing
+          if (!S.qTimings) S.qTimings = [];
+          if (!S.qTimings[S.idx]) S.qTimings[S.idx] = { start: Date.now() };
+          if (!S.qTimings[S.idx].answered) {
+            S.qTimings[S.idx].answered = Date.now();
+            S.qTimings[S.idx].duration = S.qTimings[S.idx].answered - (S.qTimings[S.idx].start || S.qTimings[S.idx].answered);
+          }
+          S.answers[S.idx]=i; renderQ();
         });
-      } catch (err) { /* best-effort — closing the modal locally still gets them out either way */ }
-    }
-    clearActiveMatchPointer();
-    closeWSModal();
-  }
-
-  // Host-only escape hatch for a stalled match — ends it right now with
-  // whatever scores/state currently stand, rather than everyone waiting
-  // out however many passive rescue cycles remain.
-  async function endMatchForEveryone() {
-    if (!WS || !WS.code || !WS.isHost) return;
-    try {
-      const res = await fetch(API_BASE + '/api/challenge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'force_end', code: WS.code, hostSecret: WS.hostSecret }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (data.ok) {
-        if (WS.pollTimer) clearInterval(WS.pollTimer);
-        renderWSResults(data.scores || WS.scores, data.eliminated || WS.eliminated, null);
-      } else {
-        showToast('Could not end the match — please try again.', 3000);
       }
-    } catch (err) {
-      showToast('Could not end the match — check your connection.', 3000);
+      E.optionsList.appendChild(btn);
+    });
+
+    if (showRes && q.explanation) {
+      const right = ans===q.answer;
+      E.explanationArea.innerHTML =
+        `<div class="exp-head ${right?'exp-right':'exp-wrong'}">` +
+          (right ? '✅ Correct!' : `❌ Incorrect — Answer: <strong>${String.fromCharCode(65+q.answer)}</strong>`) +
+        `</div>` +
+        `<div class="exp-body">💡 ${safe(q.explanation)}</div>`;
+      E.explanationArea.classList.add('visible');
     }
   }
 
-  function openMultiplayerSetup(contentMode, subjectKey, eliminationMode, mcqKind) {
-    ensureUser(() => {
-      const defaultSecs = contentMode === 'categorySort' ? WS_SORT_SECONDS_PRESETS.standard
-        : contentMode === 'mcq' ? WS_MCQ_SECONDS_PRESETS.standard : WS_WORD_SECONDS_PRESETS.standard;
-      WS = {
-        code: null, hostSecret: null, isHost: false, myName: S.currentUser, subjectKey, contentMode, mcqKind: mcqKind || null,
-        pollTimer: null, itemTimer: null, waitCountdownTimer: null, secsLeft: 0,
-        itemSeconds: defaultSecs,
-        words: [], items: [], bucketSubjects: [],
-        turnOrder: [], scores: {}, itemIndex: 0, totalItems: 0, turnStartedAt: null,
-        answeredThisTurn: false,
-        eliminationMode: !!eliminationMode, eliminated: {},
-      };
-      renderWSSetup();
-      document.getElementById('wsChallengeModal').classList.remove('hidden');
-    });
-  }
+  /* ════════ THEORY ════════ */
+  function renderTheory(q) {
+    E.theoryQuestion.innerHTML = safe(q.question).replace(/\n/g,'<br>');
 
-  function closeWSModal() {
-    if (WS && WS.pollTimer) clearInterval(WS.pollTimer);
-    if (WS && WS.itemTimer) clearInterval(WS.itemTimer);
-    if (WS && WS.waitCountdownTimer) clearInterval(WS.waitCountdownTimer);
-    if (WS && WS.rematchWatchTimer) clearInterval(WS.rematchWatchTimer);
-    if (WS && WS.hostRematchPollTimer) clearInterval(WS.hostRematchPollTimer);
-    if (WS && WS.reactionWatchTimer) clearInterval(WS.reactionWatchTimer);
-    document.getElementById('wsChallengeModal').classList.add('hidden');
-  }
+    const total = q.totalMarks ||
+      (q.markingScheme||[]).reduce((s,p) => s+(p.marks||0), 0);
 
-  function initWSChallenge() {
-    const modal = document.getElementById('wsChallengeModal');
-    document.getElementById('wsClose').addEventListener('click', closeWSModal);
-    modal.addEventListener('click', (e) => { if (e.target === modal) closeWSModal(); });
-  }
+    const isExam    = S.mode === 'exam';
+    const inReview  = S.reviewMode;
+    const snapped   = S.answers[S.idx] === 'snapped';
+    const showFull  = inReview || snapped; // reveal everything after snap or in review
 
-  function renderWSSetup() {
-    const isSort = WS.contentMode === 'categorySort';
-    const isMcq = WS.contentMode === 'mcq';
-    const presets = isSort ? WS_SORT_SECONDS_PRESETS : isMcq ? WS_MCQ_SECONDS_PRESETS : WS_WORD_SECONDS_PRESETS;
-    const meta = WS.subjectKey ? subjectMeta(WS.subjectKey) : null;
-    // Sequence has no subject concept at all (always mixed, procedurally
-    // generated) — same as the single-player game's own picker-less flow.
-    const subjectLabel = (isSort || (isMcq && WS.mcqKind === 'sequence')) ? 'Mixed subjects'
-      : (WS.subjectKey ? `${meta.icon} ${SUBJECT_LABELS[WS.subjectKey] || WS.subjectKey}` : 'Mixed subjects');
-    const gameLabel = isSort ? 'Category Sort' : isMcq ? (WS.mcqKind === 'sequence' ? 'Sequence' : 'Formula Rush') : 'Word Scramble';
-    const title = WS.eliminationMode ? `⚔️ Last Man Standing — ${gameLabel}` : `🔀 Multiplayer ${gameLabel}`;
-    const subtitle = WS.eliminationMode
-      ? `${subjectLabel} — answer wrong or miss the clock and you're out. Last player standing wins.`
-      : `${subjectLabel} — turns rotate one item at a time.`;
-    document.getElementById('wsChallengeBody').innerHTML = `
-      <h3 class="sheet-title" style="text-align:center;">${title}</h3>
-      <p class="sheet-sub" style="text-align:center;">${subtitle}</p>
-      <label style="display:flex; align-items:center; gap:.6rem; padding:.7rem .9rem; margin-top:.8rem;
-                    background: var(--cream-w); border-radius: var(--r-m); border:1px solid var(--border); cursor:pointer;">
-        <input type="checkbox" id="wsEliminationToggle" ${WS.eliminationMode ? 'checked' : ''} style="width:18px; height:18px; flex-shrink:0;">
-        <span style="font-size:.85rem;"><strong>⚔️ Last Man Standing</strong> — wrong answer or missed clock eliminates you</span>
-      </label>
-      <p class="sheet-sub" style="text-align:center; font-weight:700; margin-top:.8rem;">Seconds per turn</p>
-      <div class="ws-preset-row" style="display:flex; gap:.5rem; margin-bottom:.6rem;">
-        <button class="btn btn-ghost ws-preset-btn" data-secs="${presets.quick}" style="flex:1;">Quick (${presets.quick}s)</button>
-        <button class="btn btn-ghost ws-preset-btn" data-secs="${presets.standard}" style="flex:1;">Standard (${presets.standard}s)</button>
-        <button class="btn btn-ghost ws-preset-btn" data-secs="${presets.marathon}" style="flex:1;">Marathon (${presets.marathon}s)</button>
-      </div>
-      <input type="number" class="ws-input" id="wsCustomSecs" min="3" max="60" placeholder="Or type a custom number of seconds (3–60)" value="${WS.itemSeconds}">
-      <button class="btn btn-primary btn-block" id="wsCreateBtn" style="margin-top:.8rem;">Create a match →</button>
-      <div style="margin:1rem 0; text-align:center; font-size:.78rem; color:var(--text-dim);">or join one</div>
-      <input class="ws-input" id="wsJoinCodeInput" placeholder="Enter match code" style="text-transform:uppercase;">
-      <button class="btn btn-ghost btn-block" id="wsJoinBtn">Join match</button>
-    `;
-    document.getElementById('wsEliminationToggle').addEventListener('change', (e) => {
-      WS.eliminationMode = e.target.checked;
-      renderWSSetup(); // re-render so title/subtitle reflect the new mode immediately
-    });
-    document.querySelectorAll('.ws-preset-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        WS.itemSeconds = Number(btn.dataset.secs);
-        document.getElementById('wsCustomSecs').value = WS.itemSeconds;
-      });
-    });
-    document.getElementById('wsCreateBtn').addEventListener('click', () => {
-      const custom = Number(document.getElementById('wsCustomSecs').value);
-      if (Number.isFinite(custom) && custom >= 3 && custom <= 60) WS.itemSeconds = Math.round(custom);
-      createWSChallenge();
-    });
-    document.getElementById('wsJoinBtn').addEventListener('click', () => {
-      const code = document.getElementById('wsJoinCodeInput').value.trim().toUpperCase();
-      if (!code) { showToast('Enter a match code first.'); return; }
-      joinWSChallenge(code);
-    });
-  }
+    if (isExam && !inReview) {
+      // Exam mode: hide everything
+      E.markingScheme.innerHTML = '';
+      E.markingScheme.style.display = 'none';
+      E.modelAnswer.classList.remove('visible');
+      E.toggleAnswerBtn.style.display = 'none';
+      E.examTipBox.style.display = 'none';
+    } else if (!showFull) {
+      // Practice mode — before snap: show only total marks, hide details
+      E.markingScheme.style.display = '';
+      E.markingScheme.innerHTML =
+        `<div class="ms-head">` +
+          `<span class="ms-title">📋 Marking Scheme</span>` +
+          `<span class="ms-badge">${total} mark${total!==1?'s':''} available</span>` +
+        `</div>` +
+        `<div class="ms-snap-hint">📸 Snap your answer to see the marking scheme and model answer.</div>`;
+      E.modelAnswer.classList.remove('visible');
+      E.toggleAnswerBtn.style.display = 'none';
+      E.examTipBox.style.display = 'none';
+      S.showAnswer = false;
+    } else {
+      // Practice after snap, or review mode: show everything
+      E.markingScheme.style.display = '';
+      E.markingScheme.innerHTML =
+        `<div class="ms-head">` +
+          `<span class="ms-title">📋 Marking Scheme</span>` +
+          `<span class="ms-badge">${total} mark${total!==1?'s':''}</span>` +
+        `</div>` +
+        `<div class="ms-list">` +
+        (q.markingScheme||[]).map((pt,i) =>
+          `<div class="ms-pt">` +
+            `<span class="ms-n">${i+1}</span>` +
+            `<span class="ms-txt">${safe(pt.point)}</span>` +
+            `<span class="ms-mk">${pt.marks}mk</span>` +
+          `</div>`
+        ).join('') +
+        `</div>`;
 
-  async function createWSChallenge() {
-    const isSort = WS.contentMode === 'categorySort';
-    const isMcq = WS.contentMode === 'mcq';
-    const code = generateChallengeCode();
-    let payload;
+      E.modelAnswer.innerHTML = q.modelAnswer
+        ? q.modelAnswer.split('\n').map(l =>
+            l.trim()==='' ? '<br>' : `<p>${safe(l)}</p>`
+          ).join('')
+        : '<p><em>No model answer available.</em></p>';
 
-    if (isSort) {
-      const { bucketSubjects, items: fullItems } = buildCategorySortRound();
-      if (bucketSubjects.length < 2 || fullItems.length < 6) {
-        showToast('Not enough Study Library content yet across subjects for multiplayer Category Sort.');
-        return;
-      }
-      const items = shuffleArray(fullItems).slice(0, WS_SORT_ITEMS_PER_MATCH).map(it => ({ term: it.term, subject: it.subject }));
-      WS.bucketSubjects = bucketSubjects;
-      WS.items = items;
-      payload = { action: 'create', code, mode: 'categorySort', items, bucketSubjects, creator: WS.myName, syncMode: 'ready', itemSeconds: WS.itemSeconds, eliminationMode: WS.eliminationMode };
-    } else if (isMcq) {
-      let mcqQueue;
-      if (WS.mcqKind === 'sequence') {
-        const usedQuestions = new Set();
-        mcqQueue = [];
-        for (let i = 0; i < WS_MCQ_ITEMS_PER_MATCH; i++) mcqQueue.push(generateSequenceItem(usedQuestions));
+      const showAns = inReview || S.showAnswer;
+      E.modelAnswer.classList.toggle('visible', showAns);
+      E.toggleAnswerBtn.style.display = '';
+      E.toggleAnswerBtn.textContent = showAns ? '🙈 Hide Model Answer' : '📄 Show Model Answer';
+      S.showAnswer = showAns;
+
+      if (q.examTip) {
+        E.examTipBox.innerHTML =
+          `<div class="tip-head">⚡ Examiner's Tip</div>` +
+          `<div class="tip-body">${safe(q.examTip)}</div>`;
+        E.examTipBox.style.display = 'block';
       } else {
-        const isMixed = WS.subjectKey === null;
-        let formulas = isMixed ? formulasMixed(S.category) : formulasFor(S.category, WS.subjectKey);
-        if (!isMixed && formulas.length < 6) formulas = formulasMixed(S.category);
-        if (formulas.length < 4) {
-          showToast('Not enough formula sheet content yet for multiplayer Formula Rush.');
+        E.examTipBox.style.display = 'none';
+      }
+    }
+
+    // Don't auto-mark as seen — only snap counts as an attempt in practice mode
+  }
+
+  function toggleAnswer() {
+    S.showAnswer = !S.showAnswer;
+    E.modelAnswer.classList.toggle('visible', S.showAnswer);
+    E.toggleAnswerBtn.textContent = S.showAnswer ? '🙈 Hide Model Answer' : '📄 Show Model Answer';
+  }
+
+  /* ════════ NAVIGATE ════════ */
+  function navigate(dir) {
+    if (dir>0 && S.idx===S.questions.length-1) {
+      if (S.reviewMode) { showScreen('result'); return; }
+      // Sections mode end of Section A — offer Section B before submit
+      if (S.type === 'both' && S.bothMode === 'sections') {
+        if (S.section === 'A' && S.sectionB.length > 0) {
+          showSectionEndChoice('A');
           return;
         }
-        const pool = formulasMixed(S.category);
-        mcqQueue = buildFormulaQueue(formulas.slice(0, WS_MCQ_ITEMS_PER_MATCH), pool);
-      }
-      // Reduce each single-player-shaped item ({question, options, answer
-      // index}) down to what the server needs to grade independently:
-      // the question, the options everyone sees, and the correct option's
-      // own TEXT (compared directly, not by index — matches the same
-      // string-comparison pattern Category Sort already uses).
-      const items = mcqQueue.map(q => ({ question: q.question, options: q.options, correctText: q.options[q.answer] }));
-      WS.items = items;
-      payload = { action: 'create', code, mode: 'mcq', mcqKind: WS.mcqKind, items, creator: WS.myName, subject: WS.subjectKey, syncMode: 'ready', itemSeconds: WS.itemSeconds, eliminationMode: WS.eliminationMode };
-    } else {
-      const pool = WS.subjectKey ? scrambleWordsFor(S.category, WS.subjectKey) : scrambleWordsMixed(S.category);
-      if (pool.length < 4) {
-        showToast('Not enough Study Library words yet for a multiplayer match on this subject.');
-        return;
-      }
-      const words = shuffleArray(pool).slice(0, WS_WORDS_PER_MATCH).map(c => c.term.toUpperCase());
-      WS.words = words;
-      payload = { action: 'create', code, mode: 'scramble', words, creator: WS.myName, subject: WS.subjectKey, syncMode: 'ready', itemSeconds: WS.itemSeconds, eliminationMode: WS.eliminationMode };
-    }
-
-    document.getElementById('wsChallengeBody').innerHTML = `<div class="lib-empty">Creating match…</div>`;
-    try {
-      const res = await fetch(API_BASE + '/api/challenge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok) { showToast('Could not create the match — please try again.'); renderWSSetup(); return; }
-      WS.code = code;
-      WS.hostSecret = data.hostSecret;
-      WS.isHost = true;
-      WS.turnOrder = [WS.myName];
-      saveActiveMatchPointer();
-      showToast('Match created — share the code!', 2500);
-      renderWSWaitingRoom({ participants: { [WS.myName]: true } });
-      WS.pollTimer = setInterval(pollWSWaitingRoom, WS_POLL_MS);
-    } catch (err) {
-      showToast('Could not create the match — check your connection.');
-      renderWSSetup();
-    }
-  }
-
-  async function joinWSChallenge(code) {
-    document.getElementById('wsChallengeBody').innerHTML = `<div class="lib-empty">Joining…</div>`;
-    try {
-      const res = await fetch(API_BASE + '/api/challenge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'join', code, student: WS.myName }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok || !data.challenge) {
-        showToast(res.status === 410 ? 'That match has already started or ended.' : 'Match not found — check the code.');
-        renderWSSetup();
-        return;
-      }
-      if (data.challenge.contentMode !== WS.contentMode || (WS.contentMode === 'mcq' && data.challenge.mcqKind !== WS.mcqKind)) {
-        const gameNames = { categorySort: 'Category Sort', scramble: 'Word Scramble', formula: 'Formula Rush', sequence: 'Sequence' };
-        const wantedName = WS.contentMode === 'mcq' ? gameNames[WS.mcqKind] : gameNames[WS.contentMode];
-        showToast(`That code is for a different kind of challenge, not ${wantedName}.`);
-        renderWSSetup();
-        return;
-      }
-      WS.code = code;
-      WS.isHost = false;
-      WS.itemSeconds = data.challenge.itemSeconds || WS.itemSeconds;
-      WS.eliminationMode = !!data.challenge.eliminationMode;
-      if (WS.contentMode === 'categorySort') {
-        WS.items = data.challenge.items || [];
-        WS.bucketSubjects = data.challenge.bucketSubjects || [];
-      } else if (WS.contentMode === 'mcq') {
-        WS.items = data.challenge.items || [];
-        WS.mcqKind = data.challenge.mcqKind || WS.mcqKind;
-      } else {
-        WS.words = data.challenge.words || [];
-      }
-      saveActiveMatchPointer();
-      if (data.challenge.startedAt) {
-        // Rare edge case — joined right as the host started. Just fall
-        // straight into normal polling instead of a waiting room that
-        // would never actually be needed.
-        startWSPolling();
-      } else {
-        renderWSWaitingRoom(data.challenge);
-        WS.pollTimer = setInterval(pollWSWaitingRoom, WS_POLL_MS);
-      }
-    } catch (err) {
-      showToast('Could not join — check your connection.');
-      renderWSSetup();
-    }
-  }
-
-  function renderWSWaitingRoom(challenge) {
-    const names = Object.keys(challenge.participants || {});
-    const waitingTitle = WS.eliminationMode ? '⚔️ Waiting Room' : '🔀 Waiting Room';
-    document.getElementById('wsChallengeBody').innerHTML = `
-      <h3 class="sheet-title" style="text-align:center;">${waitingTitle}</h3>
-      <div class="ws-code-display">${WS.code}</div>
-      <p class="sheet-sub" style="text-align:center;">Share this code — players who join before the match starts get a turn.</p>
-      <p class="sheet-sub" style="text-align:center; font-weight:700;">Joined (${names.length}): ${names.join(', ')}</p>
-      ${WS.isHost
-        ? `<button class="btn btn-primary btn-block" id="wsStartMatchBtn">Start Match →</button>`
-        : `<div class="ws-turn-badge">⏳ Waiting for the host to start the match…</div>`}
-      <button class="btn btn-ghost btn-block" id="wsLeaveBtn" style="margin-top:.6rem; font-size:.82rem;">Leave</button>
-    `;
-    if (WS.isHost) {
-      document.getElementById('wsStartMatchBtn').addEventListener('click', () => {
-        if (names.length < 2) {
-          if (WS.eliminationMode) {
-            showToast('Last Man Standing needs at least one opponent — share the code first.', 3200);
-            return;
-          }
-          if (!confirm('Only you have joined so far — start anyway?')) return;
+        if (S.section === 'B') {
+          showSectionEndChoice('B');
+          return;
         }
-        startWSMatch();
-      });
-    }
-    document.getElementById('wsLeaveBtn').addEventListener('click', leaveMatch);
-  }
-
-  async function pollWSWaitingRoom() {
-    if (!WS || !WS.code) return;
-    try {
-      const res = await fetch(API_BASE + '/api/challenge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'status', code: WS.code }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok) return;
-      if (data.startedAt) {
-        clearInterval(WS.pollTimer); WS.pollTimer = null;
-        startWSPolling();
-        return;
       }
-      renderWSWaitingRoom({ participants: data.participants || {} });
-    } catch (err) { /* transient — next poll tries again */ }
-  }
-
-  async function startWSMatch() {
-    document.getElementById('wsChallengeBody').innerHTML = `<div class="lib-empty">Starting match…</div>`;
-    try {
-      const res = await fetch(API_BASE + '/api/challenge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'force_start', code: WS.code, hostSecret: WS.hostSecret }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok) { showToast('Could not start the match — please try again.'); return; }
-      clearInterval(WS.pollTimer); WS.pollTimer = null;
-      startWSPolling();
-    } catch (err) {
-      showToast('Could not start the match — check your connection.');
+      confirmSubmit();
+      return;
+    }
+    S.idx = Math.max(0, Math.min(S.questions.length-1, S.idx+dir));
+    S.showAnswer = S.reviewMode;
+    closeSidebar();
+    renderQ();
+    // Show teaser toast at question 5 for free users
+    if (!S.hasAccess && S.idx === 4 && !S.reviewMode) {
+      setTimeout(showTeaserToast, 1500);
+    }
+    // Section B nudge — Both/Sections mode, on question 5 of Section A
+    if (S.type === 'both' && S.bothMode === 'sections' && S.section === 'A' && S.idx === 4 && !S.reviewMode) {
+      setTimeout(showSectionBNudge, 2000);
     }
   }
 
-  function startWSPolling() {
-    pollWSStatus();
-    WS.pollTimer = setInterval(pollWSStatus, WS_POLL_MS);
+  /* ════════ SUBMIT ════════ */
+  function confirmSubmit() {
+    if (S.reviewMode) { showScreen('result'); return; }
+    const unanswered = S.answers.filter((a,i) =>
+      S.questions[i]._type==='objective' && a===null
+    ).length;
+    if (unanswered > 0) {
+      if (!confirm(`${unanswered} question${unanswered>1?'s':''} unanswered. Submit anyway?`)) return;
+    }
+    finishSession(false);
   }
 
-  // A small horizontal strip of every player, highlighting whoever's turn
-  // it is right now, with each player's live correct/answered tally right
-  // underneath — this is the "who's up, who's ahead" view everyone sees
-  // between their own turns, not just a static waiting message. Eliminated
-  // players (Last Man Standing only) show grayed out with a ❌ instead of
-  // ever being highlighted as active again.
-  function renderWSTurnStrip(turnOrder, currentTurn, scores, eliminated) {
-    eliminated = eliminated || {};
+  /* ════════ FINISH ════════ */
+  function finishSession(timeout=false) {
+    if (S.timerId) { clearInterval(S.timerId); S.timerId=null; }
+    S.inSession = false;
+
+    const objQs   = S.questions.filter(q => q._type==='objective');
+    const correct = objQs.filter(q => S.answers[S.questions.indexOf(q)]===q.answer).length;
+    const wrong   = objQs.filter(q => {
+      const a = S.answers[S.questions.indexOf(q)];
+      return a!==null && a!=='seen' && a!==q.answer;
+    }).length;
+    const skipped = objQs.filter(q => S.answers[S.questions.indexOf(q)]===null).length;
+    const thCount = S.questions.filter(q => q._type==='theory').length;
+    const total   = objQs.length;
+    const pct     = total>0 ? Math.round((correct/total)*100) : null;
+    const flags   = S.flagged.filter(Boolean).length;
+
+    const rec = {
+      student:S.currentUser, subject:SUBJECTS[S.subject]?.name||S.subject,
+      exam:S.exam, mode:S.mode, type:S.type,
+      total, correct, wrong, skipped, thCount, pct, flags,
+      date: new Date().toLocaleString(), timeout,
+    };
+
+    if (!S.users[S.currentUser]) S.users[S.currentUser]={history:[]};
+    S.users[S.currentUser].history.unshift(rec);
+    S.users[S.currentUser].history = S.users[S.currentUser].history.slice(0,60);
+    saveSafe(SK.users, S.users);
+
+    paintResults(rec);
+    refreshStats();
+    renderHistory();
+    showScreen('result');
+    if (window._collapseContest) window._collapseContest();
+    S._timingAnalysis = calcTimingAnalysis();
+    setTimeout(renderTimingCard, 150);
+
+    // Store for session sharing
+    _lastResult    = rec;
+    _lastQuestions = [...S.questions];
+    _lastAnswers   = [...S.answers];
+
+    // Captured before saveChallengeScore runs — it clears S._challengeCode
+    // synchronously as one of its first lines.
+    const wasChallenge = !!S._challengeCode;
+
+    // Save challenge score if this was a challenge session
+    if (S._challengeCode && total > 0) {
+      saveChallengeScore(correct, total);
+    }
+
+    // Best-effort report to the class dashboard (no-op if this device
+    // hasn't joined a class). Only objective questions are auto-graded
+    // here, so "missed" only ever covers those.
+    if (total > 0) {
+      const missed = objQs
+        .filter(q => {
+          const a = S.answers[S.questions.indexOf(q)];
+          return a !== null && a !== 'seen' && a !== q.answer;
+        })
+        .map(q => q.id).filter(Boolean);
+      recordClassSession({
+        subject: SUBJECTS[S.subject]?.name || S.subject,
+        exam: S.exam,
+        mode: wasChallenge ? 'challenge' : 'practice',
+        score: correct, total, missed,
+      });
+    }
+  }
+
+  /* ════════ SCHOOL / PARENT DASHBOARDS ════════
+     A student joins a class with a class code + a 4-6 digit PIN they pick
+     (stops another student claiming their name). Every completed session
+     (practice, exam, or challenge) reports to /api/dashboard — best-effort,
+     never blocks the student's own result screen. A parent link is a
+     read-only code the student's own device generates for one child. */
+  function getClassMembership() { return loadSafe(SK.class); }
+  function saveClassMembership(m) { saveSafe(SK.class, m); }
+  function clearClassMembership() { try { localStorage.removeItem(SK.class); } catch (e) {} }
+
+  async function dashApi(action, body) {
+    const res = await fetch(API_BASE + '/api/dashboard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...body }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  }
+
+  async function recordClassSession({ subject, exam, mode, score, total, missed }) {
+    const m = getClassMembership();
+    if (!m) return;
+    try {
+      await dashApi('record_session', {
+        classCode: m.classCode, name: m.name, pin: m.pin,
+        subject, category: exam, mode, score, total, missed, timestamp: Date.now(),
+      });
+    } catch (e) { /* offline or class removed — not worth surfacing */ }
+  }
+
+  let _classTab = null; // 'student' | 'teacher' | 'parent' — remembered while classScreen is open
+
+  function openClassScreen(tab) {
+    showScreen('class');
+    if (tab) _classTab = tab;
+    renderClassScreen();
+  }
+
+  function renderClassScreen() {
+    if (!_classTab) {
+      _classTab = getClassMembership() ? 'student' : (loadSafe(SK.classAdmin) ? 'teacher' : 'teacher');
+    }
+    const body = document.getElementById('classBody');
+    body.innerHTML = `
+      <div class="mode-toggle" id="classTabBar" style="margin-bottom:1rem;">
+        <button class="mode-btn ${_classTab === 'student' ? 'active' : ''}" data-tab="student">Student</button>
+        <button class="mode-btn ${_classTab === 'teacher' ? 'active' : ''}" data-tab="teacher">Teacher</button>
+        <button class="mode-btn ${_classTab === 'parent' ? 'active' : ''}" data-tab="parent">Parent</button>
+      </div>
+      <div id="classTabBody"></div>
+    `;
+    document.querySelectorAll('#classTabBar [data-tab]').forEach(btn => {
+      btn.addEventListener('click', () => { _classTab = btn.dataset.tab; renderClassScreen(); });
+    });
+    const tabBody = document.getElementById('classTabBody');
+    if (_classTab === 'teacher') renderTeacherTab(tabBody);
+    else if (_classTab === 'parent') renderParentTab(tabBody);
+    else renderStudentTab(tabBody);
+  }
+
+  /* ── Student tab: join a class, or manage membership + parent link ── */
+  function renderStudentTab(body) {
+    const m = getClassMembership();
+    if (m) {
+      body.innerHTML = `
+        <div class="card" style="padding:1rem; margin-bottom:1rem;">
+          <p style="margin:0 0 .35rem;">You're in a class</p>
+          <p style="color:var(--text-dim,#8a94a6); font-size:.9rem;">Class code <b>${safe(m.classCode)}</b> · joined as <b>${safe(m.name)}</b></p>
+          <p style="color:var(--text-dim,#8a94a6); font-size:.85rem;">Your practice sessions and challenges are now shared with your teacher's class dashboard.</p>
+        </div>
+        <div class="card" style="padding:1rem; margin-bottom:1rem;">
+          <p style="margin:0 0 .5rem; font-weight:600;">Share progress with a parent</p>
+          <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:.75rem;">Generates a link only they can use — nobody else's results.</p>
+          <button class="btn-primary" id="genParentLinkBtn" style="width:100%;">Generate Parent Link</button>
+          <div id="parentLinkOut" style="margin-top:.75rem;"></div>
+        </div>
+        <button class="btn-secondary" id="leaveClassBtn" style="width:100%;">Leave Class</button>
+      `;
+      document.getElementById('genParentLinkBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('genParentLinkBtn');
+        btn.disabled = true; btn.textContent = 'Generating…';
+        try {
+          const { parentCode } = await dashApi('link_parent', { classCode: m.classCode, name: m.name, pin: m.pin });
+          const url = `${location.origin}${location.pathname}?dash=parent&code=${encodeURIComponent(parentCode)}`;
+          document.getElementById('parentLinkOut').innerHTML = `
+            <input class="text-field" readonly value="${safe(parentCode)}" style="margin-bottom:.5rem;">
+            <p style="font-size:.78rem; color:var(--text-dim,#8a94a6);">Or send this link: <br><span style="word-break:break-all;">${safe(url)}</span></p>`;
+        } catch (e) {
+          showInfoToast(e.message || 'Could not generate link');
+        }
+        btn.disabled = false; btn.textContent = 'Generate Parent Link';
+      });
+      document.getElementById('leaveClassBtn').addEventListener('click', () => {
+        if (!confirm('Leave this class? You can rejoin any time with the class code.')) return;
+        clearClassMembership();
+        renderClassScreen();
+      });
+      return;
+    }
+
+    body.innerHTML = `
+      <div class="card" style="padding:1rem;">
+        <p style="margin:0 0 .5rem; font-weight:600;">Join your class</p>
+        <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:1rem;">Ask your teacher for the class code. Pick a 4-6 digit PIN — this keeps your results only yours.</p>
+        <input class="text-field" id="joinClassCode" placeholder="Class code (e.g. C-XXXXXX)" style="margin-bottom:.6rem;" autocapitalize="characters">
+        <input class="text-field" id="joinClassName" placeholder="Your name" value="${S.currentUser ? safe(S.currentUser) : ''}" style="margin-bottom:.6rem;">
+        <input class="text-field" id="joinClassPin" type="tel" placeholder="PIN (4-6 digits)" maxlength="6" style="margin-bottom:.8rem;">
+        <button class="btn-primary" id="joinClassBtn" style="width:100%;">Join Class</button>
+      </div>
+    `;
+    document.getElementById('joinClassBtn').addEventListener('click', async () => {
+      const classCode = document.getElementById('joinClassCode').value.trim().toUpperCase();
+      const name = document.getElementById('joinClassName').value.trim();
+      const pin = document.getElementById('joinClassPin').value.trim();
+      if (!classCode || !name || !/^\d{4,6}$/.test(pin)) { showInfoToast('Fill in class code, name, and a 4-6 digit PIN.'); return; }
+      const btn = document.getElementById('joinClassBtn');
+      btn.disabled = true; btn.textContent = 'Joining…';
+      try {
+        const result = await dashApi('join_class', { classCode, name, pin });
+        saveClassMembership({ classCode, name, pin });
+        if (result.entitlement) {
+          grantAccess(result.entitlement.days, result.entitlement.tier);
+        } else {
+          showInfoToast('Joined class!');
+        }
+        renderClassScreen();
+      } catch (e) {
+        showInfoToast(e.message || 'Could not join class');
+        btn.disabled = false; btn.textContent = 'Join Class';
+      }
+    });
+  }
+
+  /* ── Teacher tab: create a class, or log in to an existing one ── */
+  function renderTeacherTab(body) {
+    const admin = loadSafe(SK.classAdmin);
+    if (admin) {
+      body.innerHTML = `
+        <div class="card" style="padding:1rem; margin-bottom:1rem;">
+          <p style="margin:0 0 .35rem;">Logged in as admin</p>
+          <p style="color:var(--text-dim,#8a94a6); font-size:.9rem;">${safe(admin.schoolName || 'Class')} · code <b>${safe(admin.classCode)}</b></p>
+        </div>
+        <button class="btn-primary" id="openTeacherDashBtn2" style="width:100%; margin-bottom:.6rem;">Open Teacher Dashboard</button>
+        <button class="btn-secondary" id="teacherLogoutBtn" style="width:100%;">Log Out / Switch Class</button>
+      `;
+      document.getElementById('openTeacherDashBtn2').addEventListener('click', () => openTeacherDashboard(admin.classCode, admin.adminSecret));
+      document.getElementById('teacherLogoutBtn').addEventListener('click', () => {
+        try { localStorage.removeItem(SK.classAdmin); } catch (e) {}
+        renderClassScreen();
+      });
+      return;
+    }
+
+    body.innerHTML = `
+      <div class="card" style="padding:1rem; margin-bottom:1rem;">
+        <p style="margin:0 0 .5rem; font-weight:600;">Sign up your school</p>
+        <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:1rem;">Create a free class and get a code to share with your students — no card required to get started.</p>
+        <input class="text-field" id="newSchoolName" placeholder="School / class name" style="margin-bottom:.6rem;">
+        <input class="text-field" id="newAdminPin" type="tel" placeholder="Set an admin PIN (4-6 digits, for future logins)" maxlength="6" style="margin-bottom:.8rem;">
+        <button class="btn-primary" id="createClassBtn" style="width:100%;">Create Class</button>
+        <div id="createClassForm"></div>
+      </div>
+      <div class="card" style="padding:1rem;">
+        <p style="margin:0 0 .5rem; font-weight:600;">Already have an account?</p>
+        <input class="text-field" id="loginClassCode" placeholder="Class code (e.g. C-XXXXXX)" style="margin-bottom:.6rem;" autocapitalize="characters">
+        <input class="text-field" id="loginAdminPin" type="tel" placeholder="Admin PIN" maxlength="6" style="margin-bottom:.8rem;">
+        <button class="btn-secondary" id="teacherLoginBtn" style="width:100%;">Log In</button>
+      </div>
+    `;
+
+    document.getElementById('teacherLoginBtn').addEventListener('click', async () => {
+      const classCode = document.getElementById('loginClassCode').value.trim().toUpperCase();
+      const adminPin = document.getElementById('loginAdminPin').value.trim();
+      if (!classCode || !/^\d{4,6}$/.test(adminPin)) { showInfoToast('Enter your class code and admin PIN.'); return; }
+      const btn = document.getElementById('teacherLoginBtn');
+      btn.disabled = true; btn.textContent = 'Logging in…';
+      try {
+        const { adminSecret, schoolName } = await dashApi('admin_login', { classCode, adminPin });
+        saveSafe(SK.classAdmin, { classCode, adminSecret, schoolName });
+        showInfoToast('Logged in!');
+        openTeacherDashboard(classCode, adminSecret);
+      } catch (e) {
+        showInfoToast(e.message || 'Could not log in — check your class code and PIN.');
+        btn.disabled = false; btn.textContent = 'Log In';
+      }
+    });
+
+    document.getElementById('createClassBtn').addEventListener('click', async () => {
+      const schoolName = document.getElementById('newSchoolName').value.trim();
+      const adminPin = document.getElementById('newAdminPin').value.trim();
+      if (!schoolName || !/^\d{4,6}$/.test(adminPin)) { showInfoToast('Enter a class name and a 4-6 digit PIN.'); return; }
+      const btn = document.getElementById('createClassBtn');
+      btn.disabled = true; btn.textContent = 'Creating…';
+      try {
+        const { classCode, adminSecret } = await dashApi('create_class', { schoolName, adminPin });
+        saveSafe(SK.classAdmin, { classCode, adminSecret, schoolName });
+        const url = `${location.origin}${location.pathname}?dash=teacher`;
+        document.getElementById('createClassForm').innerHTML = `
+          <div class="card-inset" style="padding:1rem;">
+            <p style="font-weight:600; margin-bottom:.5rem;">Class created! Share this code with your students:</p>
+            <p style="font-size:1.4rem; font-weight:700; letter-spacing:.05em;">${safe(classCode)}</p>
+            <p style="font-size:.8rem; color:var(--text-dim,#8a94a6); margin-top:.75rem;">Your teacher dashboard is saved on this device. Open it any time from: <br><span style="word-break:break-all;">${safe(url)}</span></p>
+            <button class="btn-primary" style="width:100%; margin-top:1rem;" id="openTeacherDashBtn">Open Teacher Dashboard</button>
+          </div>`;
+        document.getElementById('openTeacherDashBtn').addEventListener('click', () => openTeacherDashboard(classCode, adminSecret));
+      } catch (e) {
+        showInfoToast(e.message || 'Could not create class');
+        btn.disabled = false; btn.textContent = 'Create Class';
+      }
+    });
+  }
+
+  /* ── Parent tab: log in with a parent code ───────────────────── */
+  function renderParentTab(body) {
+    body.innerHTML = `
+      <div class="card" style="padding:1rem;">
+        <p style="margin:0 0 .5rem; font-weight:600;">Log in as a parent</p>
+        <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:1rem;">Enter the parent code your child shared with you.</p>
+        <input class="text-field" id="parentTabCode" placeholder="Parent code (e.g. P-XXXXXXXX)" style="margin-bottom:.8rem;" autocapitalize="characters">
+        <button class="btn-primary" id="parentTabGoBtn" style="width:100%;">View Progress</button>
+        <p id="parentTabErr" style="color:var(--red,#e55); font-size:.82rem; margin-top:.5rem;"></p>
+      </div>
+    `;
+    document.getElementById('parentTabGoBtn').addEventListener('click', async () => {
+      const code = document.getElementById('parentTabCode').value.trim().toUpperCase();
+      if (!code) return;
+      const btn = document.getElementById('parentTabGoBtn');
+      btn.disabled = true; btn.textContent = 'Loading…';
+      try {
+        const data = await dashApi('get_parent_dashboard', { parentCode: code });
+        showScreen('parentDash');
+        renderParentDash(data);
+      } catch (e) {
+        document.getElementById('parentTabErr').textContent = e.message || 'Could not load — check the code.';
+        btn.disabled = false; btn.textContent = 'View Progress';
+      }
+    });
+  }
+
+  /* ── Teacher dashboard (class-wide view) ─────────────────────── */
+  function openTeacherDashboard(classCode, adminSecret) {
+    showScreen('teacherDash');
+    document.getElementById('teacherDashBody').innerHTML = `<p style="color:var(--text-dim,#8a94a6);">Loading class…</p>`;
+    dashApi('get_class_dashboard', { classCode, adminSecret }).then(renderTeacherDash).catch(e => {
+      document.getElementById('teacherDashBody').innerHTML = `<p style="color:var(--red,#e55);">${safe(e.message || 'Could not load dashboard')}</p>`;
+    });
+  }
+  function renderTeacherDash(data) {
+    const body = document.getElementById('teacherDashBody');
+    const admin = loadSafe(SK.classAdmin);
+    const bundleHtml = renderBundleSection(data.bundle, data.classCode, admin?.adminSecret);
+    if (!data.students.length) {
+      body.innerHTML = bundleHtml + `<p style="color:var(--text-dim,#8a94a6);">No students have joined <b>${safe(data.classCode)}</b> yet. Share the class code to get started.</p>`;
+      wireBundleSection(data.classCode, admin?.adminSecret);
+      return;
+    }
+    const sorted = [...data.students].sort((a, b) => (b.avgPct || 0) - (a.avgPct || 0));
+    body.innerHTML = bundleHtml + `
+      <p style="color:var(--text-dim,#8a94a6); font-size:.85rem; margin-bottom:1rem;">${safe(data.schoolName || 'Class')} · ${data.students.length} student${data.students.length === 1 ? '' : 's'}</p>
+      ${sorted.map(s => `
+        <div class="card-inset" style="padding:1rem; margin-bottom:.85rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong>${safe(s.name)}</strong>
+            <span style="font-weight:700; font-size:1.1rem;">${s.avgPct == null ? '—' : s.avgPct + '%'}</span>
+          </div>
+          <p style="font-size:.8rem; color:var(--text-dim,#8a94a6); margin:.35rem 0;">${s.sessionCount} session${s.sessionCount === 1 ? '' : 's'} · ${s.practiceCount || 0} practice · ${s.challengeCount || 0} challenge${(s.challengeCount || 0) === 1 ? '' : 's'}</p>
+          ${renderSubjectBreakdown(s.bySubject)}
+        </div>`).join('')}
+    `;
+    wireBundleSection(data.classCode, admin?.adminSecret);
+  }
+
+  /* ── School Bundle purchase/status — top of the teacher dashboard ── */
+  function renderBundleSection(bundle, classCode, adminSecret) {
+    if (bundle && bundle.active) {
+      const expDate = new Date(bundle.expiresAt).toLocaleDateString('en-NG');
+      const tierLabel = { standard: 'Standard', branded: 'Branded', premium: 'Premium' }[bundle.tier] || bundle.tier;
+      const nearExpiry = (bundle.expiresAt - Date.now()) < 30 * 24 * 60 * 60 * 1000;
+      return `
+        <div class="card-inset" style="padding:1rem; margin-bottom:1rem; border:1px solid var(--gold,#d4af37);">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong>${tierLabel} Bundle — Active</strong>
+            <span style="font-size:.8rem; color:var(--text-dim,#8a94a6);">Expires ${expDate}</span>
+          </div>
+          <p style="font-size:.82rem; color:var(--text-dim,#8a94a6); margin:.35rem 0;">${bundle.seatsUsed} of ${bundle.tier === 'standard' ? bundle.seatLimit : 'unlimited'} seats used · students who join get ${bundle.tier === 'standard' ? 'Student Pass' : 'Student Pass Plus'} automatically</p>
+          ${nearExpiry ? `<button class="btn-secondary" id="bundleRenewBtn" style="width:100%; margin-top:.5rem;">Renew Bundle</button>` : ''}
+        </div>
+        <div id="bundlePickerOut"></div>
+      `;
+    }
     return `
-      <div class="ws-turn-strip" style="display:flex; gap:.5rem; justify-content:center; flex-wrap:wrap; margin:1rem 0;">
-        ${turnOrder.map(name => {
-          const isOut = !!eliminated[name];
-          const isActive = !isOut && name === currentTurn;
-          const s = scores[name] || { correct: 0, answered: 0 };
-          return `
-            <div style="text-align:center; padding:.5rem .8rem; border-radius:var(--r-m); opacity:${isOut ? '.5' : '1'};
-                        background:${isActive ? 'var(--coral)' : 'var(--cream-w)'};
-                        color:${isActive ? 'var(--white)' : 'var(--text)'};
-                        border:1px solid ${isActive ? 'var(--coral)' : 'var(--border)'};
-                        min-width:72px;">
-              <div style="font-weight:700; font-size:.85rem;">${isOut ? '❌ ' : isActive ? '▶ ' : ''}${safe(name)}</div>
-              <div style="font-size:.72rem; opacity:.85;">${s.correct}/${s.answered}</div>
-            </div>`;
-        }).join('')}
+      <div class="card-inset" style="padding:1rem; margin-bottom:1rem;">
+        <strong>No active school bundle</strong>
+        <p style="font-size:.82rem; color:var(--text-dim,#8a94a6); margin:.35rem 0 .75rem;">Activate a bundle so students who join this class automatically get Student Pass access — no individual payment needed.</p>
+        <button class="btn-primary" id="bundleActivateBtn" style="width:100%;">Activate School Bundle</button>
+        <div id="bundlePickerOut"></div>
       </div>
     `;
   }
 
-  async function pollWSStatus() {
-    if (!WS || !WS.code) return;
-    try {
-      const res = await fetch(API_BASE + '/api/challenge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'status', code: WS.code }),
+  function wireBundleSection(classCode, adminSecret) {
+    const openPicker = () => renderBundlePicker(classCode, adminSecret);
+    document.getElementById('bundleActivateBtn')?.addEventListener('click', openPicker);
+    document.getElementById('bundleRenewBtn')?.addEventListener('click', openPicker);
+  }
+
+  function renderBundlePicker(classCode, adminSecret) {
+    const out = document.getElementById('bundlePickerOut');
+    if (!out) return;
+    out.innerHTML = `
+      <div class="card-inset" style="padding:1rem; margin-top:.75rem;">
+        <div class="mode-toggle" id="bundleTierTabs" style="margin-bottom:1rem;">
+          <button class="mode-btn active" data-tier="standard">Standard</button>
+          <button class="mode-btn" data-tier="branded">Branded</button>
+          <button class="mode-btn" data-tier="premium">Premium</button>
+        </div>
+        <div id="bundleTierBody"></div>
+      </div>
+    `;
+    let tier = 'standard';
+    const renderTierBody = () => {
+      const tb = document.getElementById('bundleTierBody');
+      if (tier === 'standard') {
+        tb.innerHTML = `
+          <p style="font-size:.82rem; color:var(--text-dim,#8a94a6); margin-bottom:.5rem;">₦2,000 per student/year · minimum 50 seats</p>
+          <input class="text-field" id="bundleSeats" type="number" min="50" value="50" style="margin-bottom:.5rem;">
+          <p style="font-weight:700; margin-bottom:.75rem;" id="bundlePriceOut">Total: ₦100,000</p>
+        `;
+        document.getElementById('bundleSeats').addEventListener('input', (e) => {
+          const seats = Math.max(50, parseInt(e.target.value) || 50);
+          document.getElementById('bundlePriceOut').textContent = `Total: ₦${(seats * 2000).toLocaleString('en-NG')}`;
+        });
+      } else if (tier === 'branded') {
+        tb.innerHTML = `<p style="font-size:.82rem; color:var(--text-dim,#8a94a6); margin-bottom:.75rem;">Unlimited seats, branded experience — ₦500,000/year flat.</p>`;
+      } else {
+        tb.innerHTML = `<p style="font-size:.82rem; color:var(--text-dim,#8a94a6); margin-bottom:.75rem;">Unlimited seats, full premium tier — ₦1,000,000/year flat.</p>`;
+      }
+      tb.innerHTML += `<button class="btn-primary" id="bundlePayBtn" style="width:100%;">Pay & Activate →</button>`;
+      document.getElementById('bundlePayBtn').addEventListener('click', () => payForBundle(tier, classCode, adminSecret));
+    };
+    renderTierBody();
+    document.querySelectorAll('#bundleTierTabs .mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        tier = btn.dataset.tier;
+        document.querySelectorAll('#bundleTierTabs .mode-btn').forEach(b => b.classList.toggle('active', b === btn));
+        renderTierBody();
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok) return; // transient network hiccup — next poll tries again
-
-      WS.turnOrder = data.turnOrder || WS.turnOrder;
-      WS.scores = data.scores || WS.scores;
-      WS.itemIndex = data.itemIndex || 0;
-      WS.itemSeconds = data.itemSeconds || WS.itemSeconds;
-      WS.totalItems = data.totalItems || WS.totalItems;
-      WS.turnStartedAt = data.turnStartedAt;
-      WS.eliminated = data.eliminated || WS.eliminated;
-      WS.eliminationMode = !!data.eliminationMode;
-      // These only ever change from undefined to populated (a match's
-      // content never changes mid-match), so this is safe to run on every
-      // poll — for a normal in-session player it's a harmless no-op after
-      // the first poll, and for a rejoined device (which skipped 'join'
-      // entirely) it's what actually lets them play a turn again, not
-      // just watch.
-      if (data.words) WS.words = data.words;
-      if (data.items) WS.items = data.items;
-      if (data.bucketSubjects) WS.bucketSubjects = data.bucketSubjects;
-      if (data.mcqKind) WS.mcqKind = data.mcqKind;
-
-      if (data.ended) {
-        clearInterval(WS.pollTimer); WS.pollTimer = null;
-        renderWSResults(data.scores || {}, WS.eliminated);
-        return;
-      }
-
-      if (data.currentTurn === WS.myName) {
-        clearInterval(WS.pollTimer); WS.pollTimer = null;
-        renderWSGetReady(startMyWSItem);
-        return;
-      }
-
-      // Self-healing: if whoever's turn it is has gone quiet well past
-      // their time limit (device closed, connection dropped), any other
-      // polling device — including this one — nudges the match forward
-      // with a forced-blank answer on their behalf, so one missing player
-      // can't freeze the game for everyone else. Uses the SERVER's own
-      // secsRemaining, never this device's local clock — a phone whose
-      // clock runs a few seconds fast would otherwise decide a turn is
-      // overdue while the real player is still legitimately answering,
-      // firing a rescue that collides with their actual submission.
-      const overdueBySeconds = Number.isFinite(data.secsRemaining) ? -data.secsRemaining : -Infinity;
-      const overdue = overdueBySeconds > (WS_RESCUE_GRACE_MS / 1000 + 1.5);
-      if (overdue && data.currentTurn) {
-        submitWSItemAnswer(data.currentTurn, '', true);
-        return;
-      }
-
-      renderWSWaitingFor(data);
-    } catch (err) { /* transient — next poll tries again */ }
+    });
   }
 
-  function renderWSWaitingFor(status) {
-    clearInterval(WS.waitCountdownTimer); // always replace, never stack — this fires on every poll
-    const turnOrder = status.turnOrder || WS.turnOrder;
-    const currentTurn = status.currentTurn;
-    const iAmOut = WS.eliminationMode && !!(WS.eliminated || {})[WS.myName];
-    // A persistent "this is still going" progress line — without it, the
-    // waiting screen has nothing distinguishing it from a dead end. No
-    // separate section heading above it — a "Live Scoreboard" label read
-    // as a dashboard/menu title, disconnected from the match itself; the
-    // progress line plus the turn card below now carry that job instead.
-    const progressLine = WS.eliminationMode
-      ? `⚔️ ${turnOrder.length - Object.keys(WS.eliminated || {}).length} still standing`
-      : `Item ${(WS.itemIndex || 0) + 1} of ${WS.totalItems || '?'}`;
-    // A real ticking countdown, seeded from the server's own secsRemaining
-    // (never this device's clock — same reasoning as the rescue-timing
-    // fix) so the waiting screen visibly moves between polls instead of
-    // sitting static for up to WS_POLL_MS at a time.
-    const startSecs = Number.isFinite(status.secsRemaining) ? Math.max(0, Math.ceil(status.secsRemaining)) : null;
-    document.getElementById('wsChallengeBody').innerHTML = `
-      <p class="sheet-sub" style="text-align:center; font-weight:700; margin-bottom:.7rem;">${progressLine} — match in progress</p>
-      ${renderWSTurnStrip(turnOrder, currentTurn, status.scores || {}, WS.eliminated)}
-      ${iAmOut
-        ? `<div class="ws-turn-badge">👀 You're out — watching the rest of the match play out.</div>`
-        : `
-        <div style="text-align:center; padding:1.3rem 1rem; margin:.6rem 0; border-radius:var(--r-l);
-                    background:linear-gradient(135deg, var(--cream-w), var(--coral-pale)); border:1px solid var(--border);">
-          <div style="font-size:.78rem; color:var(--text-dim); letter-spacing:.03em; text-transform:uppercase;">Waiting on</div>
-          <div style="font-weight:700; font-size:1.3rem; margin-top:.15rem;">${safe(currentTurn || '…')}</div>
-          ${startSecs !== null ? `<div class="ws-mini-timer" id="wsWaitCountdown" style="margin-top:.4rem;">${startSecs}s</div>` : ''}
-        </div>`}
-      <div style="display:flex; gap:.5rem; margin-top:.6rem;">
-        <button class="btn btn-ghost" id="wsLeaveBtn" style="flex:1; font-size:.8rem;">Leave</button>
-        ${WS.isHost ? `<button class="btn btn-ghost" id="wsEndMatchBtn" style="flex:1; font-size:.8rem;">End match for everyone</button>` : ''}
-      </div>
-    `;
-    document.getElementById('wsLeaveBtn').addEventListener('click', leaveMatch);
-    if (WS.isHost) {
-      document.getElementById('wsEndMatchBtn').addEventListener('click', () => {
-        if (confirm('End this match now for everyone? Current scores will be final.')) endMatchForEveryone();
-      });
-    }
-    if (startSecs !== null && !iAmOut) {
-      let n = startSecs;
-      WS.waitCountdownTimer = setInterval(() => {
-        n = Math.max(0, n - 1);
-        const el = document.getElementById('wsWaitCountdown');
-        if (el) el.textContent = n + 's';
-        if (n <= 0) clearInterval(WS.waitCountdownTimer); // next poll (≤WS_POLL_MS away) reseeds it correctly either way
-      }, 1000);
-    }
+  async function payForBundle(tier, classCode, adminSecret) {
+    const seats = tier === 'standard' ? Math.max(50, parseInt(document.getElementById('bundleSeats')?.value) || 50) : null;
+    const amount = tier === 'standard' ? seats * 200000 : (tier === 'branded' ? 50000000 : 100000000);
+    const email = await getEmailViaModal();
+    if (!email) return;
+    const PAYSTACK_KEY = 'pk_live_5d12ee2a90900116dc222107e059a06214c085ff';
+    const handler = window.PaystackPop.setup({
+      key: PAYSTACK_KEY, email, amount, currency: 'NGN',
+      ref: 'MEA-BUNDLE-' + Date.now(),
+      metadata: { custom_fields: [
+        { display_name: 'Bundle', variable_name: 'bundle_tier', value: tier },
+        { display_name: 'Class Code', variable_name: 'class_code', value: classCode },
+      ]},
+      onClose() {},
+      callback(response) {
+        (async () => {
+          const btn = document.getElementById('bundlePayBtn');
+          if (btn) { btn.disabled = true; btn.textContent = 'Activating…'; }
+          try {
+            const result = await dashApi('activate_bundle', {
+              classCode, adminSecret, tier, seats, reference: response.reference,
+            });
+            if (result.error) {
+              alert('Payment received but activation failed: ' + result.error + '\nContact support with reference: ' + response.reference);
+              return;
+            }
+            alert('✅ Bundle activated! Students who join this class now get automatic access.');
+            openTeacherDashboard(classCode, adminSecret);
+          } catch (e) {
+            alert('Could not confirm activation. If you were charged, contact support with reference: ' + response.reference);
+          }
+        })();
+      },
+    });
+    handler.openIframe();
   }
-
-  // A short, symmetric "you're up" moment for whoever's turn is arriving —
-  // without this, only the player who'd just answered got any kind of
-  // transition (their own "Next turn in 3…2…1…" overlay), while everyone
-  // else just silently jumped from the waiting card straight into a live
-  // timer on their next poll. This gives every player the same brief beat
-  // before their question actually appears.
-  function renderWSGetReady(onDone) {
-    const secs = 2;
-    document.getElementById('wsChallengeBody').innerHTML = `
-      ${renderWSTurnStrip(WS.turnOrder, WS.myName, WS.scores, WS.eliminated)}
-      <div style="text-align:center; padding:1.3rem 1rem; margin:.6rem 0; border-radius:var(--r-l); background:var(--coral-pale);">
-        <div style="font-size:1.8rem;">✨</div>
-        <div style="font-weight:700; font-size:1.1rem;">Your turn!</div>
-        <div class="ws-mini-timer" id="wsGetReadyCountdown" style="margin-top:.3rem;">${secs}</div>
-      </div>
-    `;
-    let n = secs;
-    const timer = setInterval(() => {
-      n--;
-      const el = document.getElementById('wsGetReadyCountdown');
-      if (el) el.textContent = n;
-      if (n <= 0) { clearInterval(timer); onDone(); }
-    }, 1000);
-  }
-
-  function startMyWSItem() {
-    WS.answeredThisTurn = false;
-    if (WS.contentMode === 'categorySort') playMyWSSortItem();
-    else if (WS.contentMode === 'mcq') playMyWSMcqItem();
-    else playMyWSWordItem();
-  }
-
-  // Shared shrinking-bar timer markup + tick update, used by all three
-  // turn-based item screens (word/sort/mcq) so there's one place that
-  // owns the bar's fill % and urgency color, not three copies.
-  function renderWSTimerHTML(secsLeft, totalSecs) {
-    const pct = totalSecs > 0 ? Math.max(0, Math.min(100, (secsLeft / totalSecs) * 100)) : 0;
-    return `<div class="ws-timer" id="wsTimerDisplay">
-      <div class="ws-timer-secs" id="wsTimerSecs">${secsLeft}s</div>
-      <div class="ws-timer-track"><div class="ws-timer-fill" id="wsTimerFill" style="width:${pct}%;"></div></div>
+  function renderSubjectBreakdown(bySubject) {
+    const entries = Object.entries(bySubject || {});
+    if (!entries.length) return '';
+    return `<div style="border-top:1px solid var(--border,#e2e2e2); margin-top:.5rem; padding-top:.5rem;">
+      ${entries.sort((a, b) => a[1].avgPct - b[1].avgPct).map(([subj, d]) => `
+        <div style="display:flex; justify-content:space-between; font-size:.82rem; padding:.2rem 0;">
+          <span>${safe(subj)} ${d.weakQuestions.length ? '⚠️' : ''}</span>
+          <span style="color:var(--text-dim,#8a94a6);">${d.avgPct}% avg · ${d.sessions}x</span>
+        </div>`).join('')}
     </div>`;
   }
-  function updateWSTimerBar(secsLeft, totalSecs) {
-    const secsEl = document.getElementById('wsTimerSecs');
-    const fillEl = document.getElementById('wsTimerFill');
-    if (secsEl) secsEl.textContent = secsLeft + 's';
-    if (fillEl) {
-      const pct = totalSecs > 0 ? Math.max(0, Math.min(100, (secsLeft / totalSecs) * 100)) : 0;
-      fillEl.style.width = pct + '%';
-      fillEl.style.background = pct <= 20 ? 'var(--red)' : pct <= 50 ? 'var(--amber)' : 'var(--coral)';
-    }
-  }
 
-  function playMyWSWordItem() {
-    const word = WS.words[WS.itemIndex];
-    if (!word) { startWSPolling(); return; } // defensive — shouldn't happen if ended was handled
-    const scrambled = scrambleLetters(word).join('');
-    WS.secsLeft = WS.itemSeconds;
-
-    document.getElementById('wsChallengeBody').innerHTML = `
-      ${renderWSTurnStrip(WS.turnOrder, WS.myName, WS.scores, WS.eliminated)}
-      <div class="ws-turn-badge">✨ Your turn! Word ${WS.itemIndex + 1} of ${WS.totalItems}</div>
-      ${renderWSTimerHTML(WS.secsLeft, WS.itemSeconds)}
-      <div class="ws-word-display">${scrambled}</div>
-      <input class="ws-input" id="wsWordInput" placeholder="Type the unscrambled word" autocomplete="off" autocapitalize="characters">
-      <button class="btn btn-primary btn-block" id="wsSubmitWordBtn">Submit →</button>
-    `;
-    const input = document.getElementById('wsWordInput');
-    input.focus();
-    const submit = () => {
-      if (WS.answeredThisTurn) return;
-      WS.answeredThisTurn = true;
-      clearInterval(WS.itemTimer);
-      // Disable in place rather than wiping the screen — the person still
-      // sees the word and turn strip while the answer is checked, instead
-      // of the whole view vanishing for a moment (which read as "did the
-      // match just end?").
-      input.disabled = true;
-      const btn = document.getElementById('wsSubmitWordBtn');
-      btn.disabled = true; btn.textContent = 'Checking…';
-      submitWSItemAnswer(WS.myName, input.value.trim(), false);
-    };
-    document.getElementById('wsSubmitWordBtn').addEventListener('click', submit);
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
-
-    clearInterval(WS.itemTimer);
-    WS.itemTimer = setInterval(() => {
-      WS.secsLeft--;
-      updateWSTimerBar(WS.secsLeft, WS.itemSeconds);
-      if (WS.secsLeft <= 0) { clearInterval(WS.itemTimer); submit(); }
-    }, 1000);
-  }
-
-  function playMyWSSortItem() {
-    const item = WS.items[WS.itemIndex];
-    if (!item) { startWSPolling(); return; }
-    WS.secsLeft = WS.itemSeconds;
-
-    document.getElementById('wsChallengeBody').innerHTML = `
-      ${renderWSTurnStrip(WS.turnOrder, WS.myName, WS.scores, WS.eliminated)}
-      <div class="ws-turn-badge">✨ Your turn! Term ${WS.itemIndex + 1} of ${WS.totalItems}</div>
-      ${renderWSTimerHTML(WS.secsLeft, WS.itemSeconds)}
-      <div class="ws-word-display">${safe(item.term)}</div>
-      <div class="sort-buckets" id="wsSortBuckets">
-        ${WS.bucketSubjects.map(s => {
-          const meta = subjectMeta(s);
-          return `<button class="sort-bucket" data-subject="${s}" style="border-color:${meta.color}55;">
-            <span class="sort-bucket-icon">${meta.icon}</span>
-            <span class="sort-bucket-label">${SUBJECT_LABELS[s] || s}</span>
-          </button>`;
-        }).join('')}
-      </div>
-    `;
-
-    const submit = (guess) => {
-      if (WS.answeredThisTurn) return;
-      WS.answeredThisTurn = true;
-      clearInterval(WS.itemTimer);
-      document.querySelectorAll('#wsSortBuckets .sort-bucket').forEach(b => {
-        b.disabled = true;
-        if (b.dataset.subject === guess) b.style.opacity = '.6';
-      });
-      submitWSItemAnswer(WS.myName, guess, false);
-    };
-
-    document.querySelectorAll('#wsSortBuckets .sort-bucket').forEach(btn => {
-      btn.addEventListener('click', () => submit(btn.dataset.subject));
-    });
-
-    clearInterval(WS.itemTimer);
-    WS.itemTimer = setInterval(() => {
-      WS.secsLeft--;
-      updateWSTimerBar(WS.secsLeft, WS.itemSeconds);
-      if (WS.secsLeft <= 0) { clearInterval(WS.itemTimer); submit(''); }
-    }, 1000);
-  }
-
-  // Shared turn UI for both Formula Rush and Sequence — identical shape
-  // ({question, options, correctText}), differing only in mcqKind, which
-  // only affects the label ("Formula" vs "Item") shown above the question.
-  function playMyWSMcqItem() {
-    const item = WS.items[WS.itemIndex];
-    if (!item) { startWSPolling(); return; }
-    WS.secsLeft = WS.itemSeconds;
-    const unitLabel = WS.mcqKind === 'sequence' ? 'Pattern' : 'Formula';
-
-    document.getElementById('wsChallengeBody').innerHTML = `
-      ${renderWSTurnStrip(WS.turnOrder, WS.myName, WS.scores, WS.eliminated)}
-      <div class="ws-turn-badge">✨ Your turn! ${unitLabel} ${WS.itemIndex + 1} of ${WS.totalItems}</div>
-      ${renderWSTimerHTML(WS.secsLeft, WS.itemSeconds)}
-      <div class="ws-word-display">${safe(item.question)}</div>
-      <div class="sort-buckets" id="wsMcqOptions">
-        ${item.options.map((opt, i) => `<button class="sort-bucket" data-option="${i}">
-          <span class="sort-bucket-label">${safe(opt)}</span>
-        </button>`).join('')}
-      </div>
-    `;
-
-    const submit = (guessText) => {
-      if (WS.answeredThisTurn) return;
-      WS.answeredThisTurn = true;
-      clearInterval(WS.itemTimer);
-      document.querySelectorAll('#wsMcqOptions .sort-bucket').forEach(b => {
-        b.disabled = true;
-        if (b.dataset.chosen) b.style.opacity = '.6';
-      });
-      submitWSItemAnswer(WS.myName, guessText, false);
-    };
-
-    document.querySelectorAll('#wsMcqOptions .sort-bucket').forEach((btn, i) => {
-      btn.addEventListener('click', () => { btn.dataset.chosen = '1'; submit(item.options[i]); });
-    });
-
-    clearInterval(WS.itemTimer);
-    WS.itemTimer = setInterval(() => {
-      WS.secsLeft--;
-      updateWSTimerBar(WS.secsLeft, WS.itemSeconds);
-      if (WS.secsLeft <= 0) { clearInterval(WS.itemTimer); submit(''); }
-    }, 1000);
-  }
-
-  // underneath (word/term, disabled input, turn strip) — this is what
-  // keeps it feeling like the SAME match continuing, not a jump to a
-  // different "did this end?" screen. Shows who's up next and their
-  // current tally, then a short countdown before the view actually
-  // advances. isEliminated distinguishes "wrong but still in" (round-
-  // robin, or Last Man Standing before this answer resolved it) from
-  // "wrong AND that's the match for you" (Last Man Standing, just now).
-  function renderWSItemResult(correct, isEliminated, nextPlayerName, nextPlayerScore, onDone) {
-    const bg = correct ? 'var(--green-bg)' : (isEliminated ? 'var(--red-bg)' : 'var(--coral-pale)');
-    const color = correct ? 'var(--green)' : (isEliminated ? 'var(--red)' : 'var(--coral)');
-    const icon = correct ? '✅' : (isEliminated ? '💀' : '❌');
-    const label = correct ? 'Correct!' : (isEliminated ? "Wrong — you're eliminated" : 'Not quite');
-    const nextLine = nextPlayerName
-      ? `<p style="font-weight:700; margin-top:.6rem;">Next up: ${safe(nextPlayerName)} <span style="font-weight:400; opacity:.75; font-size:.85rem;">(${nextPlayerScore.correct}/${nextPlayerScore.answered} so far)</span></p>`
-      : '';
-    const countdownStart = nextPlayerName ? 3 : 1;
-    const overlay = document.createElement('div');
-    overlay.style.cssText = `position:absolute; inset:0; background:${bg}; backdrop-filter:blur(3px); display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:var(--r-l); z-index:2; padding:1rem; text-align:center;`;
-    overlay.innerHTML = `
-      <div style="font-size:2.4rem; margin-bottom:.2rem;">${icon}</div>
-      <div style="font-weight:700; font-size:1.05rem; color:${color};">${label}</div>
-      ${nextLine}
-      ${nextPlayerName ? `<p style="margin-top:.7rem; font-size:.76rem; color:var(--text-dim);">Next turn in <span id="wsCountdownNum">${countdownStart}</span>…</p>` : ''}
-    `;
-    document.getElementById('wsChallengeBody').appendChild(overlay);
-
-    let n = countdownStart;
-    const timer = setInterval(() => {
-      n--;
-      const el = document.getElementById('wsCountdownNum');
-      if (el) el.textContent = n;
-      if (n <= 0) { clearInterval(timer); onDone(); }
-    }, 1000);
-  }
-
-  // `student` names whose turn is being resolved. Normally that's WS.myName
-  // answering their own turn. `isRescue` marks the self-healing path in
-  // pollWSStatus — nudging a stalled OTHER player's turn forward with a
-  // forced-blank answer, never a real guess on their behalf (the server
-  // enforces this too, independently).
-  async function submitWSItemAnswer(student, answer, isRescue) {
-    try {
-      const res = await fetch(API_BASE + '/api/challenge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'submit_item_answer', code: WS.code, student, answer, resolvesItemIndex: WS.itemIndex }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.status === 409 && data.staleTurn) {
-        // Someone else (a real answer or another device's rescue attempt)
-        // already resolved this exact turn a moment before we did — not a
-        // real error, just a race we lost. Silently pick up wherever the
-        // match actually is now instead of showing an error or, worse,
-        // letting this stale request double-advance the turn.
-        WS.itemIndex = data.itemIndex;
-        if (!isRescue) startWSPolling();
-        return;
-      }
-      if (!res.ok || !data.ok) {
-        if (!isRescue) { showToast('Could not submit — please try again.', 3000); renderWSWaitingFor({ turnOrder: WS.turnOrder, currentTurn: student, scores: WS.scores }); }
-        return;
-      }
-      WS.eliminated = data.eliminatedMap || WS.eliminated;
-      WS.scores = data.scores || WS.scores;
-      if (!isRescue) {
-        const nextName = data.ended ? null : data.nextTurn;
-        const nextScore = nextName ? (data.scores[nextName] || { correct: 0, answered: 0 }) : null;
-        renderWSItemResult(data.correct, WS.eliminationMode && !data.correct, nextName, nextScore, () => {
-          if (data.ended) renderWSResults(data.scores || {}, WS.eliminated, data.survivor);
-          else startWSPolling();
-        });
-        return;
-      }
-      if (data.ended) { renderWSResults(data.scores || {}, WS.eliminated, data.survivor); return; }
-      startWSPolling();
-    } catch (err) {
-      if (!isRescue) showToast('Could not submit — check your connection.', 3000);
-    }
-  }
-
-  const MATCH_HISTORY_KEY = 'hh-match-history';
-  const MATCH_HISTORY_MAX = 20; // oldest entry drops off once a 21st is recorded — still zero server cost either way, just more room since it's local-only
-
-  function pushToMatchHistory(entry) {
-    try {
-      let history = [];
-      try { history = JSON.parse(localStorage.getItem(MATCH_HISTORY_KEY) || '[]'); } catch (e) { history = []; }
-      history.unshift(entry);
-      if (history.length > MATCH_HISTORY_MAX) history = history.slice(0, MATCH_HISTORY_MAX);
-      localStorage.setItem(MATCH_HISTORY_KEY, JSON.stringify(history));
-    } catch (err) { /* localStorage unavailable — history just won't be recorded, not fatal */ }
-  }
-
-  // Recorded once per finished MULTIPLAYER match, on THIS device only —
-  // there's no server-side match history at all, by design, to avoid the
-  // exact "wastes space" problem raised about persistent feedback storage.
-  // hostSecret is only kept when this device was the host, and only so
-  // the Games Dashboard can action a later rematch request without
-  // needing a live session — it's the same secret this device already
-  // legitimately held in memory for the match, just kept a bit longer.
-  function recordMatchHistory(scores, eliminated, survivor) {
-    const isElimination = WS.eliminationMode;
-    const myScore = scores[WS.myName] || { correct: 0, answered: 0 };
-    const opponents = (WS.turnOrder || []).filter(n => n !== WS.myName);
-    pushToMatchHistory({
-      type: 'multiplayer',
-      code: WS.code, mode: WS.contentMode, mcqKind: WS.mcqKind || undefined, eliminationMode: isElimination,
-      opponents, myScore,
-      won: isElimination ? survivor === WS.myName : undefined,
-      wasHost: WS.isHost, hostSecret: WS.isHost ? WS.hostSecret : undefined,
-      at: Date.now(),
-    });
-  }
-
-  // Recorded once per finished SINGLE-PLAYER round, from the one shared
-  // completion screen every game already funnels through (renderGameResults)
-  // — so this covers all 8 games without needing a separate hook in each.
-  function recordSinglePlayerHistory(pct) {
-    pushToMatchHistory({
-      type: 'single',
-      kind: G.kind, subject: G.subject || null, isLive: !!G.isLive,
-      score: G.score, attempted: G.attempted, pct, bestStreak: G.bestStreak,
-      at: Date.now(),
-    });
-  }
-
-  function renderWSResults(scores, eliminated, survivor) {
-    clearActiveMatchPointer(); // the match is genuinely over — nothing left to rejoin
-    eliminated = eliminated || {};
-    const isElimination = WS.eliminationMode;
-    // Last Man Standing crowns whoever survived, not whoever has the
-    // highest raw correct count — surviving longer matters more than a
-    // score built on more turns taken, which naturally varies by how many
-    // turns each player got before someone else was eliminated first.
-    const rows = Object.entries(scores).sort((a, b) => {
-      if (isElimination) {
-        const aOut = !!eliminated[a[0]], bOut = !!eliminated[b[0]];
-        if (aOut !== bOut) return aOut ? 1 : -1; // survivor(s) float to the top
-      }
-      return b[1].correct - a[1].correct;
-    });
-    document.getElementById('wsChallengeBody').innerHTML = `
-      <h3 class="sheet-title" style="text-align:center;">${isElimination ? '⚔️ Last Man Standing' : '🏆 Match Results'}</h3>
-      ${isElimination && survivor ? `<p class="sheet-sub" style="text-align:center; font-weight:700;">🏆 ${safe(survivor)} wins!</p>` : ''}
-      ${rows.map(([name, s], i) => {
-        const isOut = isElimination && !!eliminated[name];
-        const medal = isElimination ? (isOut ? '❌' : '🏆') : (i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1) + '.');
-        return `
-        <div class="ws-leaderboard-row ${name === WS.myName ? 'me' : ''}" style="${isOut ? 'opacity:.6;' : ''}">
-          <span>${medal} ${safe(name)}</span>
-          <span>${s.correct}/${s.answered}</span>
-        </div>`;
-      }).join('')}
-      <div id="wsRematchArea" style="margin-top:1rem;"></div>
-      <div id="wsReactionArea"></div>
-      <button class="btn btn-primary btn-block" id="wsDoneBtn" style="margin-top:.6rem;">Done</button>
-    `;
-    document.getElementById('wsDoneBtn').addEventListener('click', closeWSModal);
-
-    recordMatchHistory(scores, eliminated, survivor);
-
-    if (WS.isHost) renderHostRematchArea();
-    else renderGuestRematchArea();
-
-    watchForIncomingReaction();
-    maybeShowPostGameFeedback();
-  }
-
-  function renderHostRematchArea() {
-    const area = document.getElementById('wsRematchArea');
-    area.innerHTML = `<button class="btn btn-ghost btn-block" id="wsRematchBtn">🔁 Do you want to play again?</button><div id="wsIncomingRequests" style="margin-top:.6rem;"></div>`;
-    document.getElementById('wsRematchBtn').addEventListener('click', () => proposeRematch());
-    pollHostRematchRequests();
-  }
-
-  // While the host sits on their own Results screen, watch for other
-  // participants asking to play again and surface each with an explicit
-  // Accept/Decline — this is the "queue" the host actually sees and acts
-  // on, live. (The Games Dashboard offers the same thing later, for
-  // anyone who's already moved on.)
-  function pollHostRematchRequests() {
-    const timer = setInterval(async () => {
-      try {
-        const res = await fetch(API_BASE + '/api/challenge', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'status', code: WS.code }),
-        });
-        const data = await res.json().catch(() => ({}));
-        const box = document.getElementById('wsIncomingRequests');
-        if (!box) { clearInterval(timer); return; } // modal closed or moved on
-        if (data.rematchCode) { clearInterval(timer); return; } // host already started one directly
-        const names = Object.keys(data.rematchRequests || {});
-        if (names.length === 0) { box.innerHTML = ''; return; }
-        box.innerHTML = names.map(n => `
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:.5rem; padding:.6rem .8rem; background:var(--cream-w); border-radius:var(--r-m); margin-top:.4rem;">
-            <span style="font-size:.85rem;">🔁 <strong>${safe(n)}</strong> wants to play again…</span>
-            <div style="display:flex; gap:.4rem;">
-              <button class="btn btn-primary ws-approve-btn" data-name="${safe(n)}" style="padding:.3rem .7rem; font-size:.78rem;">Accept</button>
-              <button class="btn btn-ghost ws-decline-btn" data-name="${safe(n)}" style="padding:.3rem .7rem; font-size:.78rem;">Decline</button>
-            </div>
-          </div>
-        `).join('');
-        box.querySelectorAll('.ws-approve-btn').forEach(btn => btn.addEventListener('click', () => { clearInterval(timer); proposeRematch(); }));
-        box.querySelectorAll('.ws-decline-btn').forEach(btn => btn.addEventListener('click', async () => {
-          try {
-            await fetch(API_BASE + '/api/challenge', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'decline_rematch', code: WS.code, hostSecret: WS.hostSecret, name: btn.dataset.name }),
-            });
-          } catch (err) { /* next poll will just show it again — no need to alarm over a transient failure */ }
-        }));
-      } catch (err) { /* transient — next tick tries again */ }
-    }, WS_POLL_MS);
-    WS.hostRematchPollTimer = timer;
-  }
-
-  function renderGuestRematchArea() {
-    const area = document.getElementById('wsRematchArea');
-    area.innerHTML = `<button class="btn btn-ghost btn-block" id="wsRequestRematchBtn">🔁 Do you want to play again?</button>`;
-    document.getElementById('wsRequestRematchBtn').addEventListener('click', async () => {
-      area.innerHTML = `<p class="sheet-sub" style="text-align:center; font-size:.78rem;">Waiting for the host to approve your rematch request…</p>`;
-      try {
-        await fetch(API_BASE + '/api/challenge', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'request_rematch', code: WS.code, name: WS.myName }),
-        });
-      } catch (err) { /* the watcher below will just never find a rematchCode — no separate error needed */ }
-      watchForRematch(WS.code);
-    });
-  }
-
-  // Host taps (or accepts a request for) "play again" — this is just a
-  // completely normal new match creation (same as tapping "Create a
-  // match" fresh), reusing whatever mode/timer/elimination settings are
-  // still sitting in WS from the match that just ended. The only extra
-  // step is telling the OLD (now-historical) match record about the new
-  // code, so other participants — sitting on that old match's Results
-  // screen or checking the Games Dashboard later — can discover it.
-  // Optional overrides let the Games Dashboard trigger this for a match
-  // that isn't the live WS session (see openGamesDashboard).
-  async function proposeRematch(overrideOldCode, overrideOldHostSecret) {
-    const oldCode = overrideOldCode || WS.code;
-    const oldHostSecret = overrideOldHostSecret || WS.hostSecret;
-    await createWSChallenge();
-    try {
-      await fetch(API_BASE + '/api/challenge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'link_rematch', code: oldCode, hostSecret: oldHostSecret, rematchCode: WS.code }),
-      });
-    } catch (err) { /* best-effort — the new match itself still works fine even if this linking fails */ }
-  }
-
-  // Non-host participants sitting on the Results screen, after asking to
-  // play again: poll the OLD (ended) match's own status for a rematchCode
-  // the host may attach later. Not urgent enough to need instant push —
-  // the same WS_POLL_MS cadence used everywhere else is plenty responsive.
-  function watchForRematch(oldCode) {
-    const timer = setInterval(async () => {
-      try {
-        const res = await fetch(API_BASE + '/api/challenge', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'status', code: oldCode }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (data.ok && data.rematchCode) {
-          clearInterval(timer);
-          const area2 = document.getElementById('wsRematchArea');
-          if (!area2) return; // modal already closed
-          area2.innerHTML = `<button class="btn btn-primary btn-block" id="wsJoinRematchBtn">🔁 Join Rematch</button>`;
-          document.getElementById('wsJoinRematchBtn').addEventListener('click', () => joinWSChallenge(data.rematchCode));
-        }
-      } catch (err) { /* transient — next tick tries again */ }
-    }, WS_POLL_MS);
-    WS.rematchWatchTimer = timer;
-  }
-
-  // Checks ONCE for a message left by the other player — never stored
-  // anywhere beyond the single 'pendingReaction' field on the match's own
-  // (already-expiring) record, and deleted the instant it's delivered, so
-  // it can only ever be seen once, by whoever asks first.
-  function watchForIncomingReaction() {
-    const timer = setInterval(async () => {
-      try {
-        const res = await fetch(API_BASE + '/api/challenge', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'consume_reaction', code: WS.code, viewer: WS.myName }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (data.ok && data.reaction) {
-          clearInterval(timer);
-          const area = document.getElementById('wsReactionArea');
-          if (!area) return; // modal already closed
-          const box = document.createElement('div');
-          box.style.cssText = 'margin-top:.8rem; padding:.8rem .9rem; background:var(--coral-pale); border:1px solid var(--coral); border-radius:var(--r-m);';
-          box.innerHTML = `<p style="font-size:.85rem;">💬 <strong>${safe(data.reaction.from)}</strong> says: "${safe(data.reaction.text)}"</p>`;
-          area.appendChild(box);
-        }
-      } catch (err) { /* transient — next tick tries again */ }
-    }, WS_POLL_MS);
-    WS.reactionWatchTimer = timer;
-  }
-
-  // A short, entirely optional message TO the other player — shown once
-  // ever on this device (localStorage-gated) so it doesn't nag after
-  // every single match. Deliberately NOT stored anywhere persistent
-  // server-side (see 'send_reaction' in the API) — it's delivered once to
-  // whoever's on the other end, then permanently gone, which is why the
-  // prompt says so plainly before anyone types anything.
-  function maybeShowPostGameFeedback() {
-    let alreadyShown = false;
-    try { alreadyShown = !!localStorage.getItem('hh-mp-feedback-shown'); } catch (e) { return; }
-    if (alreadyShown) return;
-    setTimeout(() => {
-      const area = document.getElementById('wsChallengeBody');
-      if (!area) return; // modal was closed before this fired
-      const box = document.createElement('div');
-      box.style.cssText = 'margin-top:1rem; padding:.9rem; background:var(--cream-w); border-radius:var(--r-m); border:1px solid var(--border);';
-      box.innerHTML = `
-        <p style="font-weight:700; font-size:.85rem; margin-bottom:.3rem;">Got a sec? Leave a message for your opponent.</p>
-        <p style="font-size:.72rem; color:var(--text-dim); margin-bottom:.5rem;">They'll see this once, then it's gone for good — not saved anywhere.</p>
-        <textarea id="wsFeedbackText" rows="2" style="width:100%; padding:.6rem; border-radius:var(--r-s); border:1px solid var(--border-w); font-family:inherit; font-size:.85rem; resize:vertical;" placeholder="GG! Good game, well played…"></textarea>
-        <div style="display:flex; gap:.5rem; margin-top:.5rem;">
-          <button class="btn btn-ghost" id="wsFeedbackSkip" style="flex:1;">Skip</button>
-          <button class="btn btn-primary" id="wsFeedbackSend" style="flex:1;">Send</button>
-        </div>
-      `;
-      area.appendChild(box);
-      const dismiss = () => { try { localStorage.setItem('hh-mp-feedback-shown', '1'); } catch (e) {} box.remove(); };
-      document.getElementById('wsFeedbackSkip').addEventListener('click', dismiss);
-      document.getElementById('wsFeedbackSend').addEventListener('click', async () => {
-        const text = document.getElementById('wsFeedbackText').value.trim();
-        if (text) {
-          try {
-            await fetch(API_BASE + '/api/challenge', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'send_reaction', code: WS.code, from: WS.myName, text }),
-            });
-          } catch (err) { /* best-effort — never worth alarming the user over */ }
-        }
-        showToast('Sent!', 1500);
-        dismiss();
-      });
-    }, 600);
-  }
-
-  // ──────────── GAMES DASHBOARD (local match history) ────────────
-  // Opened on demand from the Games Hub — reads the small local history
-  // recorded above (both single-player rounds and multiplayer matches)
-  // and, for the most recently HOSTED multiplayer match, checks once (not
-  // a background poll) for any pending rematch request so a host who
-  // already left the Results screen can still act on it later.
-  function openGamesDashboard() {
-    ensureUser(() => {
-      let history = [];
-      try { history = JSON.parse(localStorage.getItem(MATCH_HISTORY_KEY) || '[]'); } catch (e) { history = []; }
-      document.getElementById('wsChallengeBody').innerHTML = `
-        <h3 class="sheet-title" style="text-align:center;">🕹 Recent Games</h3>
-        <p class="sheet-sub" style="text-align:center; font-size:.78rem;">Your last ${MATCH_HISTORY_MAX} games on this device — solo and multiplayer.</p>
-        <div id="gdHistoryList" style="margin-top:.8rem;">
-          ${history.length === 0 ? `<div class="lib-empty">No games yet — jump into one from Games!</div>` : history.map(renderHistoryRow).join('')}
-        </div>
-      `;
-      document.getElementById('wsChallengeModal').classList.remove('hidden');
-      const lastHosted = history.find(h => h.type === 'multiplayer' && h.wasHost && h.hostSecret);
-      if (lastHosted) checkDashboardRematchRequests(lastHosted, history);
-    });
-  }
-
-  function renderHistoryRow(h) {
-    const when = new Date(h.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    if (h.type === 'single') {
-      const gameNames = { tf: 'True or False Blitz', sort: 'Category Sort', sequence: 'Sequence', scramble: 'Word Scramble',
-        formula: 'Formula Rush', equation: 'Equation Builder', memory: 'Memory Match', speed: 'Speed Round' };
-      const gameLabel = gameNames[h.kind] || h.kind;
-      return `
-        <div style="padding:.7rem .9rem; background:var(--cream-w); border-radius:var(--r-m); margin-bottom:.5rem;">
-          <div style="display:flex; justify-content:space-between; font-weight:700; font-size:.85rem;">
-            <span>${safe(gameLabel)}</span><span style="font-weight:400; color:var(--text-dim); font-size:.75rem;">${when}</span>
-          </div>
-          <div style="font-size:.78rem; color:var(--text-dim); margin-top:.15rem;">🧑 Solo${h.isLive ? ' · AI Live' : ''}${h.subject ? ' · ' + safe(SUBJECT_LABELS[h.subject] || h.subject) : ''}</div>
-          <div style="font-size:.82rem; margin-top:.25rem;">${h.score} pts · ${h.pct}% accuracy${h.bestStreak ? ` · best streak ${h.bestStreak}` : ''}</div>
-        </div>
-      `;
-    }
-    const mcqNames = { formula: 'Formula Rush', sequence: 'Sequence' };
-    const gameLabel = h.mode === 'categorySort' ? 'Category Sort' : h.mode === 'mcq' ? (mcqNames[h.mcqKind] || 'Formula/Sequence') : 'Word Scramble';
-    const modeLabel = h.eliminationMode ? '⚔️ Last Man Standing' : '🔀 Round-robin';
-    const resultLabel = h.eliminationMode
-      ? (h.won ? '🏆 You won' : '💀 Eliminated')
-      : `${h.myScore.correct}/${h.myScore.answered} correct`;
-    return `
-      <div style="padding:.7rem .9rem; background:var(--cream-w); border-radius:var(--r-m); margin-bottom:.5rem;">
-        <div style="display:flex; justify-content:space-between; font-weight:700; font-size:.85rem;">
-          <span>${gameLabel}</span><span style="font-weight:400; color:var(--text-dim); font-size:.75rem;">${when}</span>
-        </div>
-        <div style="font-size:.78rem; color:var(--text-dim); margin-top:.15rem;">${modeLabel} · vs ${h.opponents.map(safe).join(', ') || '—'}</div>
-        <div style="font-size:.82rem; margin-top:.25rem;">${resultLabel}</div>
-      </div>
-    `;
-  }
-
-  async function checkDashboardRematchRequests(entry, history) {
-    try {
-      const res = await fetch(API_BASE + '/api/challenge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'status', code: entry.code }),
-      });
-      const data = await res.json().catch(() => ({}));
-      const names = Object.keys(data.rematchRequests || {});
-      if (!data.ok || data.rematchCode || names.length === 0) return; // nothing pending, or already resolved
-      const list = document.getElementById('gdHistoryList');
-      if (!list) return;
-      const banner = document.createElement('div');
-      banner.style.cssText = 'padding:.7rem .9rem; background:var(--coral-pale); border:1px solid var(--coral); border-radius:var(--r-m); margin-bottom:.6rem;';
-      banner.innerHTML = names.map(n => `
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:.5rem; padding:.2rem 0;">
-          <span style="font-size:.85rem;">🔁 <strong>${safe(n)}</strong> wants to play again…</span>
-          <div style="display:flex; gap:.4rem;">
-            <button class="btn btn-primary gd-approve-btn" data-name="${safe(n)}" style="padding:.3rem .7rem; font-size:.78rem;">Accept</button>
-            <button class="btn btn-ghost gd-decline-btn" data-name="${safe(n)}" style="padding:.3rem .7rem; font-size:.78rem;">Decline</button>
-          </div>
-        </div>
-      `).join('');
-      list.prepend(banner);
-      banner.querySelectorAll('.gd-approve-btn').forEach(btn => btn.addEventListener('click', () => {
-        ensureUser(() => {
-          openMultiplayerSetup(entry.mode, null, entry.eliminationMode, entry.mcqKind);
-          proposeRematch(entry.code, entry.hostSecret);
-        });
-      }));
-      banner.querySelectorAll('.gd-decline-btn').forEach(btn => btn.addEventListener('click', async () => {
-        try {
-          await fetch(API_BASE + '/api/challenge', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'decline_rematch', code: entry.code, hostSecret: entry.hostSecret, name: btn.dataset.name }),
-          });
-          banner.remove();
-          showToast('Declined.', 1500);
-        } catch (err) { showToast('Could not decline — try again.', 2500); }
-      }));
-    } catch (err) { /* best-effort — no big deal if this fails silently */ }
-  }
-
-
-  function updateGameTimerDisplay() {
-    const el = document.getElementById('gameTimer');
-    el.textContent = S.gameTimerSecs;
-    el.classList.toggle('urgent', S.gameTimerSecs <= 10);
-  }
-
-  function renderGameQuestion() {
-    if (G.idx >= G.queue.length) {
-      // Ran out despite top-up attempts — end gracefully rather than error.
-      stopGameTimer();
-      finishSpeedRound();
-      return;
-    }
-    if (G.kind === 'tf') renderTFItem();
-    else if (G.kind === 'sort') renderSortItem();
-    else if (G.kind === 'scramble') renderScrambleItem();
-    else renderSpeedItem(); // covers 'speed' AND 'sequence' — sequence items are MCQ-shaped, same render/select path
-  }
-
-  function renderSpeedItem() {
-    const q = G.queue[G.idx];
-    const body = document.getElementById('gameBody');
-    const letters = ['A', 'B', 'C', 'D'];
+  /* ── Parent dashboard (single-child, read-only) ──────────────── */
+  function openParentDashboard(prefillCode) {
+    showScreen('parentDash');
+    const body = document.getElementById('parentDashBody');
     body.innerHTML = `
-      <div class="game-q-meta">Question ${G.idx + 1}${q.aiGenerated ? ' · ✨' : ''}</div>
-      <div class="game-q-text">${safe(q.question)}</div>
-      <div class="game-options" id="gameOptions">
-        ${q.options.map((opt, i) => `
-          <button class="game-opt" data-i="${i}">${letters[i]}. ${safe(opt)}</button>
-        `).join('')}
-      </div>`;
-
-    body.querySelectorAll('.game-opt').forEach(btn => {
-      btn.addEventListener('click', () => selectGameAnswer(parseInt(btn.dataset.i, 10)));
-    });
-
-    maybeTopUpQueue();
-  }
-
-  /* ────────────────────────────────
-     TRUE OR FALSE BLITZ
-     Same rapid-fire rhythm as Speed Round, completely different
-     interaction: two giant tap targets instead of a 4-option grid.
-     Statements are derived on the fly from the existing MCQ bank —
-     no new data, no AI needed. Each source question yields a "true"
-     statement (using the real answer) and a "false" one (using a
-     wrong option), roughly doubling the effective pool.
-  ──────────────────────────────── */
-  /** Extracted from buildTFQueue so the AI Live path can reuse the exact
-   * same MCQ-to-true/false transform instead of a second, potentially
-   * drifting copy of this logic. */
-  function mcqToTFItems(questions) {
-    const items = [];
-    questions.forEach(q => {
-      if (!q.options || q.options.length < 2) return;
-      items.push({
-        id: q.id + '-t', sourceId: q.id,
-        statement: `${q.question} — Is the answer "${q.options[q.answer]}"?`,
-        isTrue: true, explanation: q.explanation || '',
-      });
-      const wrongIdxs = q.options.map((_, i) => i).filter(i => i !== q.answer);
-      if (wrongIdxs.length) {
-        const wrongIdx = wrongIdxs[Math.floor(Math.random() * wrongIdxs.length)];
-        items.push({
-          id: q.id + '-f', sourceId: q.id,
-          statement: `${q.question} — Is the answer "${q.options[wrongIdx]}"?`,
-          isTrue: false, explanation: q.explanation || '',
-        });
+      <input class="text-field" id="parentCodeInput" placeholder="Parent code (e.g. P-XXXXXXXX)" value="${prefillCode ? safe(prefillCode) : ''}" style="margin-bottom:.6rem;">
+      <button class="btn-primary" id="parentCodeGoBtn" style="width:100%;">View Progress</button>
+      <p id="parentCodeErr" style="color:var(--red,#e55); font-size:.82rem; margin-top:.5rem;"></p>`;
+    const go = async () => {
+      const code = document.getElementById('parentCodeInput').value.trim().toUpperCase();
+      if (!code) return;
+      const btn = document.getElementById('parentCodeGoBtn');
+      btn.disabled = true; btn.textContent = 'Loading…';
+      try {
+        const data = await dashApi('get_parent_dashboard', { parentCode: code });
+        renderParentDash(data);
+      } catch (e) {
+        document.getElementById('parentCodeErr').textContent = e.message || 'Could not load — check the code.';
+        btn.disabled = false; btn.textContent = 'View Progress';
       }
-    });
-    return shuffleArray(items);
+    };
+    document.getElementById('parentCodeGoBtn').addEventListener('click', go);
+    if (prefillCode) go();
   }
-
-  function buildTFQueue(subjectKey) {
-    const bank = getBank(S.category);
-    const pool = (bank[subjectKey].objective || []).slice();
-    return mcqToTFItems(pool);
-  }
-
-  /** Shared by both AI Live modes. Unlike the normal top-up flow, this
-   * generates the WHOLE round in one batch call up front rather than
-   * one call per move — a live game needing an API round-trip on every
-   * single question would be slow (real latency mid-timer) and far more
-   * expensive (many small calls instead of one). Costs exactly 1 AI
-   * credit, same as every other generation in the app, regardless of
-   * how many questions come back in the batch. Requires BOTH a games
-   * round AND an AI credit, since it's genuinely both things at once —
-   * playing a game, and consuming fresh AI generation. */
-  async function fetchLiveMCQBatch(category, subjectKey, count) {
-    if (!hasAICredit()) { showAIPaywall(); return null; }
-    const bank = getBank(category);
-    const subj = bank[subjectKey] || (bank[subjectKey] = { objective: [] });
-    const avoid = (subj.objective || []).slice(-40).map(q => q.question);
-    try {
-      const res = await fetch(API_BASE + '/api/generate-questions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category, subject: SUBJECT_LABELS[subjectKey] || subjectKey,
-          count, avoidQuestions: avoid,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok || !data.questions || !data.questions.length) {
-        showToast('Could not start an AI Live round right now — please try again shortly.');
-        return null;
-      }
-      consumeAICredit();
-      // Persisted the same way as everything else generated tonight —
-      // an AI Live round's questions become permanent additions to the
-      // subject's regular bank too, not just a one-off for this round.
-      subj.objective = (subj.objective || []).concat(data.questions);
-      saveAIGeneratedItems(category, subjectKey, 'objective', data.questions);
-      return data.questions;
-    } catch (err) {
-      showToast('Could not start an AI Live round right now — please try again shortly.');
-      return null;
-    }
-  }
-
-  function startTrueFalseBlitz(subjectKey) {
-    if (!gateGameStart()) return;
-    const bank = getBank(S.category);
-    const subj = bank[subjectKey];
-    if (!subj || !subj.objective || !subj.objective.length) {
-      showToast('No questions available for this subject yet.');
-      return;
-    }
-    consumeGameRound();
-
-    const queue = buildTFQueue(subjectKey);
-    G = { kind: 'tf', subject: subjectKey, queue, idx: 0, score: 0, streak: 0, bestStreak: 0, correct: 0, attempted: 0, usedIds: [], locked: false, fetchingMore: false };
-    S.mode = 'tf';
-    S.gameTimerSecs = GAME_DURATION_SECS;
-    setLastActivity(S.category, subjectKey, 'tf');
-
-    document.getElementById('gameScore').textContent = '0';
-    document.getElementById('gameStreak').textContent = '0';
-    updateGameTimerDisplay();
-    const catLabel = CONTENT_MANIFEST[S.category].label;
-    const meta = subjectMeta(subjectKey);
-    document.getElementById('gameSubjectBadge').textContent = `${meta.icon} ${SUBJECT_LABELS[subjectKey] || subjectKey} · ${catLabel}`;
-
-    renderGameQuestion();
-    showScreen('gameScreen');
-
-    stopGameTimer();
-    S.gameTimerInterval = setInterval(() => {
-      S.gameTimerSecs--;
-      updateGameTimerDisplay();
-      if (S.gameTimerSecs <= 0) { stopGameTimer(); finishSpeedRound(); }
-    }, 1000);
-  }
-
-  function renderTFItem() {
-    const item = G.queue[G.idx];
-    const body = document.getElementById('gameBody');
+  function renderParentDash(data) {
+    const body = document.getElementById('parentDashBody');
     body.innerHTML = `
-      <div class="game-q-meta">Statement ${G.idx + 1}</div>
-      <div class="tf-statement">${safe(item.statement)}</div>
-      <div class="tf-buttons">
-        <button class="tf-btn tf-false" data-guess="false">✗<span>False</span></button>
-        <button class="tf-btn tf-true" data-guess="true">✓<span>True</span></button>
+      <div class="card-inset" style="padding:1rem; margin-bottom:1rem;">
+        <strong>${safe(data.name)}</strong>
+        <p style="font-size:.85rem; color:var(--text-dim,#8a94a6);">${safe(data.schoolName || '')}</p>
+        <div style="display:flex; gap:1.5rem; margin-top:.75rem;">
+          <div><span style="font-weight:700; font-size:1.3rem;">${data.avgPct == null ? '—' : data.avgPct + '%'}</span><br><span style="font-size:.75rem; color:var(--text-dim,#8a94a6);">Average</span></div>
+          <div><span style="font-weight:700; font-size:1.3rem;">${data.sessions.length}</span><br><span style="font-size:.75rem; color:var(--text-dim,#8a94a6);">Sessions</span></div>
+        </div>
+      </div>
+      <div class="card-inset" style="padding:1rem; margin-bottom:1rem;">
+        <p style="margin:0 0 .5rem; font-weight:600;">By subject</p>
+        ${renderSubjectBreakdown(data.bySubject) || '<p style="color:var(--text-dim,#8a94a6); font-size:.85rem;">No sessions yet.</p>'}
+      </div>
+      <div class="card-inset" style="padding:1rem;">
+        <p style="margin:0 0 .5rem; font-weight:600;">Recent sessions</p>
+        ${data.sessions.slice(0, 15).map(s => `
+          <div style="display:flex; justify-content:space-between; font-size:.82rem; padding:.3rem 0; border-bottom:1px solid var(--border,#e2e2e2);">
+            <span>${safe(s.subject)} ${s.mode === 'challenge' ? '🏆' : ''}</span>
+            <span style="color:var(--text-dim,#8a94a6);">${s.score}/${s.total} · ${new Date(s.at).toLocaleDateString()}</span>
+          </div>`).join('') || '<p style="color:var(--text-dim,#8a94a6); font-size:.85rem;">No sessions yet.</p>'}
       </div>`;
-    body.querySelector('[data-guess="true"]').addEventListener('click', () => selectTFAnswer(true));
-    body.querySelector('[data-guess="false"]').addEventListener('click', () => selectTFAnswer(false));
   }
 
-  function selectTFAnswer(guessTrue) {
-    if (G.locked) return;
-    G.locked = true;
-    const item = G.queue[G.idx];
-    const isCorrect = guessTrue === item.isTrue;
-    G.attempted++;
-    G.usedIds.push(item.sourceId);
 
-    const trueBtn = document.querySelector('.tf-btn.tf-true');
-    const falseBtn = document.querySelector('.tf-btn.tf-false');
-    const correctBtn = item.isTrue ? trueBtn : falseBtn;
-    const guessedBtn = guessTrue ? trueBtn : falseBtn;
-    correctBtn.classList.add('tf-correct');
-    if (!isCorrect) guessedBtn.classList.add('tf-incorrect');
-    if (isCorrect) burstParticlesFromElement(correctBtn);
+  /* ════════ GAMES ════════
+     Three lightweight game modes, all replaying the SAME existing
+     objective question bank through a faster-paced UI loop — no new
+     content needed. Deliberately NOT reported to class dashboards
+     (recordClassSession) — these are for-fun practice, kept separate
+     from tracked practice/exam/challenge sessions. Uses its own
+     namespaced state object G so it never touches the main quiz state S. */
+  let G = null;
 
-    if (isCorrect) {
-      G.correct++;
-      G.streak++;
-      G.bestStreak = Math.max(G.bestStreak, G.streak);
-      const bonus = G.streak >= 5 ? 3 : G.streak >= 3 ? 2 : 1;
-      G.score += 10 * bonus;
-      if (G.streak > 0 && G.streak % 3 === 0) flashStreak(G.streak);
-    } else {
-      G.streak = 0;
-    }
-
-    pulseStat('gameScore', G.score);
-    pulseStat('gameStreak', G.streak);
-
-    setTimeout(() => {
-      G.locked = false;
-      G.idx++;
-      if (S.gameTimerSecs > 0) renderGameQuestion();
-    }, GAME_LOCK_MS);
+  function gameObjectivePool(subjectKey) {
+    const bank = EXAM_BANK[subjectKey];
+    if (!bank || !bank.objective) return [];
+    return bank.objective.filter(q => Array.isArray(q.options) && q.options.length >= 2);
   }
 
-  /* ────────────────────────────────
-     CATEGORY SORT
-     A fourth, genuinely different mechanic: classification, not
-     question-answering. Terms from several subjects get mixed
-     together; the player taps which subject each one belongs to.
-     Spans multiple subjects by design, so it skips the subject
-     picker entirely and pulls from Study Library flashcards across
-     the current category.
-  ──────────────────────────────── */
-  /* ────────────────────────────────
-     FORMULA RUSH
-     Reuses Study Library formula-sheet entries directly (title + formula
-     string) — zero new content authoring, same principle as Word Scramble.
-     MCQ-shaped, so it reuses renderSpeedItem/selectGameAnswer untouched.
-  ──────────────────────────────── */
-  function formulasFor(category, subjectKey) {
-    const resBank = getResourceBank(category);
-    const r = resBank[subjectKey] || { formulas: [] };
-    return (r.formulas || []).filter(f => f.title && f.formula);
+  // Memory Match needs short text to fit on a card — a subject can pass
+  // the general objective-question count but still come up short here,
+  // so both the picker's eligibility check and the actual game must use
+  // this exact same filter, not just gameObjectivePool.
+  function memoryEligiblePool(subjectKey) {
+    return gameObjectivePool(subjectKey).filter(q => q.question.length <= 70 && q.options[q.answer].length <= 22);
   }
 
-  function formulasMixed(category) {
-    const resBank = getResourceBank(category);
-    let all = [];
-    Object.keys(resBank).forEach(k => {
-      const r = resBank[k];
-      (r.formulas || []).forEach(f => { if (f.title && f.formula) all.push(f); });
-    });
-    return all;
+  function openGamesHub() {
+    showScreen('gamesHub');
+    renderGamesHub();
   }
 
-  function buildFormulaQueue(allFormulas, poolFormulas) {
-    // allFormulas = the ones actually being asked about, poolFormulas = wider
-    // set to draw wrong-answer formula strings from (avoids only ever having
-    // 2-3 formulas to pick wrong answers from on a thin subject).
-    return shuffleArray(allFormulas).map((f, i) => {
-      const distractorPool = poolFormulas.filter(p => p.formula !== f.formula);
-      const distractors = shuffleArray(distractorPool).slice(0, 3).map(p => p.formula);
-      while (distractors.length < 3) distractors.push(f.formula + ' '.repeat(distractors.length + 1)); // pad on a very thin pool — shouldn't normally happen given the length checks before calling this
-      const options = shuffleArray([f.formula, ...distractors]);
-      return {
-        id: 'formula-' + i + '-' + f.title,
-        question: f.title,
-        options,
-        answer: options.indexOf(f.formula),
-      };
+  function renderGamesHub() {
+    const body = document.getElementById('gamesHubBody');
+    body.innerHTML = `
+      <div class="game-type-card" data-game="speed">
+        <span class="gtc-icon">⚡</span>
+        <div class="gtc-body"><div class="gtc-title">Speed Round</div><div class="gtc-sub">12 questions, 8 seconds each — how many can you get right?</div></div>
+      </div>
+      <div class="game-type-card" data-game="tf">
+        <span class="gtc-icon">✅</span>
+        <div class="gtc-body"><div class="gtc-title">True or False</div><div class="gtc-sub">Quick-fire judgment calls, 6 seconds each.</div></div>
+      </div>
+      <div class="game-type-card" data-game="memory">
+        <span class="gtc-icon">🧠</span>
+        <div class="gtc-body"><div class="gtc-title">Memory Match</div><div class="gtc-sub">Match each question to its correct answer.</div></div>
+      </div>
+      <div id="gamesSubjectPicker"></div>
+    `;
+    document.querySelectorAll('#gamesHubBody .game-type-card').forEach(card => {
+      card.addEventListener('click', () => renderGamesSubjectPicker(card.dataset.game));
     });
   }
 
-  function startFormulaRush(subjectKey) {
-    if (!gateGameStart()) return;
-    const isMixed = subjectKey === null;
-    let formulas = isMixed ? formulasMixed(S.category) : formulasFor(S.category, subjectKey);
-    // Defensive only — the subject picker already disables any subject
-    // below this threshold, so a named subject landing here thin would
-    // mean a data change since the picker was rendered, not normal flow.
-    if (!isMixed && formulas.length < 6) formulas = formulasMixed(S.category);
-    if (formulas.length < 4) {
-      showToast('Not enough formula sheet content yet for Formula Rush.');
+  function renderGamesSubjectPicker(gameType) {
+    const minNeeded = gameType === 'memory' ? 8 : 12;
+    const out = document.getElementById('gamesSubjectPicker');
+    const options = Object.entries(SUBJECTS)
+      .map(([key, meta]) => ({ key, meta, count: (gameType === 'memory' ? memoryEligiblePool(key) : gameObjectivePool(key)).length }))
+      .filter(s => s.count >= minNeeded);
+    if (!options.length) {
+      out.innerHTML = `<p style="color:var(--text-dim); font-size:.85rem; margin-top:1rem;">Not enough objective questions yet for this game.</p>`;
       return;
     }
-    consumeGameRound();
-    const pool = formulasMixed(S.category); // always draw distractors from the widest pool available
-    const queue = buildFormulaQueue(formulas.slice(0, 20), pool);
-
-    G = { kind: 'formula', subject: subjectKey, queue, idx: 0, score: 0, streak: 0, bestStreak: 0, correct: 0, attempted: 0, usedIds: [], locked: false, fetchingMore: false };
-    S.mode = 'formula';
-    S.gameTimerSecs = GAME_DURATION_SECS;
-    setLastActivity(S.category, subjectKey, 'formula');
-
-    document.getElementById('gameScore').textContent = '0';
-    document.getElementById('gameStreak').textContent = '0';
-    updateGameTimerDisplay();
-    const catLabel = CONTENT_MANIFEST[S.category].label;
-    if (isMixed) {
-      document.getElementById('gameSubjectBadge').textContent = `🔀 Mixed Subjects · ${catLabel}`;
-    } else {
-      const meta = subjectMeta(subjectKey);
-      document.getElementById('gameSubjectBadge').textContent = `${meta.icon} ${SUBJECT_LABELS[subjectKey] || subjectKey} · ${catLabel}`;
-    }
-
-    renderGameQuestion();
-    showScreen('gameScreen');
-
-    stopGameTimer();
-    S.gameTimerInterval = setInterval(() => {
-      S.gameTimerSecs--;
-      updateGameTimerDisplay();
-      if (S.gameTimerSecs <= 0) { stopGameTimer(); finishSpeedRound(); }
-    }, 1000);
+    out.innerHTML = `
+      <p style="font-weight:600; margin:1rem 0 .5rem;">Pick a subject</p>
+      <div class="subject-grid" style="max-height:220px;">
+        ${options.map(s => `
+          <button class="subject-btn" data-subject="${s.key}">
+            <span class="sub-icon">${s.meta.icon}</span>
+            <span class="sub-name">${safe(s.meta.name)}</span>
+            <span class="sub-count">${s.count}Q</span>
+          </button>`).join('')}
+      </div>
+    `;
+    document.querySelectorAll('#gamesSubjectPicker .subject-btn').forEach(btn => {
+      btn.addEventListener('click', () => startGame(gameType, btn.dataset.subject));
+    });
   }
 
-  /* ────────────────────────────────
-     EQUATION BUILDER (v1 — scoped down from the original drag-and-drop
-     spec to a solve-for-x MCQ format. The step-by-step draggable-operations
-     version needs real touch-device testing to get right on mobile, which
-     isn't possible in this build environment — safer to ship a reliable v1
-     now and revisit the richer interaction later with on-device testing.
-     Procedurally generated, same zero-content-dependency principle as
-     Sequence — reuses the same MCQ render/select path.
-  ──────────────────────────────── */
-  function generateEquationItem(usedQuestions) {
-    let a, b, x, c, questionText;
-    let attempts = 0;
-    do {
-      attempts++;
-      a = 2 + Math.floor(Math.random() * 8);      // coefficient 2–9
-      x = 2 + Math.floor(Math.random() * 11);      // the answer, 2–12
-      const subtract = Math.random() < 0.5;
-      // Cap b so a*x − b never goes negative or to zero — keeps every
-      // puzzle a clean positive-number equation either way.
-      b = subtract ? (1 + Math.floor(Math.random() * Math.min(20, a * x - 1))) : (1 + Math.floor(Math.random() * 20));
-      c = subtract ? a * x - b : a * x + b;
-      questionText = `${a}x ${subtract ? '−' : '+'} ${b} = ${c}`;
-    } while (usedQuestions.has(questionText) && attempts < 10);
-    usedQuestions.add(questionText);
-
-    const distractors = new Set();
-    // Deliberately include the classic mistake (forgetting to isolate x
-    // correctly) alongside plain nearby wrong answers, so wrong options
-    // are plausible rather than obviously-off.
-    const commonMistakes = [c, Math.round(c / a), x + 1, x - 1, x + 2, x - 2].filter(n => n !== x && n > 0);
-    commonMistakes.forEach(n => { if (distractors.size < 3) distractors.add(n); });
-    let fallback = x + 3;
-    while (distractors.size < 3) { if (fallback !== x && !distractors.has(fallback)) distractors.add(fallback); fallback++; }
-
-    const options = shuffleArray([x, ...Array.from(distractors)]);
-    return {
-      id: 'eq-' + questionText,
-      question: questionText,
-      options: options.map(String),
-      answer: options.indexOf(x),
-    };
+  function startGame(gameType, subjectKey) {
+    if (gameType === 'speed') startSpeedRound(subjectKey);
+    else if (gameType === 'tf') startTrueFalse(subjectKey);
+    else if (gameType === 'memory') startMemoryMatch(subjectKey);
   }
 
-  function startEquationBuilder() {
-    if (!gateGameStart()) return;
-    consumeGameRound(); // procedurally generated, nothing that can fail — safe to consume immediately after the gate
-    const usedQuestions = new Set();
-    const queue = [];
-    for (let i = 0; i < 25; i++) queue.push(generateEquationItem(usedQuestions));
-
-    G = { kind: 'equation', subject: null, queue, idx: 0, score: 0, streak: 0, bestStreak: 0, correct: 0, attempted: 0, usedIds: [], locked: false, fetchingMore: false };
-    S.mode = 'equation';
-    S.gameTimerSecs = GAME_DURATION_SECS;
-
-    document.getElementById('gameScore').textContent = '0';
-    document.getElementById('gameStreak').textContent = '0';
-    updateGameTimerDisplay();
-    document.getElementById('gameSubjectBadge').textContent = `🧩 Solve for x · ${CONTENT_MANIFEST[S.category].label}`;
-
-    renderGameQuestion();
-    showScreen('gameScreen');
-
-    stopGameTimer();
-    S.gameTimerInterval = setInterval(() => {
-      S.gameTimerSecs--;
-      updateGameTimerDisplay();
-      if (S.gameTimerSecs <= 0) { stopGameTimer(); finishSpeedRound(); }
-    }, 1000);
-  }
-
-  /* ────────────────────────────────
-     SEQUENCE
-     Procedurally generated number patterns — deliberately has NO content
-     dependency (no bank, no AI call needed), so it works exactly the same
-     regardless of how thin any subject's question bank is. Items are built
-     in the same {question, options, answer} shape as bank questions, so it
-     reuses renderSpeedItem/selectGameAnswer untouched — no new render path.
-  ──────────────────────────────── */
-  function generateSequenceItem(usedQuestions) {
-    const types = ['arithmetic', 'geometric', 'squares', 'fibonacci'];
-    let seq, answer, questionText;
-    let attempts = 0;
-    do {
-      attempts++;
-      const type = types[Math.floor(Math.random() * types.length)];
-      if (type === 'arithmetic') {
-        const start = 1 + Math.floor(Math.random() * 20);
-        const step = 2 + Math.floor(Math.random() * 8);
-        seq = [0, 1, 2, 3, 4].map(i => start + i * step);
-      } else if (type === 'geometric') {
-        const start = 1 + Math.floor(Math.random() * 5);
-        const ratio = Math.random() < 0.5 ? 2 : 3;
-        seq = [0, 1, 2, 3, 4].map(i => start * Math.pow(ratio, i));
-      } else if (type === 'squares') {
-        const startN = 1 + Math.floor(Math.random() * 6);
-        seq = [0, 1, 2, 3, 4].map(i => Math.pow(startN + i, 2));
-      } else {
-        let a = 1 + Math.floor(Math.random() * 5), b = 1 + Math.floor(Math.random() * 5);
-        seq = [a, b];
-        for (let i = 2; i < 5; i++) seq.push(seq[i - 1] + seq[i - 2]);
-      }
-      answer = seq[4];
-      questionText = seq.slice(0, 4).join(', ') + ', ?';
-    } while (usedQuestions.has(questionText) && attempts < 10);
-    usedQuestions.add(questionText);
-
-    const distractors = new Set();
-    let guardCount = 0;
-    while (distractors.size < 3 && guardCount < 30) {
-      guardCount++;
-      const magnitude = Math.max(2, Math.round(Math.abs(answer) * 0.2)) || 3;
-      const delta = (Math.floor(Math.random() * magnitude * 2) - magnitude) || (Math.random() < 0.5 ? 1 : -1);
-      const wrong = answer + delta;
-      if (wrong !== answer && wrong > 0 && !distractors.has(wrong)) distractors.add(wrong);
-    }
-    // Guard against a thin distractor set on tiny/edge sequences.
-    let fallback = answer + 1;
-    while (distractors.size < 3) { if (fallback !== answer && !distractors.has(fallback)) distractors.add(fallback); fallback++; }
-
-    const options = shuffleArray([answer, ...Array.from(distractors)]);
-    return {
-      id: 'seq-' + questionText,
-      question: questionText,
-      options: options.map(String),
-      answer: options.indexOf(answer),
-    };
-  }
-
-  function shuffleArray(arr) {
-    const a = arr.slice();
+  function shuffleArr(arr) {
+    const a = [...arr];
     for (let i = a.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [a[i], a[j]] = [a[j], a[i]];
@@ -3878,914 +1614,1188 @@
     return a;
   }
 
-  function startSequenceGame() {
-    if (!gateGameStart()) return;
-    consumeGameRound(); // procedurally generated, nothing that can fail — safe to consume immediately after the gate
-    const usedQuestions = new Set();
-    const queue = [];
-    for (let i = 0; i < 25; i++) queue.push(generateSequenceItem(usedQuestions));
-
-    G = { kind: 'sequence', subject: null, queue, idx: 0, score: 0, streak: 0, bestStreak: 0, correct: 0, attempted: 0, usedIds: [], locked: false, fetchingMore: false };
-    S.mode = 'sequence';
-    S.gameTimerSecs = GAME_DURATION_SECS;
-
-    document.getElementById('gameScore').textContent = '0';
-    document.getElementById('gameStreak').textContent = '0';
-    updateGameTimerDisplay();
-    document.getElementById('gameSubjectBadge').textContent = `🔢 Number Patterns · ${CONTENT_MANIFEST[S.category].label}`;
-
-    renderGameQuestion();
-    showScreen('gameScreen');
-
-    stopGameTimer();
-    S.gameTimerInterval = setInterval(() => {
-      S.gameTimerSecs--;
-      updateGameTimerDisplay();
-      if (S.gameTimerSecs <= 0) { stopGameTimer(); finishSpeedRound(); }
-    }, 1000);
+  function exitGameConfirm(targetScreen) {
+    if (G && G.active && !confirm('Leave this game? Your progress will be lost.')) return;
+    if (G) G.active = false;
+    clearGameTimer();
+    showScreen(targetScreen || 'gamesHub');
+    if (!targetScreen) renderGamesHub();
   }
 
-  /* ────────────────────────────────
-     WORD SCRAMBLE
-     Reuses Study Library flashcard terms — zero new content authoring
-     needed. Different mechanic from every other game: tap scrambled
-     letters in order to spell the word, rather than picking from options.
-  ──────────────────────────────── */
-  function scrambleWordsFor(category, subjectKey) {
-    const resBank = getResourceBank(category);
-    const r = resBank[subjectKey] || { flashcards: [] };
-    return (r.flashcards || []).filter(c => /^[A-Za-z]+$/.test(c.term) && c.term.length >= 4 && c.term.length <= 12);
+  function clearGameTimer() {
+    if (G && G.timerHandle) { clearInterval(G.timerHandle); G.timerHandle = null; }
   }
 
-  function scrambleWordsMixed(category) {
-    const resBank = getResourceBank(category);
-    let all = [];
-    Object.keys(resBank).forEach(k => {
-      const r = resBank[k];
-      (r.flashcards || []).forEach(c => {
-        if (/^[A-Za-z]+$/.test(c.term) && c.term.length >= 4 && c.term.length <= 12) all.push(c);
-      });
-    });
-    return all;
+  /* ── Speed Round ── */
+  function startSpeedRound(subjectKey) {
+    const pool = shuffleArr(gameObjectivePool(subjectKey)).slice(0, 12);
+    G = { type: 'speed', subject: subjectKey, questions: pool, idx: 0, score: 0, active: true, timerHandle: null };
+    showScreen('speedRound');
+    renderSpeedRoundQ();
   }
 
-  function scrambleLetters(word) {
-    const upper = word.toUpperCase();
-    let arr = upper.split('');
-    let tries = 0;
-    do {
-      arr = shuffleArray(arr);
-      tries++;
-    } while (arr.join('') === upper && upper.length > 1 && tries < 10);
-    return arr;
-  }
-
-  let _scrambleBuilt = [];
-  let _scrambleLetters = [];
-
-  function startWordScramble(subjectKey) {
-    if (!gateGameStart()) return;
-    const isMixed = subjectKey === null;
-    let words = isMixed ? scrambleWordsMixed(S.category) : scrambleWordsFor(S.category, subjectKey);
-    // Defensive only — the picker already disables any subject below this
-    // threshold, same reasoning as Formula Rush above.
-    if (!isMixed && words.length < 6) words = scrambleWordsMixed(S.category);
-    if (words.length < 4) {
-      showToast('Not enough Study Library words yet for Word Scramble.');
-      return;
-    }
-    consumeGameRound();
-    words = shuffleArray(words).slice(0, 15);
-    const queue = words.map((c, i) => ({ id: 'scr-' + i + '-' + c.term, word: c.term.toUpperCase(), definition: c.definition || '' }));
-
-    G = { kind: 'scramble', subject: subjectKey, queue, idx: 0, score: 0, streak: 0, bestStreak: 0, correct: 0, attempted: 0, usedIds: [], locked: false, fetchingMore: false, attemptLog: [] };
-    S.mode = 'scramble';
-    S.gameTimerSecs = GAME_DURATION_SECS;
-    setLastActivity(S.category, subjectKey, 'scramble');
-
-    document.getElementById('gameScore').textContent = '0';
-    document.getElementById('gameStreak').textContent = '0';
-    updateGameTimerDisplay();
-    const catLabel = CONTENT_MANIFEST[S.category].label;
-    if (isMixed) {
-      document.getElementById('gameSubjectBadge').textContent = `🔀 Mixed Subjects · ${catLabel}`;
-    } else {
-      const meta = subjectMeta(subjectKey);
-      document.getElementById('gameSubjectBadge').textContent = `${meta.icon} ${SUBJECT_LABELS[subjectKey] || subjectKey} · ${catLabel}`;
-    }
-
-    renderGameQuestion();
-    showScreen('gameScreen');
-
-    stopGameTimer();
-    S.gameTimerInterval = setInterval(() => {
-      S.gameTimerSecs--;
-      updateGameTimerDisplay();
-      if (S.gameTimerSecs <= 0) { stopGameTimer(); finishSpeedRound(); }
-    }, 1000);
-  }
-
-  function renderScrambleItem() {
-    const item = G.queue[G.idx];
-    _scrambleLetters = scrambleLetters(item.word);
-    _scrambleBuilt = [];
-    const body = document.getElementById('gameBody');
+  function renderSpeedRoundQ() {
+    const body = document.getElementById('speedRoundBody');
+    const q = G.questions[G.idx];
+    const total = G.questions.length;
     body.innerHTML = `
-      <div class="scramble-layout">
-        <div class="scramble-main">
-          <div class="game-q-meta">Word ${G.idx + 1}${G.queue.length ? ' / ' + G.queue.length : ''}</div>
-          <div class="scramble-built" id="scrambleBuilt"></div>
-          <p class="scramble-hint">Tap a placed letter to remove just that one</p>
-          <div class="scramble-letters" id="scrambleLetters">
-            ${_scrambleLetters.map((l, i) => `<button class="scramble-letter" data-i="${i}">${safe(l)}</button>`).join('')}
-          </div>
-          <button class="btn btn-ghost btn-block" id="scrambleClearBtn" style="margin-top:.75rem;">Clear all</button>
-        </div>
-        <div class="scramble-attempted" id="scrambleAttempted"></div>
+      <button class="ghost-link" id="speedExitBtn" style="margin-bottom:.5rem;">✕ Exit</button>
+      <div class="game-progress"><span>⚡ Speed Round · Q${G.idx + 1} of ${total}</span><span class="game-score-live">Score: ${G.score}</span></div>
+      <div class="game-timer-bar"><div class="game-timer-fill" id="speedTimerFill" style="width:100%;"></div></div>
+      <p class="game-question">${safe(q.question)}</p>
+      <div id="speedOptions">
+        ${q.options.map((opt, i) => `<button class="game-option-btn" data-i="${i}">${safe(opt)}</button>`).join('')}
       </div>
     `;
-    renderScrambleBuilt();
-    renderScrambleAttempted();
-    document.getElementById('scrambleClearBtn').addEventListener('click', () => {
-      if (G.locked) return;
-      _scrambleBuilt = [];
-      renderScrambleBuilt();
-      body.querySelectorAll('.scramble-letter').forEach(b => b.classList.remove('used'));
+    document.getElementById('speedExitBtn').addEventListener('click', () => exitGameConfirm());
+    document.querySelectorAll('#speedOptions .game-option-btn').forEach(btn => {
+      btn.addEventListener('click', () => answerSpeedRound(parseInt(btn.dataset.i)));
     });
-    body.querySelectorAll('.scramble-letter').forEach(btn => {
-      btn.addEventListener('click', () => tapScrambleLetter(parseInt(btn.dataset.i, 10)));
+    runGameTimer(8, document.getElementById('speedTimerFill'), () => answerSpeedRound(null));
+  }
+
+  function runGameTimer(seconds, fillEl, onExpire) {
+    clearGameTimer();
+    const start = Date.now();
+    const durationMs = seconds * 1000;
+    G.timerHandle = setInterval(() => {
+      const elapsed = Date.now() - start;
+      const pct = Math.max(0, 100 - (elapsed / durationMs) * 100);
+      if (fillEl) {
+        fillEl.style.width = pct + '%';
+        fillEl.classList.toggle('urgent', pct < 30);
+      }
+      if (elapsed >= durationMs) {
+        clearGameTimer();
+        onExpire();
+      }
+    }, 100);
+  }
+
+  function answerSpeedRound(choiceIdx) {
+    if (!G || !G.active) return;
+    clearGameTimer();
+    const q = G.questions[G.idx];
+    const correct = choiceIdx === q.answer;
+    if (correct) G.score++;
+    document.querySelectorAll('#speedOptions .game-option-btn').forEach((btn, i) => {
+      btn.disabled = true;
+      if (i === q.answer) btn.classList.add('correct');
+      else if (i === choiceIdx) btn.classList.add('wrong');
+    });
+    setTimeout(() => {
+      G.idx++;
+      if (G.idx >= G.questions.length) finishGame();
+      else renderSpeedRoundQ();
+    }, 600);
+  }
+
+  /* ── True or False ── */
+  function startTrueFalse(subjectKey) {
+    const pool = shuffleArr(gameObjectivePool(subjectKey)).slice(0, 12);
+    const rounds = pool.map(q => {
+      const showCorrect = Math.random() < 0.5;
+      let statementIdx;
+      if (showCorrect) statementIdx = q.answer;
+      else {
+        const wrongIndices = q.options.map((_, i) => i).filter(i => i !== q.answer);
+        statementIdx = wrongIndices[Math.floor(Math.random() * wrongIndices.length)];
+      }
+      return { q, statementIdx, isTrue: statementIdx === q.answer };
+    });
+    G = { type: 'tf', subject: subjectKey, rounds, idx: 0, score: 0, active: true, timerHandle: null };
+    showScreen('trueFalse');
+    renderTrueFalseQ();
+  }
+
+  function renderTrueFalseQ() {
+    const body = document.getElementById('trueFalseBody');
+    const r = G.rounds[G.idx];
+    const total = G.rounds.length;
+    body.innerHTML = `
+      <button class="ghost-link" id="tfExitBtn" style="margin-bottom:.5rem;">✕ Exit</button>
+      <div class="game-progress"><span>✅ True or False · Q${G.idx + 1} of ${total}</span><span class="game-score-live">Score: ${G.score}</span></div>
+      <div class="game-timer-bar"><div class="game-timer-fill" id="tfTimerFill" style="width:100%;"></div></div>
+      <div class="tf-statement" id="tfStatement">${safe(r.q.question)} — <b>${safe(r.q.options[r.statementIdx])}</b></div>
+      <div class="tf-btn-row">
+        <button class="tf-btn true-btn" id="tfTrueBtn">TRUE</button>
+        <button class="tf-btn false-btn" id="tfFalseBtn">FALSE</button>
+      </div>
+    `;
+    document.getElementById('tfExitBtn').addEventListener('click', () => exitGameConfirm());
+    document.getElementById('tfTrueBtn').addEventListener('click', () => answerTrueFalse(true));
+    document.getElementById('tfFalseBtn').addEventListener('click', () => answerTrueFalse(false));
+    runGameTimer(6, document.getElementById('tfTimerFill'), () => answerTrueFalse(null));
+  }
+
+  function answerTrueFalse(choice) {
+    if (!G || !G.active) return;
+    clearGameTimer();
+    const r = G.rounds[G.idx];
+    const correct = choice === r.isTrue;
+    if (correct) G.score++;
+    document.getElementById('tfTrueBtn').disabled = true;
+    document.getElementById('tfFalseBtn').disabled = true;
+    document.getElementById('tfStatement').classList.add(r.isTrue ? 'correct' : 'wrong');
+    setTimeout(() => {
+      G.idx++;
+      if (G.idx >= G.rounds.length) finishGame();
+      else renderTrueFalseQ();
+    }, 600);
+  }
+
+  /* ── Memory Match ── */
+  function startMemoryMatch(subjectKey) {
+    const pool = memoryEligiblePool(subjectKey);
+    const shuffled = shuffleArr(pool).slice(0, 8);
+    const cards = [];
+    shuffled.forEach((q, pairIdx) => {
+      cards.push({ pairIdx, side: 'q', text: q.question, matched: false });
+      cards.push({ pairIdx, side: 'a', text: q.options[q.answer], matched: false });
+    });
+    G = {
+      type: 'memory', subject: subjectKey, cards: shuffleArr(cards),
+      flipped: [], moves: 0, matchedCount: 0, totalPairs: shuffled.length,
+      active: true, startTime: Date.now(),
+    };
+    showScreen('memoryMatch');
+    renderMemoryMatch();
+  }
+
+  function renderMemoryMatch() {
+    const body = document.getElementById('memoryMatchBody');
+    body.innerHTML = `
+      <button class="ghost-link" id="memoryExitBtn" style="margin-bottom:.5rem;">✕ Exit</button>
+      <div class="memory-stats"><span>🧠 Memory Match</span><span>Moves: ${G.moves} · Pairs: ${G.matchedCount}/${G.totalPairs}</span></div>
+      <div class="memory-grid" id="memoryGrid">
+        ${G.cards.map((c, i) => `
+          <div class="memory-card hidden-face" data-i="${i}">
+            <div class="memory-card-inner">?</div>
+          </div>`).join('')}
+      </div>
+    `;
+    document.getElementById('memoryExitBtn').addEventListener('click', () => exitGameConfirm());
+    document.querySelectorAll('#memoryGrid .memory-card').forEach(el => {
+      el.addEventListener('click', () => flipMemoryCard(parseInt(el.dataset.i)));
     });
   }
 
-  // Pinned side list of every word attempted so far this round — most
-  // recent first, so a player can glance back at what they've already
-  // gotten right or wrong without it interrupting the current word.
-  function renderScrambleAttempted() {
-    const el = document.getElementById('scrambleAttempted');
-    if (!el) return;
-    if (!G.attemptLog || !G.attemptLog.length) {
-      el.innerHTML = '<div class="scramble-attempted-empty">Solved words appear here</div>';
+  function flipMemoryCard(i) {
+    if (!G || !G.active) return;
+    const card = G.cards[i];
+    if (card.matched || G.flipped.includes(i) || G.flipped.length >= 2) return;
+    const el = document.querySelector(`#memoryGrid .memory-card[data-i="${i}"]`);
+    el.classList.remove('hidden-face');
+    el.classList.add('flipped');
+    el.querySelector('.memory-card-inner').textContent = card.text;
+    G.flipped.push(i);
+    if (G.flipped.length === 2) {
+      G.moves++;
+      const [i1, i2] = G.flipped;
+      const c1 = G.cards[i1], c2 = G.cards[i2];
+      if (c1.pairIdx === c2.pairIdx && c1.side !== c2.side) {
+        c1.matched = true; c2.matched = true;
+        G.matchedCount++;
+        [i1, i2].forEach(idx => {
+          const cel = document.querySelector(`#memoryGrid .memory-card[data-i="${idx}"]`);
+          cel.classList.remove('flipped');
+          cel.classList.add('matched');
+        });
+        G.flipped = [];
+        document.querySelector('.memory-stats span:last-child').textContent = `Moves: ${G.moves} · Pairs: ${G.matchedCount}/${G.totalPairs}`;
+        if (G.matchedCount >= G.totalPairs) setTimeout(finishGame, 500);
+      } else {
+        setTimeout(() => {
+          [i1, i2].forEach(idx => {
+            const cel = document.querySelector(`#memoryGrid .memory-card[data-i="${idx}"]`);
+            if (cel) { cel.classList.remove('flipped'); cel.classList.add('hidden-face'); cel.querySelector('.memory-card-inner').textContent = '?'; }
+          });
+          G.flipped = [];
+          const statsEl = document.querySelector('.memory-stats span:last-child');
+          if (statsEl) statsEl.textContent = `Moves: ${G.moves} · Pairs: ${G.matchedCount}/${G.totalPairs}`;
+        }, 800);
+      }
+    }
+  }
+
+  /* ── Shared results screen ── */
+  function finishGame() {
+    if (!G) return;
+    G.active = false;
+    clearGameTimer();
+    showScreen('gameResult');
+    const body = document.getElementById('gameResultBody');
+    const subjName = SUBJECTS[G.subject]?.name || G.subject;
+    let scoreLine, labelLine;
+    if (G.type === 'speed') {
+      scoreLine = `${G.score}/${G.questions.length}`;
+      labelLine = `Speed Round · ${safe(subjName)}`;
+    } else if (G.type === 'tf') {
+      scoreLine = `${G.score}/${G.rounds.length}`;
+      labelLine = `True or False · ${safe(subjName)}`;
+    } else {
+      const seconds = Math.round((Date.now() - G.startTime) / 1000);
+      scoreLine = `${G.moves} moves`;
+      labelLine = `Memory Match · ${safe(subjName)} · ${seconds}s`;
+    }
+    body.innerHTML = `
+      <div style="font-size:2.5rem;">🎮</div>
+      <div class="game-result-score">${scoreLine}</div>
+      <div class="game-result-label">${labelLine}</div>
+      <div class="game-result-actions">
+        <button class="btn-primary" id="gamePlayAgainBtn">Play Again</button>
+        <button class="btn-secondary" id="gameChangeBtn">Change Game</button>
+        <button class="ghost-link" id="gameHomeBtn">Home</button>
+      </div>
+    `;
+    document.getElementById('gamePlayAgainBtn').addEventListener('click', () => startGame(G.type, G.subject));
+    document.getElementById('gameChangeBtn').addEventListener('click', () => { showScreen('gamesHub'); renderGamesHub(); });
+    document.getElementById('gameHomeBtn').addEventListener('click', () => showScreen('home'));
+  }
+
+  /* ════════ RESULTS ════════ */
+  function calcTimingAnalysis() {
+    const timings = S.qTimings.filter(t => t && t.duration);
+    if (timings.length < 3) return null;
+    const durations = timings.map(t => t.duration);
+    const avg = durations.reduce((a,b) => a+b, 0) / durations.length;
+    const slow = S.questions
+      .map((q,i) => ({ q, i, dur: S.qTimings[i]?.duration }))
+      .filter(x => x.dur && x.dur > avg * 2 && x.dur > 30000) // >2x avg and >30s
+      .slice(0, 3);
+    const totalMs = S.qTimings.reduce((sum,t) => sum + (t?.duration||0), 0);
+    const verdict = avg < 30000 ? 'Very fast — double-check your answers' :
+                    avg < 60000 ? 'Good pace' :
+                    avg < 90000 ? 'A little slow — try to speed up' :
+                                  'Too slow — practise more to build speed';
+    return { avg: Math.round(avg/1000), totalSec: Math.round(totalMs/1000), slow, verdict };
+  }
+
+  function paintResults(r) {
+    const hasObj = r.pct!==null;
+    const pct    = r.pct||0;
+    const grade  = !hasObj?'Theory Study':pct>=75?'Distinction':pct>=60?'Credit':pct>=50?'Pass':'Below Pass';
+    const emoji  = !hasObj?'📖':pct>=75?'🏆':pct>=60?'🎯':pct>=50?'✅':'💪';
+    const color  = !hasObj?'var(--ink)':pct>=50?'var(--green)':'var(--red)';
+    const msg    = !hasObj?'Study the model answers and marking schemes carefully.'
+                 : pct>=75?"Outstanding! You're well prepared."
+                 : pct>=60?"Good work — keep pushing, you're almost there."
+                 : pct>=50?'You passed! More sessions will build confidence.'
+                 :'Keep going — review the explanations and try again.';
+
+    E.resultEmoji.textContent = emoji;
+    E.resultScore.textContent = hasObj ? `${pct}%` : 'Theory';
+    E.resultScore.style.color = color;
+    E.resultGrade.textContent = grade;
+    E.resultGrade.style.color = color;
+    E.resultSummary.innerHTML =
+      `<strong>${safe(r.student)}</strong> · ${safe(r.subject)} · ${safe(r.exam)}` +
+      (r.timeout?' <span class="tag-timeout">Time elapsed</span>':'') +
+      `<br><span class="res-msg">${msg}</span>`;
+
+    const stats = [
+      hasObj && {label:'Correct', val:r.correct, cls:'green'},
+      hasObj && {label:'Wrong',   val:r.wrong,   cls:'red'},
+      hasObj && {label:'Skipped', val:r.skipped, cls:''},
+      r.thCount && {label:'Theory', val:r.thCount, cls:''},
+      r.flags   && {label:'Flagged',val:r.flags,   cls:'amber'},
+    ].filter(Boolean);
+
+    E.resultStatsGrid.innerHTML = stats.map(s =>
+      `<div class="rstat ${s.cls}"><strong>${s.val}</strong><span>${safe(s.label)}</span></div>`
+    ).join('');
+
+    if (hasObj) {
+      E.resultBreakdown.style.display='block';
+      E.resultBreakdown.innerHTML =
+        `<div class="bk-bar"><div class="bk-fill" style="width:${pct}%;background:${color}"></div></div>` +
+        `<div class="bk-lbl">${r.correct} correct · ${r.wrong} wrong · ${r.skipped} skipped</div>` +
+        (r.flags?`<div class="bk-flag">🚩 ${r.flags} flagged for review</div>`:'');
+    } else {
+      E.resultBreakdown.style.display='none';
+    }
+  }
+
+  /* ════════ REVIEW ════════ */
+  function enterReview() {
+    S.reviewMode=true; S.idx=0; S.showAnswer=true;
+    buildPills(); renderQ(); showScreen('quiz');
+  }
+
+  /* ════════ EXIT ════════ */
+  /* ════════ EXIT CONFIRMATION ════════ */
+  function confirmExit() {
+    if (!S.inSession || S.reviewMode) {
+      // Not in active session — just go home
+      if (S.timerId) { clearInterval(S.timerId); S.timerId = null; }
+      S.inSession = false;
+      showScreen('home');
       return;
     }
-    el.innerHTML = G.attemptLog.slice().reverse().map(a =>
-      `<div class="scramble-chip ${a.correct ? 'sc-correct' : 'sc-wrong'}" title="${safe(a.word)}">
-        <span class="sc-mark">${a.correct ? '✓' : '✕'}</span><span class="sc-word">${safe(a.word)}</span>
+    showExitModal(
+      S.mode === 'exam',
+      () => {
+        // Confirmed exit
+        if (S.mode === 'exam') {
+          finishSession(false);
+        } else {
+          if (S.timerId) { clearInterval(S.timerId); S.timerId = null; }
+          S.inSession = false;
+          showScreen('home');
+        }
+      }
+    );
+  }
+
+  function showExitModal(isExam, onConfirm) {
+    const modal = document.getElementById('exitConfirmModal');
+    const icon  = document.getElementById('exitModalIcon');
+    const title = document.getElementById('exitModalTitle');
+    const sub   = document.getElementById('exitModalSub');
+    const stay  = document.getElementById('exitModalStay');
+    const leave = document.getElementById('exitModalLeave');
+    if (!modal) { onConfirm(); return; }
+
+    icon.textContent  = isExam ? '⚠️' : '🚪';
+    title.textContent = isExam ? 'Exit Exam?' : 'Exit Session?';
+    sub.textContent   = isExam
+      ? 'Your answers will be submitted and scored.'
+      : 'Your progress in this session will be lost.';
+    leave.textContent = isExam ? 'Submit & Exit' : 'Exit';
+
+    modal.classList.remove('hidden');
+
+    // Clean up old listeners
+    const newStay  = stay.cloneNode(true);
+    const newLeave = leave.cloneNode(true);
+    stay.parentNode.replaceChild(newStay, stay);
+    leave.parentNode.replaceChild(newLeave, leave);
+
+    document.getElementById('exitModalStay').addEventListener('click', () => {
+      modal.classList.add('hidden');
+    });
+    document.getElementById('exitModalLeave').addEventListener('click', () => {
+      modal.classList.add('hidden');
+      onConfirm();
+    });
+  }
+
+  function goHome() {
+    if (S.timerId) { clearInterval(S.timerId); S.timerId=null; }
+    S.inSession=false;
+    showScreen('home');
+  }
+
+  /* ════════ HISTORY ════════ */
+  function renderHistory() {
+    const hist = getHistory();
+    if (!S.currentUser) {
+      E.historyList.innerHTML='<div class="empty-history">Login to see your history.</div>'; return;
+    }
+    if (!hist.length) {
+      E.historyList.innerHTML='<div class="empty-history">No sessions yet — start your first practice!</div>'; return;
+    }
+    E.historyList.innerHTML = hist.slice(0,25).map(r => `
+      <div class="hi-item">
+        <div class="hi-main">
+          <div class="hi-sub">${safe(r.subject)}</div>
+          <div class="hi-meta">${safe(r.exam)} · ${safe(r.mode)} · ${safe(r.type||'objective')}</div>
+          <div class="hi-date">${safe(r.date)}</div>
+        </div>
+        <div class="hi-right">
+          <div class="hi-score ${r.pct==null?'':r.pct>=50?'pass':'fail'}">
+            ${r.pct!=null?r.pct+'%':'—'}
+          </div>
+          ${r.pct!=null?`<div class="hi-fraction">${r.correct}/${r.total}</div>`:''}
+        </div>
       </div>`
     ).join('');
   }
 
-  function renderScrambleBuilt() {
-    const built = document.getElementById('scrambleBuilt');
-    const item = G.queue[G.idx];
-    const filled = _scrambleBuilt.map(i => _scrambleLetters[i]);
-    const slots = item.word.length;
-    built.innerHTML = Array.from({ length: slots }, (_, i) =>
-      `<span class="scramble-slot ${filled[i] ? 'filled' : ''}" data-pos="${i}">${filled[i] ? safe(filled[i]) : ''}</span>`
-    ).join('');
-    built.querySelectorAll('.scramble-slot.filled').forEach(slot => {
-      slot.addEventListener('click', () => removeScrambleLetterAt(parseInt(slot.dataset.pos, 10)));
-    });
+  function clearHistory() {
+    if (!S.currentUser||!confirm('Clear all history for '+S.currentUser+'?')) return;
+    if (S.users[S.currentUser]) S.users[S.currentUser].history=[];
+    saveSafe(SK.users, S.users);
+    renderHistory(); refreshStats();
   }
 
-  /** Removes exactly the one letter at this position in the built word —
-   * not a full reset. Everything after it shifts left to fill the gap
-   * (same as backspacing in the middle of a text field), and the tapped
-   * letter tile becomes available again. Lets a player fix one wrong
-   * letter without losing everything else they'd already placed. */
-  function removeScrambleLetterAt(pos) {
-    if (G.locked) return;
-    if (pos < 0 || pos >= _scrambleBuilt.length) return;
-    const tileIndex = _scrambleBuilt[pos];
-    _scrambleBuilt.splice(pos, 1);
-    const tileBtn = document.querySelector(`.scramble-letter[data-i="${tileIndex}"]`);
-    if (tileBtn) tileBtn.classList.remove('used');
-    renderScrambleBuilt();
+  function getHistory() { return S.users[S.currentUser]?.history||[]; }
+
+  function refreshStats() {
+    const hist = getHistory();
+    const objH = hist.filter(r => r.pct!=null);
+    E.hStatSessions.textContent = hist.length;
+    E.hStatAvg.textContent  = objH.length ? Math.round(objH.reduce((s,r)=>s+r.pct,0)/objH.length)+'%' : '—';
+    E.hStatBest.textContent = objH.length ? Math.max(...objH.map(r=>r.pct))+'%' : '—';
   }
 
-  function tapScrambleLetter(i) {
-    if (G.locked) return;
-    const btn = document.querySelector(`.scramble-letter[data-i="${i}"]`);
-    if (!btn || btn.classList.contains('used')) return;
-    _scrambleBuilt.push(i);
-    btn.classList.add('used');
-    renderScrambleBuilt();
-
-    const item = G.queue[G.idx];
-    if (_scrambleBuilt.length === item.word.length) checkScrambleAnswer();
+  /* ════════ PAYWALL ════════ */
+  function checkAccess() {
+    const d = loadSafe(SK.access);
+    return !!(d?.expires && new Date(d.expires) > new Date());
   }
 
-  function checkScrambleAnswer() {
-    G.locked = true;
-    const item = G.queue[G.idx];
-    const guess = _scrambleBuilt.map(i => _scrambleLetters[i]).join('');
-    const isCorrect = guess === item.word;
-    G.attempted++;
-    G.usedIds.push(item.id);
-    G.attemptLog.push({ word: item.word, correct: isCorrect });
-    renderScrambleAttempted();
-
-    const built = document.getElementById('scrambleBuilt');
-    built.classList.add(isCorrect ? 'scramble-correct' : 'scramble-incorrect');
-    if (isCorrect) burstParticlesFromElement(built);
-    else built.classList.add('wrong-shake-once');
-
-    const body = document.getElementById('gameBody');
-    const defEl = document.createElement('div');
-    defEl.className = 'scramble-def';
-    defEl.textContent = isCorrect
-      ? (item.definition ? `✓ ${item.word} — ${item.definition}` : `✓ ${item.word}`)
-      : (item.definition ? `The word was ${item.word} — ${item.definition}` : `The word was ${item.word}`);
-    body.appendChild(defEl);
-
-    if (isCorrect) {
-      G.correct++;
-      G.streak++;
-      G.bestStreak = Math.max(G.bestStreak, G.streak);
-      const bonus = G.streak >= 5 ? 3 : G.streak >= 3 ? 2 : 1;
-      G.score += 10 * bonus;
-      if (G.streak > 0 && G.streak % 3 === 0) flashStreak(G.streak);
-    } else {
-      G.streak = 0;
-    }
-    pulseStat('gameScore', G.score);
-    pulseStat('gameStreak', G.streak);
-
-    setTimeout(() => {
-      G.locked = false;
-      G.idx++;
-      if (S.gameTimerSecs > 0) renderGameQuestion();
-    }, 1700); // longer than GAME_LOCK_MS — gives time to actually read the definition
+  function getFreeUsed() {
+    const d = loadSafe(SK.free);
+    return d?.n || 0;
   }
 
-  function buildCategorySortRound() {
-    const resBank = getResourceBank(S.category);
-    const manifest = CONTENT_MANIFEST[S.category];
-    const eligible = shuffleArray(manifest.subjects.filter(s => ((resBank[s] || {}).flashcards || []).length >= 3));
-    const bucketSubjects = eligible.slice(0, Math.min(4, eligible.length));
-
-    // Some subjects legitimately share terms (e.g. "Democracy" is a real
-    // flashcard in both Government and Civic Education) — if this
-    // round happens to pick both, a term drawn from one bucket would
-    // score as "wrong" if tapped in the other, even though the answer
-    // is genuinely correct there too. Rather than deleting legitimate
-    // content from either subject, exclude terms that appear in more
-    // than one of THIS round's chosen buckets — dynamic, so it keeps
-    // working correctly as content keeps growing, not just a one-off
-    // patch for today's known overlaps.
-    const termSubjectCount = {};
-    bucketSubjects.forEach(subj => {
-      const seen = new Set();
-      (resBank[subj].flashcards || []).forEach(c => {
-        const key = c.term.trim().toLowerCase();
-        if (seen.has(key)) return; // don't double-count dupes within the same subject
-        seen.add(key);
-        termSubjectCount[key] = (termSubjectCount[key] || 0) + 1;
-      });
-    });
-
-    const items = [];
-    bucketSubjects.forEach(subj => {
-      const cards = shuffleArray((resBank[subj].flashcards || []).slice())
-        .filter(c => termSubjectCount[c.term.trim().toLowerCase()] === 1);
-      cards.slice(0, 8).forEach(c => items.push({ id: subj + '::' + c.term, term: c.term, subject: subj }));
-    });
-    return { bucketSubjects, items: shuffleArray(items) };
+  function getFreeSnaps() {
+    const d = loadSafe(SK.free);
+    return d?.snaps || 0;
   }
 
-  function startCategorySort() {
-    if (!gateGameStart()) return;
-    const { bucketSubjects, items } = buildCategorySortRound();
-    if (bucketSubjects.length < 2 || items.length < 6) {
-      showToast('Not enough Study Library content yet across subjects for Category Sort.');
-      return;
-    }
-    consumeGameRound();
-
-    G = { kind: 'sort', subject: null, queue: items, idx: 0, score: 0, streak: 0, bestStreak: 0, correct: 0, attempted: 0, usedIds: [], locked: false, fetchingMore: false, bucketSubjects };
-    S.mode = 'sort';
-    S.gameTimerSecs = GAME_DURATION_SECS;
-
-    document.getElementById('gameScore').textContent = '0';
-    document.getElementById('gameStreak').textContent = '0';
-    updateGameTimerDisplay();
-    document.getElementById('gameSubjectBadge').textContent = `🗂 Mixed Subjects · ${CONTENT_MANIFEST[S.category].label}`;
-
-    renderGameQuestion();
-    showScreen('gameScreen');
-
-    stopGameTimer();
-    S.gameTimerInterval = setInterval(() => {
-      S.gameTimerSecs--;
-      updateGameTimerDisplay();
-      if (S.gameTimerSecs <= 0) { stopGameTimer(); finishSpeedRound(); }
-    }, 1000);
-  }
-
-  function renderSortItem() {
-    const item = G.queue[G.idx];
-    const body = document.getElementById('gameBody');
-    body.innerHTML = `
-      <div class="game-q-meta">Which subject does this belong to?</div>
-      <div class="sort-term">${safe(item.term)}</div>
-      <div class="sort-buckets" id="sortBuckets">
-        ${G.bucketSubjects.map(s => {
-          const meta = subjectMeta(s);
-          return `<button class="sort-bucket" data-subject="${s}" style="border-color:${meta.color}55;">
-            <span class="sort-bucket-icon">${meta.icon}</span>
-            <span class="sort-bucket-label">${SUBJECT_LABELS[s] || s}</span>
-          </button>`;
-        }).join('')}
-      </div>`;
-    body.querySelectorAll('.sort-bucket').forEach(btn => {
-      btn.addEventListener('click', () => selectSortAnswer(btn.dataset.subject));
-    });
-  }
-
-  function selectSortAnswer(guessSubject) {
-    if (G.locked) return;
-    G.locked = true;
-    const item = G.queue[G.idx];
-    const isCorrect = guessSubject === item.subject;
-    G.attempted++;
-    G.usedIds.push(item.id);
-
-    document.querySelectorAll('.sort-bucket').forEach(btn => {
-      if (btn.dataset.subject === item.subject) { btn.classList.add('sort-correct'); if (isCorrect) burstParticlesFromElement(btn); }
-      else if (btn.dataset.subject === guessSubject) btn.classList.add('sort-incorrect');
-    });
-
-    if (isCorrect) {
-      G.correct++;
-      G.streak++;
-      G.bestStreak = Math.max(G.bestStreak, G.streak);
-      const bonus = G.streak >= 5 ? 3 : G.streak >= 3 ? 2 : 1;
-      G.score += 10 * bonus;
-      if (G.streak > 0 && G.streak % 3 === 0) flashStreak(G.streak);
-    } else {
-      G.streak = 0;
-    }
-    pulseStat('gameScore', G.score);
-    pulseStat('gameStreak', G.streak);
-
-    setTimeout(() => {
-      G.locked = false;
-      G.idx++;
-      if (S.gameTimerSecs > 0) renderGameQuestion();
-    }, GAME_LOCK_MS);
-  }
-
-  function selectGameAnswer(i) {
-    if (G.locked) return;
-    G.locked = true;
-    const q = G.queue[G.idx];
-    const isCorrect = i === q.answer;
-    G.attempted++;
-    G.usedIds.push(q.id);
-
-    const opts = document.querySelectorAll('#gameOptions .game-opt');
-    opts.forEach((btn, bi) => {
-      if (bi === q.answer) btn.classList.add('g-correct');
-      else if (bi === i) btn.classList.add('g-incorrect');
-      else btn.classList.add('g-dim');
-    });
-    if (isCorrect) burstParticlesFromElement(opts[i]);
-
-    if (isCorrect) {
-      G.correct++;
-      G.streak++;
-      G.bestStreak = Math.max(G.bestStreak, G.streak);
-      const bonus = G.streak >= 5 ? 3 : G.streak >= 3 ? 2 : 1;
-      G.score += 10 * bonus;
-      if (G.streak > 0 && G.streak % 3 === 0) flashStreak(G.streak);
-    } else {
-      G.streak = 0;
-    }
-
-    pulseStat('gameScore', G.score);
-    pulseStat('gameStreak', G.streak);
-
-    setTimeout(() => {
-      G.locked = false;
-      G.idx++;
-      if (S.gameTimerSecs > 0) renderGameQuestion();
-    }, GAME_LOCK_MS);
-  }
-
-  function flashStreak(streak) {
-    const bonus = streak >= 5 ? '3× points' : streak >= 3 ? '2× points' : '';
-    const el = document.createElement('div');
-    el.className = 'streak-flash';
-    el.innerHTML = `
-      <div class="sf-glow"></div>
-      <div class="sf-text">🔥 ${streak} streak!</div>
-      ${bonus ? `<div class="sf-bonus">${bonus}</div>` : ''}
-    `;
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 900);
-  }
-
-  /* ────────────────────────────────
-     SHARED GAME-FEEL HELPERS
-     Small, dependency-free effects used across every game: a particle
-     burst fired from wherever the player tapped, a pop animation on the
-     score/streak digits when they change, and an animated count-up for
-     the results screen. Pure CSS keyframes + DOM, no canvas/library.
-  ──────────────────────────────── */
-  const FX_COLORS = ['#e85d4a', '#f5b942', '#16a34a', '#2563eb', '#7c3aed'];
-
-  function burstParticles(x, y) {
-    // Respect reduced-motion preferences — skip the effect entirely rather
-    // than force motion on someone who's asked their device to avoid it.
-    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const count = 10;
-    for (let i = 0; i < count; i++) {
-      const el = document.createElement('div');
-      el.className = 'fx-particle';
-      const angle = (Math.PI * 2 * i) / count + (Math.random() * 0.4 - 0.2);
-      const distance = 40 + Math.random() * 35;
-      const dx = Math.cos(angle) * distance;
-      const dy = Math.sin(angle) * distance;
-      el.style.setProperty('--fx-end', `translate(${dx}px, ${dy}px)`);
-      el.style.left = x + 'px';
-      el.style.top = y + 'px';
-      el.style.background = FX_COLORS[i % FX_COLORS.length];
-      document.body.appendChild(el);
-      setTimeout(() => el.remove(), 650);
-    }
-  }
-
-  function burstParticlesFromElement(el) {
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    burstParticles(rect.left + rect.width / 2, rect.top + rect.height / 2);
-  }
-
-  function pulseStat(id, value) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.textContent = value;
-    el.classList.remove('stat-pop');
-    void el.offsetWidth; // force reflow so the animation can retrigger on rapid consecutive updates
-    el.classList.add('stat-pop');
-  }
-
-  function confettiBurst() {
-    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const count = 26;
-    for (let i = 0; i < count; i++) {
-      const el = document.createElement('div');
-      el.className = 'fx-confetti';
-      const startX = Math.random() * window.innerWidth;
-      const fallX = (Math.random() - 0.5) * 120;
-      const fallY = window.innerHeight * 0.5 + Math.random() * 200;
-      const rotation = 180 + Math.random() * 540;
-      el.style.setProperty('--fx-fall', `translate(${fallX}px, ${fallY}px) rotate(${rotation}deg)`);
-      el.style.left = startX + 'px';
-      el.style.top = '-20px';
-      el.style.background = FX_COLORS[i % FX_COLORS.length];
-      el.style.animationDelay = (Math.random() * 0.3) + 's';
-      document.body.appendChild(el);
-      setTimeout(() => el.remove(), 2200);
-    }
-  }
-
-  function animateCounter(el, target, duration) {
-    if (!el) return;
-    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      el.textContent = target;
-      return;
-    }
-    const start = performance.now();
-    el.classList.add('counting');
-    function tick(now) {
-      const progress = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic — fast start, gentle settle
-      el.textContent = Math.round(target * eased);
-      if (progress < 1) requestAnimationFrame(tick);
-      else { el.textContent = target; el.classList.remove('counting'); }
-    }
-    requestAnimationFrame(tick);
-  }
-
-  async function maybeTopUpQueue() {
-    // Only 'speed' is actually reachable here (called from startSpeedRound
-    // and the shared renderSpeedItem) AND has a matching item shape
-    // ({question,options,answer}) for what this fetches. 'tf' was assumed
-    // to have live top-up too in earlier notes — checked, and it doesn't:
-    // renderTFItem() never calls this function, and even if it did, its
-    // items are {statement,isTrue,sourceId}-shaped, incompatible with
-    // this endpoint's MCQ output. 'formula' happens to produce
-    // MCQ-shaped items (so it silently passed the old subject-only
-    // guard) but its options are formula strings, not curriculum trivia
-    // — topping it up here would inject real quiz questions into what's
-    // supposed to be an exclusively formula-matching game. Explicit
-    // allowlist instead of inferring from G.subject being set.
-    if (G.kind !== 'speed') return;
-    if (!G.subject) return; // shouldn't happen for 'speed', but stay defensive
-    const remaining = G.queue.length - G.idx;
-    if (remaining >= GAME_MIN_QUEUE || G.fetchingMore) return;
-    if (!hasAICredit()) {
-      // Still no blocking paywall mid-game — the game plays out fine on
-      // whatever static questions remain either way. But now the player
-      // actually knows why the variety dried up and how to fix it, once
-      // per round rather than nagging on every low-queue check.
-      if (!G._toldNoCredits) {
-        G._toldNoCredits = true;
-        showActionToast('Running low on fresh questions.', 'Unlock more →', () => showAIPaywall());
+  function updateFreeTrialIndicator() {
+    // Show a subtle indicator on home screen of remaining trial questions
+    const remaining = Math.max(0, FREE_TRIAL_LIMIT - S.freeUsed);
+    const pill = E.studentPill;
+    if (pill && !S.hasAccess && S.currentUser) {
+      const orig = pill.textContent;
+      if (remaining <= 3 && remaining > 0) {
+        pill.innerHTML = `${safe(S.currentUser)} &nbsp;·&nbsp; <span style="color:var(--amber);font-weight:600">${remaining} free question${remaining===1?'':'s'} left</span>`;
+      } else if (remaining === 0) {
+        pill.innerHTML = `${safe(S.currentUser)} &nbsp;·&nbsp; <span style="color:var(--red,#e55)">Free trial complete</span>`;
       }
-      return;
     }
-    G.fetchingMore = true;
+  }
+
+  function showPaywall(reason) {
+    if (E.paywallBadge) {
+      E.paywallBadge.textContent = reason === 'trial' ? 'FREE TRIAL COMPLETE' : 'PREMIUM FEATURE';
+    }
+    // Show early adopter counter
+    updateEarlyAdopterBanner();
+    E.paywallOverlay.classList.remove('hidden');
+  }
+
+  function updateEarlyAdopterBanner() {
+    // In production this would fetch from backend. For now simulate with localStorage count.
+    const sold = loadSafe('mea-ea-sold') || 0;
+    const remaining = Math.max(0, EARLY_ADOPTER_CAP - sold);
+    if (E.earlyAdopterCounter) {
+      if (remaining > 0) {
+        E.earlyAdopterCounter.textContent = `${remaining} of 100 spots remaining`;
+        if (E.earlyAdopterBanner) E.earlyAdopterBanner.style.display = '';
+        if (E.payBtn) {
+          E.payBtn.textContent = `Get Early Access — ₦2,000/quarter →`;
+        }
+      } else {
+        // Early adopter cap reached — show standard price
+        if (E.earlyAdopterBanner) E.earlyAdopterBanner.style.display = 'none';
+        if (E.payBtn) E.payBtn.textContent = `Get Student Pass — ₦2,500/quarter →`;
+      }
+    }
+  }
+
+  function grantAccess(days, tier) {
+    // Extend from current expiry if still active, not from today
+    const existing = loadSafe(SK.access);
+    const base = (existing?.expires && new Date(existing.expires) > new Date())
+      ? new Date(existing.expires)   // active sub — extend from expiry
+      : new Date();                  // no active sub — start from today
+    const exp = new Date(base);
+    exp.setDate(exp.getDate() + days);
+    saveSafe(SK.access, { expires: exp.toISOString() });
+    saveSafe(SK.tier, tier || 'student');
+    S.hasAccess = true;
+    S.tier = tier || 'student';
+    E.paywallOverlay.classList.add('hidden');
+    const extendedFrom = existing?.expires && new Date(existing.expires) > new Date()
+      ? ` (extended from your current expiry)` : '';
+    alert(`✅ Access granted until ${exp.toLocaleDateString('en-NG')}${extendedFrom}. Welcome to My Exams App.`);
+  }
+
+  // ⚙️ Same Vercel project as the snap-and-mark API — add a /api/verify-payment
+  // serverless function there (see handoff notes) that calls Paystack's
+  // /transaction/verify/:reference with your SECRET key and returns the
+  // entitlement (tier + days) based on the amount actually paid.
+  const API_BASE = 'https://editoby-api.vercel.app';
+
+  // Grants access ONLY after the payment is confirmed server-side against
+  // Paystack — the client-side Paystack callback firing is not sufficient
+  // proof of payment on its own (it can be triggered without a real charge
+  // via devtools), so we never call grantAccess() directly from a Paystack
+  // callback anymore.
+  async function verifyAndGrant(reference, fallbackTier, fallbackDays) {
     try {
-      const bank = getBank(S.category)[G.subject];
-      const avoid = (bank.objective || []).map(q => q.question).slice(0, 40);
-      const res = await fetch(API_BASE + '/api/generate-questions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category: S.category,
-          subject: SUBJECT_LABELS[G.subject] || G.subject,
-          count: 10,
-          avoidQuestions: avoid,
-        }),
+      const res = await fetch(API_BASE + '/api/verify-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reference })
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.ok && data.questions.length) {
-        consumeAICredit();
-        G.queue = G.queue.concat(data.questions);
-        // Previously only extended this round's in-memory queue — the
-        // underlying bank never saw these questions, so even a second
-        // Speed Round on the same subject in the same session wouldn't
-        // benefit, let alone surviving reload. Now both fixed: persisted
-        // via the same overlay as every other AI-generated content type,
-        // and the subject's actual bank is extended too.
-        bank.objective = (bank.objective || []).concat(data.questions);
-        saveAIGeneratedItems(S.category, G.subject, 'objective', data.questions);
-        const left = getAICredits().credits;
-        showToast(`✨ +${data.questions.length} fresh AI questions added — 1 credit used (${left} left)`, 3200);
+      if (res.ok && data.verified) {
+        // Trust the server's determination of tier/days (based on amount
+        // actually paid), not whatever the client thinks it bought.
+        grantAccess(data.days || fallbackDays, data.tier || fallbackTier);
+        return true;
       }
+      alert('We could not confirm this payment yet. If you were charged, please contact support with reference: ' + reference);
+      return false;
     } catch (err) {
-      // Silent fail — game just ends a little early if this doesn't work, no need to interrupt play.
-    } finally {
-      G.fetchingMore = false;
+      alert('Could not verify payment (network error). If you were charged, please contact support with reference: ' + reference);
+      return false;
     }
   }
 
-  function finishSpeedRound() {
-    stopGameTimer();
-    const pct = G.attempted ? Math.round((G.correct / G.attempted) * 100) : 0;
-    if (G.subject && G.usedIds.length) markSeen(S.category, G.subject, G.usedIds);
-    if (G.subject && G.attempted) recordMastery(S.category, G.subject, G.correct, G.attempted);
-    recordSession(pct);
-    renderGameResults(pct);
-    showScreen('gameResultsScreen');
-  }
+  /* ════════ EMAIL MODAL (replaces native prompt() for payment email) ════════ */
+  /* ════════ CONFIRM MODAL (replaces native browser confirm()) ════════ */
+  function showConfirmModal(message, confirmLabel = 'Yes', cancelLabel = 'Cancel') {
+    return new Promise((resolve) => {
+      let overlay = document.getElementById('meaConfirmModalOverlay');
+      if (overlay) overlay.remove();
 
-  function renderGameResults(pct) {
-    recordSinglePlayerHistory(pct);
-    const body = document.getElementById('gameResultsBody');
-    const gameTitle = G.kind === 'tf' ? '✓✗ True or False Blitz' : G.kind === 'sort' ? '🗂 Category Sort'
-      : G.kind === 'sequence' ? '🔢 Sequence' : G.kind === 'scramble' ? '🔤 Word Scramble'
-      : G.kind === 'formula' ? '🔢 Formula Rush' : G.kind === 'equation' ? '🧩 Equation Builder' : '⚡ Speed Round';
-    const verdict = G.bestStreak >= 8 ? "🔥 On fire! Incredible streak." : G.bestStreak >= 4 ? "Nice streak — keep it up!" : "Good round — try to build a streak next time.";
-    body.innerHTML = `
-      <div class="game-result-hero">
-        <div class="game-q-meta">${gameTitle} · ⏱ Time's up!</div>
-        <div class="game-result-score" id="gameResultScore">0</div>
-        <div class="game-result-sub">points</div>
-        <p style="margin-top:1rem; font-size:.95rem; color:var(--text-mid);">${verdict}</p>
-      </div>
-      <div class="game-result-stats">
-        <div class="grs-box"><span>${G.attempted}</span><label>Answered</label></div>
-        <div class="grs-box"><span>${pct}%</span><label>Accuracy</label></div>
-        <div class="grs-box"><span>${G.bestStreak}</span><label>Best Streak</label></div>
-      </div>
-      <div class="result-actions">
-        <button class="btn btn-primary btn-block" id="gameReplayBtn">Play Again →</button>
-        <button class="btn btn-ghost btn-block" id="gameHomeBtn">Back to Home</button>
-      </div>`;
-    animateCounter(document.getElementById('gameResultScore'), G.score, 900);
-    // A strong round earns a confetti moment — good streak or solid accuracy,
-    // not just "any round finished", so it stays a real reward.
-    if (G.bestStreak >= 5 || (G.attempted >= 5 && pct >= 80)) confettiBurst();
-    // Only shown if the player actually ran into the credit wall this round
-    // (flagged by maybeTopUpQueue) — not a generic upsell on every result.
-    // Inserted before the action buttons, not after — otherwise someone
-    // could tap "Play Again" before ever seeing it.
-    if (G._toldNoCredits) {
-      const banner = renderExpandBanner(
-        body,
-        `Running low on AI-generated questions in ${gameTitle}.`,
-        'Unlock more →',
-        () => showAIPaywall()
-      );
-      body.insertBefore(banner, document.querySelector('.result-actions'));
-    }
-    document.getElementById('gameReplayBtn').addEventListener('click', () => {
-      // Play Again used to always restart offline, even if the round
-      // just finished was AI Live — silently switching modes without
-      // saying so. Now it respects whichever mode was actually played.
-      if (G.isLive && G.kind === 'tf') startTrueFalseLive(G.subject);
-      else if (G.isLive) startSpeedRoundLive(G.subject);
-      else if (G.kind === 'tf') startTrueFalseBlitz(G.subject);
-      else if (G.kind === 'sort') startCategorySort();
-      else if (G.kind === 'sequence') startSequenceGame();
-      else if (G.kind === 'scramble') startWordScramble(G.subject);
-      else if (G.kind === 'formula') startFormulaRush(G.subject);
-      else if (G.kind === 'equation') startEquationBuilder();
-      else startSpeedRound(G.subject, G.level || getLastSpeedLevel());
-    });
-    document.getElementById('gameHomeBtn').addEventListener('click', () => { showScreen('homeScreen'); renderDashboardNudge(); updateStudyPlanBanner(); });
-  }
-
-  /* ────────────────────────────────
-     MEMORY MATCH
-     A genuinely different mechanic — no reading a question and picking
-     an answer at all. Flip tiles to pair a flashcard term with its
-     definition. Untimed pressure (clock counts up, not down) — this
-     one is meant to feel calm, not urgent, unlike the two games above.
-     Reuses Study Library's flashcard data directly.
-  ──────────────────────────────── */
-  let MEM = { subject: null, tiles: [], flippedIdx: [], matchedCount: 0, totalPairs: 0, moves: 0, startTime: 0, locked: false };
-
-  function stopMemoryTimer() {
-    if (S.memTimerInterval) clearInterval(S.memTimerInterval);
-    S.memTimerInterval = null;
-  }
-
-  function startMemoryMatch(subjectKey) {
-    if (!gateGameStart()) return;
-    const resBank = getResourceBank(S.category);
-    const cards = ((resBank[subjectKey] || {}).flashcards || []).slice();
-    if (cards.length < 4) {
-      showToast('Not enough flashcards for Memory Match on this subject yet.');
-      return;
-    }
-    consumeGameRound();
-
-    const shuffledCards = shuffleArray(cards);
-    const pairCount = Math.min(6, shuffledCards.length);
-    const chosen = shuffledCards.slice(0, pairCount);
-    const tiles = [];
-    chosen.forEach((c, i) => {
-      tiles.push({ pairId: i, text: c.term, matched: false });
-      tiles.push({ pairId: i, text: c.definition, matched: false });
-    });
-    const shuffledTiles = shuffleArray(tiles);
-
-    MEM = { subject: subjectKey, tiles: shuffledTiles, flippedIdx: [], matchedCount: 0, totalPairs: pairCount, moves: 0, startTime: Date.now(), locked: false };
-    setLastActivity(S.category, subjectKey, 'memory');
-
-    document.getElementById('memMoves').textContent = '0';
-    document.getElementById('memPairs').textContent = `0/${pairCount}`;
-    document.getElementById('memTimer').textContent = '0:00';
-    const meta = subjectMeta(subjectKey);
-    document.getElementById('memSubjectBadge').textContent = `${meta.icon} ${SUBJECT_LABELS[subjectKey] || subjectKey} · ${CONTENT_MANIFEST[S.category].label}`;
-
-    renderMemoryGrid();
-    showScreen('memoryScreen');
-
-    stopMemoryTimer();
-    S.memTimerInterval = setInterval(updateMemoryTimerDisplay, 1000);
-  }
-
-  function updateMemoryTimerDisplay() {
-    const secs = Math.floor((Date.now() - MEM.startTime) / 1000);
-    const m = Math.floor(secs / 60), s = secs % 60;
-    document.getElementById('memTimer').textContent = `${m}:${String(s).padStart(2, '0')}`;
-  }
-
-  function renderMemoryGrid() {
-    const body = document.getElementById('memoryBody');
-    body.innerHTML = `<div class="memory-grid">${MEM.tiles.map((t, i) => {
-      const isFlipped = MEM.flippedIdx.includes(i) || t.matched;
-      return `
-      <button class="memory-tile ${t.matched ? 'matched' : ''} ${isFlipped ? 'flipped' : ''}" data-i="${i}" ${t.matched ? 'disabled' : ''}>
-        <div class="memory-tile-inner">
-          <div class="memory-tile-face memory-tile-back">?</div>
-          <div class="memory-tile-face memory-tile-front">${safe(t.text)}</div>
+      overlay = document.createElement('div');
+      overlay.id = 'meaConfirmModalOverlay';
+      overlay.style.cssText = `
+        position:fixed; inset:0; background:rgba(5,10,20,.72);
+        display:flex; align-items:center; justify-content:center;
+        z-index:10000; padding:1rem; font-family:var(--sans,sans-serif);
+      `;
+      overlay.innerHTML = `
+        <div style="background:#0a1628; border:1.5px solid var(--gold,#d4af37); border-radius:14px;
+                    padding:1.75rem 1.5rem; max-width:340px; width:100%; box-shadow:0 10px 40px rgba(0,0,0,.5);">
+          <p style="margin:0 0 1.1rem; color:#fff; font-size:.95rem; line-height:1.5;">${safe(message)}</p>
+          <div style="display:flex; gap:.6rem;">
+            <button id="meaConfirmCancel" style="flex:1; padding:.65rem; border-radius:9px; border:1.5px solid #26344a;
+                    background:transparent; color:#fff; font-weight:600; font-size:.85rem;">${safe(cancelLabel)}</button>
+            <button id="meaConfirmOk" style="flex:1; padding:.65rem; border-radius:9px; border:none;
+                    background:var(--gold,#d4af37); color:#0a1628; font-weight:700; font-size:.85rem;">${safe(confirmLabel)}</button>
+          </div>
         </div>
-      </button>`;
-    }).join('')}</div>`;
+      `;
+      document.body.appendChild(overlay);
 
-    body.querySelectorAll('.memory-tile').forEach(btn => {
-      btn.addEventListener('click', () => flipMemoryTile(parseInt(btn.dataset.i, 10)));
+      const cleanup = (val) => { overlay.remove(); resolve(val); };
+      document.getElementById('meaConfirmCancel').addEventListener('click', () => cleanup(false));
+      document.getElementById('meaConfirmOk').addEventListener('click', () => cleanup(true));
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(false); });
     });
   }
 
-  function flipMemoryTile(i) {
-    if (MEM.locked) return;
-    if (MEM.flippedIdx.includes(i)) return;
-    if (MEM.tiles[i].matched) return;
-    if (MEM.flippedIdx.length >= 2) return;
+  function getEmailViaModal() {
+    return new Promise((resolve) => {
+      let overlay = document.getElementById('emailModalOverlay');
+      if (overlay) overlay.remove(); // fresh each time, avoids stale listeners
 
-    MEM.flippedIdx.push(i);
-    renderMemoryGrid();
+      overlay = document.createElement('div');
+      overlay.id = 'emailModalOverlay';
+      overlay.style.cssText = `
+        position:fixed; inset:0; background:rgba(5,10,20,.72);
+        display:flex; align-items:center; justify-content:center;
+        z-index:10000; padding:1rem; font-family:var(--sans,sans-serif);
+        animation:toastSlideUp .2s ease;
+      `;
+      overlay.innerHTML = `
+        <div style="background:#0a1628; border:1.5px solid var(--gold,#d4af37); border-radius:14px;
+                    padding:1.75rem 1.5rem; max-width:340px; width:100%; box-shadow:0 10px 40px rgba(0,0,0,.5);">
+          <h3 style="margin:0 0 .5rem; color:#fff; font-size:1.05rem; font-weight:700;">Enter your email</h3>
+          <p style="margin:0 0 1rem; color:var(--text-dim,#9aa5b1); font-size:.85rem; line-height:1.4;">
+            We'll send your payment receipt here.
+          </p>
+          <input id="emailModalInput" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com"
+                 style="width:100%; box-sizing:border-box; padding:.7rem .85rem; border-radius:9px;
+                        border:1.5px solid #26344a; background:#0d1b2a; color:#fff; font-size:.95rem; outline:none;" />
+          <p id="emailModalError" style="display:none; color:var(--red,#e55); font-size:.78rem; margin:.4rem 0 0;">
+            Please enter a valid email address.
+          </p>
+          <div style="display:flex; gap:.6rem; margin-top:1.1rem;">
+            <button id="emailModalCancel" style="flex:1; padding:.65rem; border-radius:9px; border:1.5px solid #26344a;
+                    background:transparent; color:#fff; font-weight:600; font-size:.85rem;">Cancel</button>
+            <button id="emailModalContinue" style="flex:1; padding:.65rem; border-radius:9px; border:none;
+                    background:var(--gold,#d4af37); color:#0a1628; font-weight:700; font-size:.85rem;">Continue</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
 
-    if (MEM.flippedIdx.length === 2) {
-      MEM.moves++;
-      document.getElementById('memMoves').textContent = MEM.moves;
-      MEM.locked = true;
-      const [a, b] = MEM.flippedIdx;
-      const isMatch = a !== b && MEM.tiles[a].pairId === MEM.tiles[b].pairId;
+      const input   = document.getElementById('emailModalInput');
+      const errEl   = document.getElementById('emailModalError');
+      const cleanup = (val) => { overlay.remove(); resolve(val); };
 
-      setTimeout(() => {
-        if (isMatch) {
-          MEM.tiles[a].matched = true;
-          MEM.tiles[b].matched = true;
-          MEM.matchedCount++;
-          document.getElementById('memPairs').textContent = `${MEM.matchedCount}/${MEM.totalPairs}`;
+      input.focus();
+      document.getElementById('emailModalCancel').addEventListener('click', () => cleanup(null));
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(null); });
+      const submit = () => {
+        const val = (input.value || '').trim();
+        if (!val.includes('@') || !val.includes('.')) { errEl.style.display = 'block'; return; }
+        cleanup(val);
+      };
+      document.getElementById('emailModalContinue').addEventListener('click', submit);
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+    });
+  }
+
+  async function upgradeToPlus(mode) {
+    // mode: 'upgrade' = pay difference ₦1,000, keep expiry
+    //       'renew'   = pay full ₦3,500, extend from current expiry
+    const email = await getEmailViaModal();
+    if (!email) return; // cancelled
+
+    const PAYSTACK_KEY = 'pk_live_5d12ee2a90900116dc222107e059a06214c085ff';
+
+    if (mode === 'upgrade') {
+      // Pay ₦1,000 difference — keep existing expiry, just upgrade tier
+      const handler = window.PaystackPop.setup({
+        key: PAYSTACK_KEY, email,
+        amount: 100000, // ₦1,000 in kobo
+        currency: 'NGN',
+        ref: 'MEA-UPGRADE-' + Date.now(),
+        metadata: { custom_fields: [
+          { display_name: 'Plan', variable_name: 'plan', value: 'Upgrade to Student Pass Plus (₦1,000)' },
+        ]},
+        onClose() {},
+        callback(response) {
+          (async () => {
+            const res = await fetch(API_BASE + '/api/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ reference: response.reference })
+            }).catch(() => null);
+            const data = res ? await res.json().catch(() => ({})) : {};
+            if (!res || !res.ok || !data.verified) {
+              alert('We could not confirm this payment yet. If you were charged, please contact support with reference: ' + response.reference);
+              return;
+            }
+            // Keep existing expiry, just change tier
+            saveSafe(SK.tier, 'plus');
+            S.tier = 'plus';
+            E.paywallOverlay?.classList.add('hidden');
+            alert('✅ Upgraded to Student Pass Plus! Teach Me are now unlocked for your current subscription period.');
+            renderQ(); // re-render to show AI buttons
+          })();
         }
-        MEM.flippedIdx = [];
-        MEM.locked = false;
-        renderMemoryGrid();
-        if (MEM.matchedCount === MEM.totalPairs) finishMemoryMatch();
-      }, isMatch ? 550 : 950);
+      });
+      handler.openIframe();
+    } else {
+      // Renew as Plus — full ₦3,500, extends from current expiry
+      handlePayment('plus', 'quarterly');
     }
   }
 
-  function finishMemoryMatch() {
-    stopMemoryTimer();
-    const secs = Math.floor((Date.now() - MEM.startTime) / 1000);
-    recordActivity();
+  async function handlePayment(tier, period) {
+    tier   = tier   || 'student';
+    period = period || 'quarterly';
 
-    const body = document.getElementById('memoryResultsBody');
-    const m = Math.floor(secs / 60), s = secs % 60;
-    const timeStr = `${m}:${String(s).padStart(2, '0')}`;
-    const verdict = MEM.moves <= MEM.totalPairs + 2 ? "🧠 Excellent memory — barely any wasted flips!" : MEM.moves <= MEM.totalPairs * 2 ? "Nice work — solid pairing." : "All matched! Try to beat your move count next time.";
+    const sold          = loadSafe('mea-ea-sold') || 0;
+    const isEarlyAdopter = sold < EARLY_ADOPTER_CAP;
 
-    body.innerHTML = `
-      <div class="game-result-hero">
-        <div class="game-q-meta">🧠 Memory Match · All Pairs Found!</div>
-        <div class="game-result-score">${timeStr}</div>
-        <div class="game-result-sub">time</div>
-        <p style="margin-top:1rem; font-size:.95rem; color:var(--text-mid);">${verdict}</p>
-      </div>
-      <div class="game-result-stats">
-        <div class="grs-box"><span>${MEM.moves}</span><label>Moves</label></div>
-        <div class="grs-box"><span>${MEM.totalPairs}</span><label>Pairs</label></div>
-      </div>
-      <div class="result-actions">
-        <button class="btn btn-primary btn-block" id="memReplayBtn">Play Again →</button>
-        <button class="btn btn-ghost btn-block" id="memHomeBtn">Back to Home</button>
-      </div>`;
-    document.getElementById('memReplayBtn').addEventListener('click', () => startMemoryMatch(MEM.subject));
-    document.getElementById('memHomeBtn').addEventListener('click', () => { showScreen('homeScreen'); renderDashboardNudge(); updateStudyPlanBanner(); });
+    // Amount map in kobo
+    const amounts = {
+      'student-quarterly': isEarlyAdopter ? EARLY_ADOPTER_PRICE : STANDARD_PRICE,
+      'student-yearly':    750000,
+      'plus-quarterly':    350000,
+      'plus-yearly':       1050000,
+      'jamb-quarterly':    150000,
+    };
 
-    showScreen('memoryResultsScreen');
+    const labels = {
+      'student-quarterly': isEarlyAdopter ? 'Student Pass — Early Access (₦2,000/quarter)' : 'Student Pass (₦2,500/quarter)',
+      'student-yearly':    'Student Pass — Full Year (₦7,500)',
+      'plus-quarterly':    'Student Pass Plus (₦3,500/quarter)',
+      'plus-yearly':       'Student Pass Plus — Full Year (₦10,500)',
+      'jamb-quarterly':    'JAMB Only (₦1,500/quarter)',
+    };
+
+    // Days of access granted
+    const days = {
+      'student-quarterly': 90,
+      'student-yearly':    365,
+      'plus-quarterly':    90,
+      'plus-yearly':       365,
+      'jamb-quarterly':    90,
+    };
+
+    const key    = tier + '-' + period;
+    const amount = amounts[key];
+    const label  = labels[key];
+    const daysToGrant = days[key];
+
+    if (!amount) return;
+
+    const email = await getEmailViaModal();
+    if (!email) return; // cancelled
+
+    const PAYSTACK_KEY = 'pk_live_5d12ee2a90900116dc222107e059a06214c085ff';
+    // 🔑 When Paystack approves your account, replace the line above with:
+    // const PAYSTACK_KEY = 'pk_live_YOUR_LIVE_KEY_HERE';
+
+    const handler = window.PaystackPop.setup({
+      key: PAYSTACK_KEY,
+      email,
+      amount,
+      currency: 'NGN',
+      ref: 'MEA-' + tier.toUpperCase() + '-' + Date.now(),
+      metadata: {
+        custom_fields: [
+          { display_name: 'Plan',   variable_name: 'plan',   value: label },
+          { display_name: 'App',    variable_name: 'app',    value: 'My Exams App' },
+          { display_name: 'Period', variable_name: 'period', value: period },
+        ]
+      },
+      onClose() {},
+      callback(response) {
+        // Paystack's SDK rejects an `async` function here during its own
+        // internal validation (it wants a plain function reference), so we
+        // keep this synchronous and run the actual async verification inside.
+        (async () => {
+          const verified = await verifyAndGrant(response.reference, tier, daysToGrant);
+          if (verified && (tier === 'student' || tier === 'jamb') && isEarlyAdopter && period === 'quarterly') {
+            saveSafe('mea-ea-sold', sold + 1);
+          }
+        })();
+      }
+    });
+    handler.openIframe();
   }
 
-  /* ────────────────────────────────
-     CHALLENGE A FRIEND
-     (adapted from My Exams App / My JAMB App's community quiz —
-      same shared backend, same challenge shape)
-  ──────────────────────────────── */
-  const QC_STORE = 'hh-challenges-v1';
-  const MAX_PENDING_CHALLENGES = 3;
-  const WAITING_ROOM_TIMEOUT_MS = 2 * 60 * 1000;
+  function handleSchoolEnquiry() {
+    const email = 'schools@myexamsapp.com';
+    const subject = encodeURIComponent('School Bundle Enquiry — My Exams App');
+    const body    = encodeURIComponent(
+      'Hello,\n\nI am interested in a school bundle for My Exams App.\n\n' +
+      'School name:\nNumber of students:\nPreferred tier (Standard / Branded / Premium):\nContact number:\n\nThank you.'
+    );
+    window.open(`mailto:${email}?subject=${subject}&body=${body}`);
+  }
+
+  /* ════════════════════════════════
+     COMMUNITY QUIZ
+  ════════════════════════════════ */
+  const SUBJECT_KEYS = Object.keys(EXAM_BANK);
+  const QC_STORE = 'mea-challenges-v1';
   let _pendingChallenge = null;
   let _waitingRoomTimer = null;
   let _waitingRoomCountdownTicker = null;
   let _isWaitingRoomCreator = false;
+  const WAITING_ROOM_TIMEOUT_MS = 2 * 60 * 1000;
+  const MAX_PENDING_CHALLENGES = 5;
 
-  function safe(str) {
-    return String(str == null ? '' : str).replace(/[&<>"']/g, c => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[c]));
-  }
-
-  const AVATAR_COLORS = ['#e85d4a', '#2563eb', '#16a34a', '#c9a05c', '#7c3aed', '#0891b2', '#dc2626', '#0d9488'];
-  function avatarFor(name) {
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-    const color = AVATAR_COLORS[hash % AVATAR_COLORS.length];
-    const initials = name.trim().split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join('');
-    return { color, initials: initials || '?' };
-  }
-
-  function initChallengeModule() {
+  function initCommunityQuiz() {
+    const btn = document.getElementById('quizChallengeBtn');
     const modal = document.getElementById('quizChallengeModal');
-    if (!modal) return;
+    if (!btn || !modal) return;
 
+    // Show trigger button only for paid users
+    if (S.hasAccess) btn.classList.remove('hidden');
+
+    btn.addEventListener('click', openQuizChallenge);
     document.getElementById('qcClose').addEventListener('click', closeQuizChallenge);
     modal.addEventListener('click', e => { if (e.target === modal) closeQuizChallenge(); });
 
-    document.getElementById('qcCreateBtn').addEventListener('click', () => { showQcPanel('qcSetup'); updateAiBoostHint(); });
+    document.getElementById('qcCreateBtn').addEventListener('click', () => showQcPanel('qcCreate'));
+    document.getElementById('qcBackBtn').addEventListener('click',   () => showQcPanel('qcHome'));
+    document.getElementById('qcShareBackBtn')?.addEventListener('click', () => { showQcPanel('qcHome'); renderPendingChallenges(); });
+    document.getElementById('qcWaitingBackBtn')?.addEventListener('click', () => {
+      clearInterval(_waitingRoomTimer);
+      clearInterval(_waitingRoomCountdownTicker);
+      showQcPanel('qcHome');
+      renderPendingChallenges();
+      refreshChallengeBadgeState();
+    });
+    document.getElementById('qcJoinBtn').addEventListener('click',   () => {
+      document.getElementById('qcJoinRow').classList.toggle('hidden');
+    });
     document.getElementById('qcJoinConfirm').addEventListener('click', joinChallenge);
     document.getElementById('qcGenerateBtn').addEventListener('click', generateChallenge);
     document.getElementById('qcShareLinkBtn').addEventListener('click', shareChallengeLink);
     document.getElementById('qcStartOwnBtn').addEventListener('click', startOwnAttempt);
-    document.getElementById('qcNewChallengeBtn').addEventListener('click', () => { showQcPanel('qcSetup'); updateAiBoostHint(); });
+    document.getElementById('qcNewChallengeBtn').addEventListener('click', () => showQcPanel('qcCreate'));
     document.getElementById('qcDoneBtn').addEventListener('click', closeQuizChallenge);
-    document.getElementById('qcMarkReadyBtn').addEventListener('click', markReady);
-    document.getElementById('qcForceStartBtn').addEventListener('click', forceStartChallenge);
-    document.getElementById('qcEndChallengeBtn').addEventListener('click', endChallengeFromWaitingRoom);
-    document.getElementById('qcSyncMode').addEventListener('change', (e) => {
-      document.getElementById('qcScheduleWrap').classList.toggle('hidden', e.target.value !== 'scheduled');
+    document.getElementById('qcReadyBtn')?.addEventListener('click', markReady);
+    document.getElementById('qcForceStartBtn')?.addEventListener('click', forceStartChallenge);
+    document.getElementById('qcEndChallengeBtn')?.addEventListener('click', endChallengeFromWaitingRoom);
+    document.querySelectorAll('input[name="qcSyncMode"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        document.getElementById('qcScheduledTimeWrap')?.classList.toggle('hidden', radio.value !== 'scheduled' || !radio.checked);
+      });
     });
-    document.getElementById('qcSubject').addEventListener('change', updateAiBoostHint);
-    document.getElementById('qcCount').addEventListener('change', updateAiBoostHint);
-  }
 
-  /**
-   * Looks at the static pool size for the selected subject vs. how many
-   * of those the creator has already seen, and nudges the AI-boost
-   * toggle accordingly — auto-checking (but not locking) it when the
-   * pool can't cover the requested question count without repeats.
-   */
-  function updateAiBoostHint() {
-    const subject = document.getElementById('qcSubject').value;
-    const count = parseInt(document.getElementById('qcCount').value, 10) || 20;
-    const bank = getBank(S.category)[subject];
-    const hint = document.getElementById('qcAiBoostHint');
-    const checkbox = document.getElementById('qcAiBoost');
-    if (!bank) { hint.textContent = ''; return; }
+    // Populate subject checkboxes (multi-select)
+    const subjectsWrap = document.getElementById('qcSubjects');
+    if (subjectsWrap) SUBJECT_KEYS.forEach(s => {
+      const label = document.createElement('label');
+      label.className = 'qc-subject-check';
+      label.innerHTML = `<input type="checkbox" value="${s}"/> <span>${safe(SUBJECTS[s]?.name || s)}</span>`;
+      const input = label.querySelector('input');
+      input.addEventListener('change', () => label.classList.toggle('checked', input.checked));
+      subjectsWrap.appendChild(label);
+    });
 
-    const pool = bank.objective || [];
-    const seen = getSeenSet(S.category, subject);
-    const unseenCount = pool.filter(q => !seen.has(q.id)).length;
-
-    if (unseenCount < count) {
-      hint.textContent = `— recommended, only ${unseenCount} fresh question${unseenCount === 1 ? '' : 's'} left in this subject`;
-      checkbox.checked = true;
-    } else {
-      hint.textContent = '— optional, adds variety beyond the question bank';
-      checkbox.checked = false;
+    // Check if arriving via challenge link
+    const params = new URLSearchParams(window.location.search);
+    const challengeCode = params.get('challenge');
+    if (challengeCode) {
+      history.replaceState(null, '', window.location.pathname);
+      openQuizChallenge();
+      document.getElementById('qcJoinCode').value = challengeCode;
+      joinChallenge();
     }
   }
 
-  function populateChallengeSubjects() {
-    const sel = document.getElementById('qcSubject');
-    const manifest = CONTENT_MANIFEST[S.category];
-    sel.innerHTML = manifest.subjects.map(key =>
-      `<option value="${key}">${SUBJECT_LABELS[key] || key}</option>`).join('');
+  function refreshChallengeBadgeState() {
+    const all = loadSafe(QC_STORE, {});
+    const needsAttention = Object.values(all).some(c => {
+      if (c.ended) return false;
+      if (!c.syncMode || c.syncMode === 'anytime') return false; // no "started" moment to alert about
+      const completed = c.scores && c.scores[S.currentUser];
+      return c.startedAt && !completed;
+    });
+    setChallengeBadge(needsAttention);
   }
 
+  const _qcPanelOrder = ['qcHome','qcCreate','qcShare','qcLeaderboard','qcWaitingRoom'];
+  let _qcCurrentPanel = 'qcHome';
+  let _qcModalPanelHistory = [];
+
   function openQuizChallenge() {
-    if (!S.currentUser) { showToast('Please enter a name first.'); return; }
-    populateChallengeSubjects();
-    showQcPanel('qcCreate');
+    if (!S.hasAccess) { showPaywall('upgrade'); return; }
+    if (!S.currentUser) { alert('Please log in first to use Community Quiz.'); return; }
+    _qcModalPanelHistory = [];
+    showQcPanel('qcHome');
     document.getElementById('quizChallengeModal').classList.remove('hidden');
+    // Push a hash entry so the hardware/gesture back button can be caught
+    // and used to navigate panels within the modal.
+    history.pushState(null, '', window.location.pathname + '#mea-challenge');
     renderPendingChallenges();
+    checkForStartedChallenges().then(() => { renderPendingChallenges(); refreshChallengeBadgeState(); });
   }
-  window.openQuizChallenge = openQuizChallenge;
 
   function closeQuizChallenge() {
     clearInterval(_waitingRoomTimer);
     clearInterval(_waitingRoomCountdownTicker);
     document.getElementById('quizChallengeModal').classList.add('hidden');
+    _qcModalPanelHistory = [];
+    if (window.location.hash === '#mea-challenge') history.replaceState(null, '', window.location.pathname);
   }
 
-  function showQcPanel(id) {
-    ['qcCreate', 'qcSetup', 'qcCreated', 'qcWaiting', 'qcResults'].forEach(p => {
+  function showQcPanel(id, fromBack = false) {
+    if (!fromBack && id !== _qcCurrentPanel) {
+      if (id === 'qcHome') {
+        _qcModalPanelHistory = []; // Home is the root — nothing further back
+      } else {
+        _qcModalPanelHistory.push(_qcCurrentPanel);
+      }
+    }
+    _qcCurrentPanel = id;
+    _qcPanelOrder.forEach(p => {
       const el = document.getElementById(p);
       if (el) el.classList.toggle('hidden', p !== id);
     });
   }
 
+  // Instead of yanking the student straight into the quiz the moment a
+  // scheduled/ready challenge starts (jarring if they're doing something
+  // else), show a small dismissible notice with the choice to join now or
+  // later. "Later" leaves a badge on the Challenge button as a reminder.
+  function showChallengeStartedNotice(code, challenge, startedAt) {
+    let card = document.getElementById('meaStartedNotice');
+    if (card) card.remove();
+    playChallengeBeep();
+
+    card = document.createElement('div');
+    card.id = 'meaStartedNotice';
+    card.style.cssText = `
+      position:fixed; bottom:1.25rem; left:50%; transform:translateX(-50%);
+      background:#0a1628; border:1.5px solid var(--gold,#d4af37); border-radius:14px;
+      padding:1.1rem 1.25rem; max-width:340px; width:calc(100% - 2rem);
+      box-shadow:0 10px 40px rgba(0,0,0,.5); z-index:10001; font-family:var(--sans,sans-serif);
+      text-align:center;
+    `;
+    card.innerHTML = `
+      <button id="meaStartedClose" style="position:absolute; top:.6rem; right:.7rem; background:none; border:none;
+              color:rgba(255,255,255,.5); font-size:1.1rem; cursor:pointer; line-height:1;">✕</button>
+      <p style="margin:0 0 .7rem; color:#fff; font-size:.9rem; font-weight:600;">🎉 Your challenge has started!</p>
+      <button id="meaStartedNow" style="width:100%; padding:.65rem; border-radius:9px; border:none; margin-bottom:.6rem;
+              background:var(--gold,#d4af37); color:#0a1628; font-weight:700; font-size:.85rem;">Join Now</button>
+      <p style="margin:0 0 .4rem; color:rgba(255,255,255,.5); font-size:.72rem;">Or remind me again in:</p>
+      <div style="display:flex; gap:.4rem; margin-bottom:.6rem;">
+        <button class="mea-snooze-opt" data-min="5" style="flex:1; padding:.5rem; border-radius:8px; border:1px solid #26344a; background:transparent; color:#fff; font-size:.75rem;">5 min</button>
+        <button class="mea-snooze-opt" data-min="15" style="flex:1; padding:.5rem; border-radius:8px; border:1px solid #26344a; background:transparent; color:#fff; font-size:.75rem;">15 min</button>
+        <button class="mea-snooze-opt" data-min="30" style="flex:1; padding:.5rem; border-radius:8px; border:1px solid #26344a; background:transparent; color:#fff; font-size:.75rem;">30 min</button>
+      </div>
+      <button id="meaStartedDecline" style="width:100%; padding:.4rem; border-radius:8px; border:none;
+              background:transparent; color:rgba(255,255,255,.4); font-size:.72rem; text-decoration:underline; cursor:pointer;">Decline — I won't be joining this one</button>
+    `;
+    document.body.appendChild(card);
+
+    document.getElementById('meaStartedClose').addEventListener('click', () => {
+      card.remove();
+      const challenges = loadSafe(QC_STORE, {});
+      if (challenges[code]) { challenges[code].startedAt = startedAt; saveSafe(QC_STORE, challenges); }
+      setChallengeBadge(true);
+    });
+    document.getElementById('meaStartedDecline').addEventListener('click', async () => {
+      card.remove();
+      try {
+        await fetch(API_BASE + '/api/challenge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'remove_participant', code, student: S.currentUser }),
+        });
+      } catch (err) { /* still remove locally even if this fails */ }
+      const challenges = loadSafe(QC_STORE, {});
+      delete challenges[code];
+      saveSafe(QC_STORE, challenges);
+      refreshChallengeBadgeState();
+      renderPendingChallenges();
+    });
+    document.getElementById('meaStartedNow').addEventListener('click', () => {
+      card.remove();
+      document.getElementById('quizChallengeModal')?.classList.add('hidden');
+      startChallengeAttempt(challenge, startedAt);
+    });
+    card.querySelectorAll('.mea-snooze-opt').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const minutes = parseInt(btn.dataset.min, 10);
+        card.remove();
+        const challenges = loadSafe(QC_STORE, {});
+        if (challenges[code]) { challenges[code].startedAt = startedAt; saveSafe(QC_STORE, challenges); }
+        setChallengeBadge(true);
+        // Re-show the notice after the snooze period, unless the student
+        // has since joined or the challenge ended in the meantime.
+        setTimeout(() => {
+          const latest = loadSafe(QC_STORE, {})[code];
+          if (latest && !latest.ended && !(latest.scores && latest.scores[S.currentUser])) {
+            showChallengeStartedNotice(code, challenge, startedAt);
+          }
+        }, minutes * 60000);
+      });
+    });
+  }
+
+  function playChallengeBeep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine'; osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      osc.start(); osc.stop(ctx.currentTime + 0.35);
+    } catch (err) { /* audio not available — badge/card still show visually */ }
+  }
+
+  function setChallengeBadge(show) {
+    document.getElementById('qcChallengeBadge')?.classList.toggle('hidden', !show);
+  }
+
+  // Checked on login and whenever the Challenge modal opens — quietly (no
+  // interrupting popup) flags the button if something the student owns or
+  // joined has started without them actively watching for it.
+  // Shows a one-time-per-day reminder toast for a scheduled challenge
+  // that's coming up within the next 2 days.
+  const MEA_REMINDED_STORE = 'mea-challenge-reminded-v1';
+  function checkScheduledChallengeReminders() {
+    if (!S.currentUser) return;
+    const all = loadSafe(QC_STORE, {});
+    const reminded = loadSafe(MEA_REMINDED_STORE, {});
+    const todayKey = new Date().toDateString();
+    const mine = Object.values(all).filter(c =>
+      c.creator === S.currentUser && c.syncMode === 'scheduled'
+      && c.scheduledStartAt && !c.startedAt && !c.ended
+    );
+    for (const c of mine) {
+      if (reminded[c.code] === todayKey) continue;
+      const daysUntil = Math.ceil((c.scheduledStartAt - Date.now()) / 86400000);
+      if (daysUntil < 0 || daysUntil > 2) continue;
+      const when = daysUntil === 0 ? 'today' : daysUntil === 1 ? 'in 1 day' : 'in 2 days';
+      showInfoToast(`📅 You have a scheduled challenge (${c.code}) starting ${when}.`);
+      reminded[c.code] = todayKey;
+      saveSafe(MEA_REMINDED_STORE, reminded);
+      break;
+    }
+  }
+
+  async function checkForStartedChallenges() {
+    if (!S.currentUser) return;
+    const inQuiz = document.getElementById('quizScreen')?.classList.contains('active');
+
+    const all = loadSafe(QC_STORE, {});
+    const candidates = Object.values(all).filter(c =>
+      c.syncMode && c.syncMode !== 'anytime' && !c.ended && !c.startedAt
+      && (c.creator === S.currentUser || c.joinedAsParticipant)
+    );
+    if (!candidates.length) return;
+
+    const justStarted = [];
+    for (const c of candidates) {
+      try {
+        const res = await fetch(API_BASE + '/api/challenge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'status', code: c.code }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok && data.startedAt) {
+          all[c.code].startedAt = data.startedAt;
+          justStarted.push({ code: c.code, challenge: all[c.code], startedAt: data.startedAt });
+        }
+      } catch (err) { /* skip — try again next time */ }
+    }
+    if (!justStarted.length) return;
+
+    saveSafe(QC_STORE, all);
+    setChallengeBadge(true);
+    playChallengeBeep();
+
+    if (inQuiz) return; // badge is set — they'll see it once they finish
+
+    if (justStarted.length === 1) {
+      showChallengeStartedNotice(justStarted[0].code, justStarted[0].challenge, justStarted[0].startedAt);
+    } else {
+      showMultipleChallengesStartedNotice(justStarted);
+    }
+  }
+
+  function showMultipleChallengesStartedNotice(startedList) {
+    let card = document.getElementById('meaStartedNotice');
+    if (card) card.remove();
+    playChallengeBeep();
+
+    card = document.createElement('div');
+    card.id = 'meaStartedNotice';
+    card.style.cssText = `
+      position:fixed; bottom:1.25rem; left:50%; transform:translateX(-50%);
+      background:#0a1628; border:1.5px solid var(--gold,#d4af37); border-radius:14px;
+      padding:1.1rem 1.25rem; max-width:340px; width:calc(100% - 2rem);
+      box-shadow:0 10px 40px rgba(0,0,0,.5); z-index:10001; font-family:var(--sans,sans-serif);
+      text-align:center;
+    `;
+    const rows = startedList.map(({code, challenge}) => {
+      const endTxt = challenge.time > 0
+        ? ' · ends ' + new Date(challenge.startedAt + challenge.time * 60000).toLocaleTimeString(undefined, { hour:'numeric', minute:'2-digit' })
+        : '';
+      return `
+        <div class="qc-pending-row" style="text-align:left; margin-bottom:.5rem;">
+          <div class="qc-pending-info">
+            <div class="qc-pending-code">${safe(code)}</div>
+            <div class="qc-pending-sub">${safe(challenge.subject||'')}${endTxt}</div>
+          </div>
+          <button class="qc-pending-btn" data-code="${safe(code)}">Join</button>
+        </div>
+      `;
+    }).join('');
+    card.innerHTML = `
+      <button id="meaStartedClose" style="position:absolute; top:.6rem; right:.7rem; background:none; border:none;
+              color:rgba(255,255,255,.5); font-size:1.1rem; cursor:pointer; line-height:1;">✕</button>
+      <p style="margin:0 0 .7rem; color:#fff; font-size:.9rem; font-weight:600;">🎉 ${startedList.length} challenges have started!</p>
+      <p style="margin:0 0 .7rem; color:rgba(255,255,255,.55); font-size:.75rem;">Pick one to join now — the rest stay in your challenge list.</p>
+      ${rows}
+    `;
+    document.body.appendChild(card);
+
+    document.getElementById('meaStartedClose').addEventListener('click', () => card.remove());
+    card.querySelectorAll('.qc-pending-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const code = btn.dataset.code;
+        const picked = startedList.find(s => s.code === code);
+        card.remove();
+        if (picked) startChallengeAttempt(picked.challenge, picked.startedAt);
+      });
+    });
+  }
+
   function generateChallengeCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = 'MSA-';
+    let code = 'MEA-';
     for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
     return code;
   }
 
-  function getMyPendingChallenges() {
+  function getMyChallenges() {
     const all = loadSafe(QC_STORE, {});
     return Object.values(all)
-      .filter(c => c.creator === S.currentUser && !c.ended)
-      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      .filter(c => c.creator === S.currentUser)
+      .sort((a, b) => (b.createdAt||0) - (a.createdAt||0));
+  }
+
+  function getJoinedChallenges() {
+    const all = loadSafe(QC_STORE, {});
+    return Object.values(all)
+      .filter(c => c.joinedAsParticipant && c.creator !== S.currentUser)
+      .sort((a, b) => (b.createdAt||0) - (a.createdAt||0));
   }
 
   function renderPendingChallenges() {
     const wrap = document.getElementById('qcPendingWrap');
     const list = document.getElementById('qcPendingList');
     const countEl = document.getElementById('qcPendingCount');
-    const mine = getMyPendingChallenges();
-    countEl.textContent = mine.length;
-    wrap.classList.toggle('hidden', mine.length === 0);
+    if (!wrap || !list) return;
 
-    list.innerHTML = mine.map(c => {
-      const statusLabel = c.syncMode === 'scheduled' ? '📅 Scheduled'
-        : c.syncMode === 'ready' && !c.startedAt ? '⏱ Waiting room'
-        : '▶ In progress';
-      return `<div class="pending-challenge-row">
-        <div>
-          <div style="font-weight:700;">${safe(c.code)}</div>
-          <div style="color:var(--text-dim); font-size:.75rem;">${safe(SUBJECT_LABELS[c.subject] || c.subject)} · ${statusLabel}</div>
+    const mine   = getMyChallenges().slice(0, MAX_PENDING_CHALLENGES);
+    const joined = getJoinedChallenges().slice(0, MAX_PENDING_CHALLENGES);
+    countEl && (countEl.textContent = mine.length);
+    const maxEl = document.getElementById('qcPendingMax');
+    if (maxEl) maxEl.textContent = MAX_PENDING_CHALLENGES;
+    wrap.classList.toggle('hidden', mine.length === 0 && joined.length === 0);
+
+    const renderRow = (c, isOwner) => {
+      const completed = !!(c.scores && c.scores[S.currentUser]);
+      const isDone = c.ended || completed;
+      let statusLabel;
+      if (c.ended)      statusLabel = '⏹ Ended';
+      else if (completed) statusLabel = '✅ Completed';
+      else if (c.syncMode === 'scheduled' && !c.startedAt) {
+        const when = c.scheduledStartAt
+          ? new Date(c.scheduledStartAt).toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })
+          : '';
+        statusLabel = '📅 Scheduled' + (when ? ' for ' + when : '');
+      }
+      else if (c.syncMode === 'ready' && !c.startedAt)     statusLabel = '⏱ Waiting room';
+      else if (c.startedAt && c.syncMode && c.syncMode !== 'anytime') {
+        const endTxt = c.time > 0
+          ? ' · ends ' + new Date(c.startedAt + c.time * 60000).toLocaleTimeString(undefined, { hour:'numeric', minute:'2-digit' })
+          : '';
+        statusLabel = '▶ Ongoing' + endTxt;
+      } else statusLabel = '▶ Not yet taken';
+
+      const actionBtn = isDone
+        ? `<button class="qc-pending-btn" data-code="${safe(c.code)}" data-action="results">View Results</button>`
+        : `<button class="qc-pending-btn" data-code="${safe(c.code)}" data-action="continue">Continue</button>`;
+      const deleteBtn = isOwner
+        ? `<button class="qc-pending-delete" data-code="${safe(c.code)}" data-action="delete">Delete</button>`
+        : '';
+
+      return `
+        <div class="qc-pending-row">
+          <div class="qc-pending-info">
+            <div class="qc-pending-code">${safe(c.code)}${isOwner ? '' : ' <span class="qc-pending-tag">Joined</span>'}</div>
+            <div class="qc-pending-sub">${safe(c.subject||'')} · ${statusLabel}</div>
+          </div>
+          ${actionBtn}
+          ${deleteBtn}
         </div>
-        <div style="display:flex; gap:.5rem;">
-          <button data-code="${safe(c.code)}" data-action="continue">Continue</button>
-          <button data-code="${safe(c.code)}" data-action="delete" style="color:var(--red);">Delete</button>
-        </div>
-      </div>`;
-    }).join('');
+      `;
+    };
+
+    list.innerHTML = mine.map(c => renderRow(c, true)).join('')
+      + joined.map(c => renderRow(c, false)).join('');
 
     list.querySelectorAll('[data-action="continue"]').forEach(btn => {
       btn.addEventListener('click', () => continueChallenge(btn.dataset.code));
     });
+    list.querySelectorAll('[data-action="results"]').forEach(btn => {
+      btn.addEventListener('click', () => viewChallengeResults(btn.dataset.code));
+    });
     list.querySelectorAll('[data-action="delete"]').forEach(btn => {
       btn.addEventListener('click', () => deleteChallenge(btn.dataset.code));
     });
+  }
+
+  async function viewChallengeResults(code) {
+    const local = loadSafe(QC_STORE, {})[code];
+    if (local && local.scores) showChallengeLeaderboard(code, local.scores);
+    try {
+      const res = await fetch(API_BASE + '/api/challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'leaderboard', code }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) showChallengeLeaderboard(code, data.scores);
+    } catch (err) { /* local scores already shown as a fallback */ }
   }
 
   function continueChallenge(code) {
@@ -4793,117 +2803,143 @@
     const challenge = challenges[code];
     if (!challenge) return;
     window._currentChallengeCode = code;
+    const isOwner = challenge.creator === S.currentUser;
     if (challenge.syncMode && challenge.syncMode !== 'anytime' && !challenge.startedAt) {
       _pendingChallenge = challenge;
-      openWaitingRoom(code, true);
+      openWaitingRoom(code, isOwner);
+    } else if (challenge.syncMode && challenge.syncMode !== 'anytime' && challenge.startedAt) {
+      showChallengeStartedNotice(code, challenge, challenge.startedAt);
     } else {
       document.getElementById('qcCodeDisplay').textContent = code;
-      showQcPanel('qcCreated');
+      showQcPanel('qcShare');
     }
   }
 
-  async function deleteChallenge(code) {
-    if (!confirm(`Delete challenge ${code}? Anyone with the code will no longer be able to join.`)) return;
-    const challenges = loadSafe(QC_STORE, {});
-    const hostSecret = challenges[code] && challenges[code].hostSecret;
+  async function deleteChallenge(code, silent = false) {
+    if (!silent) {
+      const ok = await showConfirmModal(`Delete challenge ${code}? Anyone with the code will no longer be able to join.`, 'Delete', 'Cancel');
+      if (!ok) return;
+    }
     try {
       await fetch(API_BASE + '/api/challenge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'end_challenge', code, hostSecret }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'end_challenge', code }),
       });
-    } catch (err) {}
+    } catch (err) { /* still remove locally even if the network call fails */ }
+    const challenges = loadSafe(QC_STORE, {});
     if (challenges[code]) { challenges[code].ended = true; saveSafe(QC_STORE, challenges); }
     renderPendingChallenges();
+    refreshChallengeBadgeState();
+  }
+
+  const RECENT_QS_STORE = 'mea-challenge-recent-qs-v1';
+  const RECENT_QS_CAP = 80; // roughly several challenges' worth of history
+
+  // Picks `count` questions from `pool`, preferring ones this student hasn't
+  // used in their recent challenges — so repeated challenges with the same
+  // friends don't keep surfacing the same questions. Falls back to allowing
+  // repeats (oldest-used first) only if the pool genuinely isn't big enough
+  // to avoid it.
+  function pickChallengeQuestions(pool, count) {
+    if (!pool.length) return [];
+    const recentIds = loadSafe(RECENT_QS_STORE, []);
+    const recentSet = new Set(recentIds);
+    const fresh = shuffle(pool.filter(q => q.id && !recentSet.has(q.id)));
+    const stale = pool.filter(q => q.id && recentSet.has(q.id))
+      .sort((a, b) => recentIds.indexOf(a.id) - recentIds.indexOf(b.id)); // oldest-used first
+
+    const selected = fresh.slice(0, count);
+    if (selected.length < count) {
+      selected.push(...stale.slice(0, count - selected.length));
+    }
+
+    // Remember these as recently used (most-recent at the end), capped.
+    const usedIds = selected.map(q => q.id).filter(Boolean);
+    const updated = [...recentIds.filter(id => !usedIds.includes(id)), ...usedIds].slice(-RECENT_QS_CAP);
+    saveSafe(RECENT_QS_STORE, updated);
+
+    return selected;
   }
 
   async function generateChallenge() {
-    if (getMyPendingChallenges().length >= MAX_PENDING_CHALLENGES) {
-      showToast(`You can have up to ${MAX_PENDING_CHALLENGES} active challenges at a time — delete one first.`);
-      return;
+    // Keep at most MAX_PENDING_CHALLENGES total — auto-retire the oldest
+    // one rather than blocking creation. Since we're building this on a
+    // free-tier backend, there's no real reason to make someone manually
+    // clean up before they can make a new challenge.
+    const mine = getMyChallenges();
+    if (mine.length >= MAX_PENDING_CHALLENGES) {
+      const oldest = mine[mine.length - 1];
+      await deleteChallenge(oldest.code, true); // silent — no confirm prompt for auto-eviction
     }
 
-    const subject = document.getElementById('qcSubject').value;
-    const count = parseInt(document.getElementById('qcCount').value, 10);
-    const time = parseInt(document.getElementById('qcTime').value, 10);
-    const syncMode = document.getElementById('qcSyncMode').value;
+    const subjectBoxes = [...document.querySelectorAll('#qcSubjects input:checked')].map(i => i.value);
+    if (!subjectBoxes.length) { showInfoToast('Pick at least one subject.'); return; }
+    const examBoard = document.getElementById('qcExamBoard')?.value || '';
+    const yearRange = document.getElementById('qcYearRange')?.value || '';
+    const count   = parseInt(document.getElementById('qcCount').value);
+    const time    = parseInt(document.getElementById('qcTime').value);
+    const syncMode = document.querySelector('input[name="qcSyncMode"]:checked')?.value || 'anytime';
     let scheduledStartAt = null;
     if (syncMode === 'scheduled') {
-      const raw = document.getElementById('qcScheduleAt').value;
-      if (!raw) { showToast('Pick a date and time for the challenge to start.'); return; }
+      const raw = document.getElementById('qcScheduledTime')?.value;
+      if (!raw) { showInfoToast('Pick a date and time for the challenge to start.'); return; }
       scheduledStartAt = new Date(raw).getTime();
       if (!Number.isFinite(scheduledStartAt) || scheduledStartAt <= Date.now()) {
-        showToast('Pick a start time in the future.'); return;
+        showInfoToast('Pick a start time in the future.');
+        return;
       }
     }
 
-    const bank = getBank(S.category)[subject];
-    if (!bank) return;
-    const pool = bank.objective.slice();
-
-    const useAiBoost = document.getElementById('qcAiBoost').checked;
-    if (useAiBoost && !hasAICredit()) {
-      showAIPaywall();
-      return;
-    }
-    const { questions: staticQuestions } = pickQuestions(S.category, subject, pool, count);
-    let questions = staticQuestions;
-
-    const genBtn = document.getElementById('qcGenerateBtn');
-
-    if (useAiBoost) {
-      genBtn.disabled = true; genBtn.textContent = 'Generating fresh questions…';
-      try {
-        // Fill however many slots the static pool couldn't cover fresh,
-        // or top up with a handful of extra fresh ones if the pool was full.
-        const shortfall = Math.max(count - staticQuestions.length, Math.min(count, 5));
-        const aiRes = await fetch(API_BASE + '/api/generate-questions', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            category: S.category,
-            subject: SUBJECT_LABELS[subject] || subject,
-            count: shortfall,
-            avoidQuestions: pool.map(q => q.question).slice(0, 60),
-          }),
-        });
-        const aiData = await aiRes.json().catch(() => ({}));
-        if (aiRes.ok && aiData.ok && aiData.questions.length) {
-          consumeAICredit();
-          // Replace recycled/seen static questions first with AI ones, keep unseen static.
-          const combined = shuffleArray(staticQuestions.concat(aiData.questions));
-          questions = combined.slice(0, count);
-          const left = getAICredits().credits;
-          showToast(`✨ AI Boost added ${aiData.questions.length} fresh questions — 1 credit used (${left} left)`, 3200);
-        } else {
-          showToast('Could not generate AI questions right now — using the question bank instead.');
-        }
-      } catch (err) {
-        showToast('Could not generate AI questions right now — using the question bank instead.');
+    // Split the requested count evenly across subjects, but keep each
+    // subject's questions grouped together (not interleaved) so students
+    // can switch between subjects the same way they do in a normal exam.
+    const perSubject = Math.max(1, Math.floor(count / subjectBoxes.length));
+    let pool = [];
+    const subjectRanges = {};
+    let offset = 0;
+    for (const subject of subjectBoxes) {
+      const bank = EXAM_BANK[subject];
+      if (!bank) continue;
+      let sourcePool = bank.objective || [];
+      if (examBoard) sourcePool = sourcePool.filter(q => q.exam === examBoard);
+      if (yearRange) {
+        const [from, to] = yearRange.split('-').map(Number);
+        sourcePool = sourcePool.filter(q => q.year >= from && q.year <= to);
       }
+      const picked = pickChallengeQuestions(sourcePool, perSubject).map(q => ({ ...q, sourceSubject: subject }));
+      if (!picked.length) continue;
+      subjectRanges[subject] = { start: offset, end: offset + picked.length - 1 };
+      offset += picked.length;
+      pool = pool.concat(picked);
     }
+    if (!pool.length) { showInfoToast('Not enough questions match those filters — try widening the exam board or year range.'); return; }
 
-    if (!questions.length) { showToast('Not enough questions for this subject.'); return; }
-
+    const subjectLabel = subjectBoxes.map(s => SUBJECTS[s]?.name || s).join(' + ');
     const code = generateChallengeCode();
-    genBtn.disabled = true; genBtn.textContent = 'Creating…';
+    const genBtn = document.getElementById('qcGenerateBtn');
+    if (genBtn) { genBtn.disabled = true; genBtn.textContent = 'Creating…'; }
 
     try {
       const res = await fetch(API_BASE + '/api/challenge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'create', code, subject, count, time,
-          questions, creator: S.currentUser, syncMode, scheduledStartAt,
+          action: 'create', code, subject: subjectLabel, subjects: subjectBoxes, subjectRanges,
+          count: pool.length, time, questions: pool, creator: S.currentUser, syncMode, scheduledStartAt,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || 'Could not create challenge');
 
+      // Also keep a local copy so the creator's own attempt works instantly.
       const challenges = loadSafe(QC_STORE, {});
       const challengeObj = {
-        code, subject, count, time,
-        questionData: questions,
+        code, subject: subjectLabel, subjects: subjectBoxes, subjectRanges, count: pool.length, time,
+        questions: pool.map(q => q.id || pool.indexOf(q)),
+        questionData: pool,
         expires: Date.now() + 24 * 60 * 60 * 1000,
         creator: S.currentUser,
-        hostSecret: data.hostSecret,
         syncMode, scheduledStartAt,
         startedAt: syncMode === 'anytime' ? Date.now() : null,
         createdAt: Date.now(), ended: false,
@@ -4919,43 +2955,48 @@
         _pendingChallenge = challengeObj;
         openWaitingRoom(code, true);
       } else {
-        showQcPanel('qcCreated');
+        showQcPanel('qcShare');
       }
     } catch (err) {
-      showToast('Could not create challenge — check your connection and try again.');
+      showInfoToast('Could not create challenge — check your connection and try again.');
     } finally {
-      genBtn.disabled = false; genBtn.textContent = 'Generate Challenge Code →';
+      if (genBtn) { genBtn.disabled = false; genBtn.textContent = 'Generate Code →'; }
     }
   }
 
   function shareChallengeLink() {
     const code = window._currentChallengeCode;
     if (!code) return;
-    const url = window.location.origin + window.location.pathname + '?challenge=' + code;
-    const subj = document.getElementById('qcSubject')?.value || '';
-    const text = `🏆 I challenge you! Take this ${SUBJECT_LABELS[subj] || subj} quiz on My Study App.\n\nCode: ${code}\nLink: ${url}`;
+    const url  = window.location.origin + window.location.pathname + '?challenge=' + code;
+    const subj = loadSafe(QC_STORE, {})[code]?.subject || '';
+    const text = `🏆 I challenge you! Take this ${subj} quiz on My Exams App.\n\nCode: ${code}\nLink: ${url}`;
     if (navigator.share) {
-      navigator.share({ title: 'My Study App Challenge', text, url }).catch(() => {});
+      navigator.share({ title: 'My Exams App Challenge', text, url }).catch(() => {});
     } else {
-      navigator.clipboard?.writeText(text).then(() => showToast('Challenge link copied!')).catch(() => showToast('Link: ' + url));
+      navigator.clipboard?.writeText(text).then(() => alert('Challenge link copied!')).catch(() => alert('Link: ' + url));
     }
   }
 
   async function joinChallenge() {
     const code = (document.getElementById('qcJoinCode').value || '').trim().toUpperCase();
     if (!code) return;
+
     const joinBtn = document.getElementById('qcJoinConfirm');
-    joinBtn.disabled = true; joinBtn.textContent = 'Joining…';
+    if (joinBtn) { joinBtn.disabled = true; joinBtn.textContent = 'Joining…'; }
 
     try {
+      // Local first (covers the creator's own device instantly), then the
+      // shared backend for anyone joining from a different device.
       const local = loadSafe(QC_STORE, {})[code];
       if (local) {
-        if (local.ended) { showToast('This challenge has ended.'); return; }
-        if (Date.now() > local.expires) { showToast('This challenge has expired (challenges last 24 hours).'); return; }
+        if (local.ended) { showInfoToast('This challenge has ended.'); return; }
+        if (Date.now() > local.expires) { showInfoToast('This challenge has expired (challenges last 24 hours).'); return; }
         window._currentChallengeCode = code;
         if (local.syncMode && local.syncMode !== 'anytime' && !local.startedAt) {
           _pendingChallenge = local;
           openWaitingRoom(code, local.creator === S.currentUser);
+        } else if (local.syncMode && local.syncMode !== 'anytime' && local.startedAt) {
+          showChallengeStartedNotice(code, local, local.startedAt);
         } else {
           startChallengeAttempt(local);
         }
@@ -4963,86 +3004,119 @@
       }
 
       const res = await fetch(API_BASE + '/api/challenge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'join', code, student: S.currentUser }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) {
         if (res.status === 409 && data.alreadyCompleted) {
-          showToast("You've already completed this challenge — check the leaderboard for your result.");
+          showInfoToast("You've already completed this challenge — check the leaderboard for your result.");
           const lbRes = await fetch(API_BASE + '/api/challenge', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'leaderboard', code }),
           });
           const lbData = await lbRes.json().catch(() => ({}));
           if (lbRes.ok && lbData.ok) showChallengeLeaderboard(code, lbData.scores);
           return;
         }
-        showToast(res.status === 410 ? 'This challenge has ended.'
+        showInfoToast(res.status === 410 ? 'This challenge has ended.'
           : data.error === 'Challenge not found or expired'
           ? 'Challenge not found. Check the code and try again.'
           : 'Could not join challenge — check your connection and try again.');
         return;
       }
+      // Backend challenge shape uses `questions`; local shape expects
+      // `questionData` — normalize so startChallengeAttempt works either way.
       const challenge = { ...data.challenge, questionData: data.challenge.questions };
       window._currentChallengeCode = code;
+      // Persist locally so this device has its own record of challenges it
+      // joined, not just ones it created.
+      {
+        const challenges = loadSafe(QC_STORE, {});
+        challenges[code] = { ...challenge, joinedAsParticipant: true };
+        saveSafe(QC_STORE, challenges);
+      }
       if (challenge.syncMode && challenge.syncMode !== 'anytime' && !challenge.startedAt) {
         _pendingChallenge = challenge;
         openWaitingRoom(code, challenge.creator === S.currentUser);
+      } else if (challenge.syncMode && challenge.syncMode !== 'anytime' && challenge.startedAt) {
+        showChallengeStartedNotice(code, challenge, challenge.startedAt);
       } else {
         startChallengeAttempt(challenge);
       }
     } finally {
-      joinBtn.disabled = false; joinBtn.textContent = 'Join';
+      if (joinBtn) { joinBtn.disabled = false; joinBtn.textContent = 'Join →'; }
     }
   }
 
   function startOwnAttempt() {
     const code = window._currentChallengeCode;
     if (!code) return;
-    const challenge = loadSafe(QC_STORE, {})[code];
+    const challenges = loadSafe(QC_STORE, {});
+    const challenge  = challenges[code];
     if (!challenge) return;
     startChallengeAttempt(challenge);
   }
 
   function openWaitingRoom(code, isCreator) {
     _isWaitingRoomCreator = isCreator;
-    document.getElementById('qcForceStartBtn').classList.toggle('hidden', !isCreator);
-    document.getElementById('qcEndChallengeBtn').classList.toggle('hidden', !isCreator);
-    const readyBtn = document.getElementById('qcMarkReadyBtn');
-    readyBtn.classList.remove('hidden');
-    readyBtn.disabled = false; readyBtn.textContent = "I'm Ready";
-    showQcPanel('qcWaiting');
+    document.getElementById('qcWaitingCodeDisplay').textContent = code;
+    document.getElementById('qcForceStartBtn')?.classList.toggle('hidden', !isCreator);
+    document.getElementById('qcEndChallengeBtn')?.classList.toggle('hidden', !isCreator);
+    const readyBtn = document.getElementById('qcReadyBtn');
+    if (readyBtn) { readyBtn.disabled = false; readyBtn.textContent = "✅ I'm Ready"; }
+    showQcPanel('qcWaitingRoom');
     document.getElementById('quizChallengeModal').classList.remove('hidden');
     pollWaitingRoom(code);
   }
 
   function renderWaitingList(participants) {
     const list = document.getElementById('qcWaitingList');
+    if (!list) return;
     const entries = Object.entries(participants || {});
-    list.innerHTML = entries.map(([name, p]) => {
-      const av = avatarFor(name);
-      return `
-      <div class="duel-participant ${p.ready ? 'ready' : ''}">
-        <div class="duel-avatar" style="background:${av.color};">${av.initials}</div>
-        <span class="duel-participant-name">${safe(name)}${name === S.currentUser ? ' (you)' : ''}</span>
-        <span class="duel-status-chip">${p.ready ? '✓ Ready' : 'Waiting…'}</span>
-      </div>`;
-    }).join('') || '<p class="sheet-sub">Waiting for people to join…</p>';
+    list.innerHTML = entries.map(([name, p]) => `
+      <div class="qc-score-row">
+        <span class="qc-rank">${p.ready ? '✅' : '⏳'}</span>
+        <span class="qc-score-name">${safe(name)}${name === S.currentUser ? ' (you)' : ''}</span>
+        <span class="qc-score-val">${p.ready ? 'Ready' : 'Waiting'}</span>
+        ${_isWaitingRoomCreator && name !== S.currentUser
+          ? `<button class="qc-pending-delete" data-name="${safe(name)}" style="margin-left:.4rem">Remove</button>` : ''}
+      </div>
+    `).join('') || '<p class="qc-sub">Waiting for people to join…</p>';
+
+    list.querySelectorAll('button[data-name]').forEach(btn => {
+      btn.addEventListener('click', () => removeParticipant(btn.dataset.name));
+    });
   }
 
   function updateCountdownDisplay(msRemaining) {
-    // Reserved for future inline countdown display in the waiting room.
+    const el2 = document.getElementById('qcWaitingCountdown');
+    if (!el2) return;
+    if (msRemaining == null || msRemaining <= 0) { el2.classList.add('hidden'); return; }
+    const totalSec = Math.ceil(msRemaining / 1000);
+    const m = Math.floor(totalSec / 60), s = totalSec % 60;
+    el2.textContent = `Auto-starts in ${m}:${String(s).padStart(2,'0')}`;
+    el2.classList.remove('hidden');
   }
 
   async function pollWaitingRoom(code) {
     clearInterval(_waitingRoomTimer);
     clearInterval(_waitingRoomCountdownTicker);
+    let localFirstReadyAt = null;
+    let localScheduledAt = null;
+
+    _waitingRoomCountdownTicker = setInterval(() => {
+      if (localScheduledAt) updateCountdownDisplay(localScheduledAt - Date.now());
+      else if (localFirstReadyAt) updateCountdownDisplay((localFirstReadyAt + WAITING_ROOM_TIMEOUT_MS) - Date.now());
+    }, 1000);
 
     const tick = async () => {
       try {
         const res = await fetch(API_BASE + '/api/challenge', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'status', code }),
         });
         const data = await res.json().catch(() => ({}));
@@ -5050,31 +3124,35 @@
 
         if (data.ended) {
           clearInterval(_waitingRoomTimer);
+          clearInterval(_waitingRoomCountdownTicker);
           document.getElementById('qcWaitingStatus').textContent = 'This challenge has ended.';
-          document.getElementById('qcMarkReadyBtn').classList.add('hidden');
-          document.getElementById('qcForceStartBtn').classList.add('hidden');
+          document.getElementById('qcReadyBtn')?.classList.add('hidden');
+          document.getElementById('qcForceStartBtn')?.classList.add('hidden');
           return;
         }
 
         renderWaitingList(data.participants);
-        if (data.scheduledStartAt) {
+        localFirstReadyAt = data.firstReadyAt || null;
+        localScheduledAt  = data.scheduledStartAt || null;
+        if (localScheduledAt) {
           document.getElementById('qcWaitingStatus').textContent = 'Challenge starts automatically at the scheduled time.';
         }
 
         if (data.startedAt) {
           clearInterval(_waitingRoomTimer);
-          document.getElementById('quizChallengeModal').classList.add('hidden');
-          startChallengeAttempt(_pendingChallenge, data.startedAt);
+          clearInterval(_waitingRoomCountdownTicker);
+          showChallengeStartedNotice(code, _pendingChallenge, data.startedAt);
           return;
         }
 
         if (data.firstReadyAt && (Date.now() - data.firstReadyAt) > WAITING_ROOM_TIMEOUT_MS) {
           await fetch(API_BASE + '/api/challenge', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'force_start', code }),
           });
         }
-      } catch (err) {}
+      } catch (err) { /* try again next tick */ }
     };
 
     tick();
@@ -5084,581 +3162,1318 @@
   async function markReady() {
     const code = window._currentChallengeCode;
     if (!code) return;
-    const btn = document.getElementById('qcMarkReadyBtn');
-    btn.disabled = true; btn.textContent = 'Waiting for others…';
+    const btn = document.getElementById('qcReadyBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '✅ Waiting for others…'; }
     try {
       await fetch(API_BASE + '/api/challenge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'mark_ready', code, student: S.currentUser }),
       });
     } catch (err) {
-      showToast('Could not mark ready — check your connection.');
-      btn.disabled = false; btn.textContent = "I'm Ready";
+      showInfoToast('Could not mark ready — check your connection.');
+      if (btn) { btn.disabled = false; btn.textContent = "✅ I'm Ready"; }
     }
   }
 
   async function forceStartChallenge() {
     const code = window._currentChallengeCode;
     if (!code) return;
-    const challenges = loadSafe(QC_STORE, {});
-    const hostSecret = challenges[code] && challenges[code].hostSecret;
     try {
       await fetch(API_BASE + '/api/challenge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'force_start', code, hostSecret }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'force_start', code }),
       });
     } catch (err) {
-      showToast('Could not start — check your connection.');
+      showInfoToast('Could not start — check your connection.');
+    }
+  }
+
+  async function removeParticipant(name) {
+    const code = window._currentChallengeCode;
+    if (!code) return;
+    try {
+      await fetch(API_BASE + '/api/challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove_participant', code, student: name }),
+      });
+    } catch (err) {
+      showInfoToast('Could not remove participant — check your connection.');
     }
   }
 
   async function endChallengeFromWaitingRoom() {
     const code = window._currentChallengeCode;
     if (!code) return;
-    if (!confirm('End this challenge for everyone? Nobody will be able to join or continue it.')) return;
+    const ok = await showConfirmModal('End this challenge for everyone? Nobody will be able to join or continue it.', 'End Challenge', 'Cancel');
+    if (!ok) return;
     await deleteChallenge(code);
     clearInterval(_waitingRoomTimer);
+    clearInterval(_waitingRoomCountdownTicker);
     document.getElementById('quizChallengeModal').classList.add('hidden');
   }
 
   function startChallengeAttempt(challenge, startedAtOverride) {
+    // A challenge is a one-shot comparison, not a retakeable practice set —
+    // if this student already has a recorded score, show results instead.
     if (challenge.scores && challenge.scores[S.currentUser]) {
-      showToast("You've already completed this challenge — check the leaderboard for your result.");
+      showInfoToast("You've already completed this challenge — check the leaderboard for your result.");
       showChallengeLeaderboard(challenge.code, challenge.scores);
       return;
     }
 
     closeQuizChallenge();
 
-    S.subject = challenge.subject;
-    S.mode = 'challenge';
-    S.questions = challenge.questionData;
-    S.answers = new Array(S.questions.length).fill(null);
-    S.idx = 0;
+    // Questions come directly from challenge.questionData (already fetched
+    // at creation/join time) — no need to re-look-up EXAM_BANK[subject]
+    // here, which matters now that a multi-subject challenge's `subject`
+    // is a combined label like "Mathematics + Physics" that wouldn't match
+    // any single EXAM_BANK key anyway.
+    S.subject    = challenge.subject;
+    S.subjects   = challenge.subjects || [challenge.subject];
+    S.subjectRanges = challenge.subjectRanges || {};
+    S.exam       = 'WAEC';
+    S.mode       = 'exam';
+    S.type       = 'objective';
+    S.count      = challenge.questionData.length;
+    S.questions  = challenge.questionData.map(q => ({...q, _type:'objective'}));
+    S.answers    = new Array(S.questions.length).fill(null);
+    S.flagged    = new Array(S.questions.length).fill(false);
+    S.qTimings   = new Array(S.questions.length).fill(null);
+    S.idx        = 0;
+    S.reviewMode = false;
+    S.showAnswer = false;
+    S.inSession  = true;
+
+    E.sbStudent.textContent = S.currentUser;
+    E.sbSubject.textContent = S.subjects.length > 1 ? S.subject : (SUBJECTS[S.subject]?.name || S.subject);
+    E.sbMode.textContent    = 'Challenge';
+    E.sbExam.textContent    = S.exam;
+
+    // Subject switcher — only for multi-subject challenges.
+    const isMulti = S.subjects.length > 1;
+    if (E.subjectSwitcher) E.subjectSwitcher.classList.toggle('hidden', !isMulti);
+    if (isMulti) buildSubjectSwitcher();
+
+    // Store challenge context so results can save score
     S._challengeCode = challenge.code;
 
-    document.getElementById('quizTitle').textContent = (SUBJECT_LABELS[challenge.subject] || challenge.subject) + ' · Challenge';
-
+    // Timer: for a challenge with a shared clock (ready/scheduled modes), a
+    // late joiner resumes the already-ticking timer rather than getting a
+    // fresh one.
     const startedAt = startedAtOverride || challenge.startedAt || Date.now();
+    if (S.timerId) { clearInterval(S.timerId); S.timerId = null; }
     if (challenge.time > 0) {
       const elapsedSec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
-      const remaining = Math.max(0, challenge.time * 60 - elapsedSec);
-      startTimer(remaining);
+      S.timerSecs = Math.max(0, challenge.time * 60 - elapsedSec);
+      if (E.timerCard) E.timerCard.style.display = 'block';
+      if (E.qhMobileTimer) E.qhMobileTimer.classList.remove('hidden');
+      runTimer();
     } else {
-      stopTimer(true);
+      S.timerSecs = 0;
+      if (E.timerCard) E.timerCard.style.display = 'none';
+      if (E.qhMobileTimer) E.qhMobileTimer.classList.add('hidden');
     }
 
-    renderQuizQuestion();
-    showScreen('quizScreen');
+    buildPills();
+    renderQ();
+    showScreen('quiz');
   }
 
-  async function saveChallengeScore(score, total, answers) {
+  async function saveChallengeScore(score, total) {
     const code = S._challengeCode;
     if (!code) return;
     const pct = Math.round((score / total) * 100);
 
+    // Keep a local copy too (covers the creator's own device offline)
     const challenges = loadSafe(QC_STORE, {});
     if (challenges[code]) {
-      // Optimistic local record for immediate UI — the real, trusted score
-      // comes back from the server below and overwrites this if different.
       challenges[code].scores[S.currentUser] = { score, total, pct, time: new Date().toLocaleTimeString() };
       saveSafe(QC_STORE, challenges);
     }
     S._challengeCode = null;
+    refreshChallengeBadgeState();
 
     let backendScores = null;
     try {
       const res = await fetch(API_BASE + '/api/challenge', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'submit', code, student: S.currentUser, answers }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'submit', code, student: S.currentUser, score, total, pct }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.ok) backendScores = data.scores;
-    } catch (err) {}
+    } catch (err) {
+      // Non-fatal — the student's own result screen already showed their
+      // score; the shared leaderboard just won't update this time.
+    }
 
-    showChallengeLeaderboard(code, backendScores);
+    const viewNow = await showConfirmModal('Challenge complete! View the leaderboard?', 'View', 'Not now');
+    if (viewNow) showChallengeLeaderboard(code, backendScores);
   }
 
   function showChallengeLeaderboard(code, scoresOverride) {
     const challenges = loadSafe(QC_STORE, {});
     const localChallenge = challenges[code];
-    const scores = scoresOverride || (localChallenge && localChallenge.scores);
+    const scores = scoresOverride || localChallenge?.scores;
     if (!scores) return;
 
-    const list = document.getElementById('qcLeaderboard');
+    const list = document.getElementById('qcLeaderboardList');
+    if (!list) return;
+
     const entries = Object.entries(scores).sort((a, b) => b[1].pct - a[1].pct);
 
-    list.innerHTML = entries.length ? entries.map(([name, data], i) => {
-      const av = avatarFor(name);
-      const rankBadge = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#' + (i + 1);
-      return `
-      <div class="duel-leaderboard-row ${name === S.currentUser ? 'is-me' : ''}">
-        <span class="duel-rank">${rankBadge}</span>
-        <div class="duel-avatar duel-avatar-sm" style="background:${av.color};">${av.initials}</div>
-        <span class="duel-lb-name">${safe(name)}${name === S.currentUser ? ' (you)' : ''}</span>
-        <span class="duel-lb-score">${data.score}/${data.total}<em>${data.pct}%</em></span>
-      </div>`;
-    }).join('') : '<p class="sheet-sub">No scores yet — be the first!</p>';
+    if (!entries.length) {
+      list.innerHTML = '<p class="qc-empty">No scores yet — be the first!</p>';
+    } else {
+      list.innerHTML = entries.map(([name, data], i) => `
+        <div class="qc-score-row ${name === S.currentUser ? 'qc-score-me' : ''}">
+          <span class="qc-rank">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#' + (i+1)}</span>
+          <span class="qc-score-name">${safe(name)}${name === S.currentUser ? ' (you)' : ''}</span>
+          <span class="qc-score-val">${data.score}/${data.total} · ${data.pct}%</span>
+        </div>
+      `).join('');
+    }
 
     document.getElementById('quizChallengeModal').classList.remove('hidden');
-    showQcPanel('qcResults');
+    showQcPanel('qcLeaderboard');
   }
 
-  function checkIncomingChallengeLink() {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('challenge');
-    if (!code) return;
-    history.replaceState(null, '', window.location.pathname);
-    ensureUser(() => {
-      openQuizChallenge();
-      document.getElementById('qcJoinCode').value = code;
-      joinChallenge();
+  function initContestNotify() {
+    const btn  = document.getElementById('contestNotifyBtn');
+    const note = document.getElementById('contestNoteText');
+
+    // Collapse/expand logic
+    const collapseBtn = document.getElementById('contestCollapseBtn');
+    const expandBtn   = document.getElementById('contestExpandBtn');
+    const expanded    = document.getElementById('contestExpanded');
+    const collapsed   = document.getElementById('contestCollapsed');
+
+    function collapseContest() {
+      if (expanded) expanded.style.display = 'none';
+      if (collapsed) collapsed.style.display = 'flex';
+      // Only persist collapsed state if user has already clicked notify
+      if (loadSafe('mea-contest-notify')) saveSafe('mea-contest-session-collapsed', true);
+    }
+    function expandContest() {
+      if (expanded) expanded.style.display = '';
+      if (collapsed) collapsed.style.display = 'none';
+      saveSafe('mea-contest-session-collapsed', false);
+    }
+
+    // Only restore collapsed if they've notified AND previously collapsed
+    if (loadSafe('mea-contest-notify') && loadSafe('mea-contest-session-collapsed')) {
+      collapseContest();
+    }
+
+    if (collapseBtn) collapseBtn.addEventListener('click', collapseContest);
+    if (expandBtn)   expandBtn.addEventListener('click', expandContest);
+
+    // Auto-collapse when user starts a session (called from startSession)
+    window._collapseContest = collapseContest;
+
+    if (!btn) return;
+    const already = loadSafe('mea-contest-notify');
+    if (already) {
+      btn.textContent  = '✓ You\'re on the list';
+      btn.disabled     = true;
+      btn.style.opacity = '0.7';
+      if (note) note.textContent = 'We\'ll notify you when registration opens.';
+      return;
+    }
+    btn.addEventListener('click', () => {
+      if (!S.currentUser) {
+        alert('Please log in first so we know who to notify.');
+        return;
+      }
+      saveSafe('mea-contest-notify', { name: S.currentUser, date: new Date().toISOString() });
+      btn.textContent   = '✓ You\'re on the list!';
+      btn.disabled      = true;
+      btn.style.opacity = '0.7';
+      if (note) note.textContent = 'We\'ll notify you when registration opens. Tell your friends!';
     });
   }
+  window._showChallengeLeaderboard = showChallengeLeaderboard;
 
-  /* ────────────────────────────────
-     AI CREDITS & PAYWALL
-     Free trial of 3 AI responses, then ₦500 unlocks 10 more. Gates:
-     Project Helper replies, "Explain Differently", and Challenge's
-     AI Boost. Does NOT gate anything else — Revision, Quiz, all 4
-     games, and Study Library stay fully free and uncapped. Reuses
-     the same live Paystack key and /api/verify-payment endpoint as
-     My Exams App / My JAMB App (same merchant account).
-  ──────────────────────────────── */
-  const AI_BOOST_WINDOW_MS = 48 * 60 * 60 * 1000; // 2 days
+  // Expose for result screen
+  window.switchPaywallTab = function(tab) {
+    ['individual','jamb','school'].forEach(t => {
+      const panel = document.getElementById('paywall' + t.charAt(0).toUpperCase() + t.slice(1));
+      const btn   = document.getElementById('tab'    + t.charAt(0).toUpperCase() + t.slice(1));
+      if (panel) panel.classList.toggle('hidden', t !== tab);
+      if (btn)   btn.classList.toggle('active',   t === tab);
+    });
+  };
 
-  const BOOST_REMINDER_KEY = 'hh-boost-reminder-v1';
-  /** Nobody should pay ₦500 and have it quietly expire unused. Once per
-   * day, if there's an active boost with credits still left and under 6
-   * hours remaining, say so — same spirit as the rest of this project's
-   * "tell people what's actually happening" fixes. */
-  function maybeShowBoostExpiryReminder() {
-    const data = getAICredits();
-    if (!data.boostExpiresAt || data.credits <= 0) return;
-    const hoursLeft = (data.boostExpiresAt - Date.now()) / 3600000;
-    if (hoursLeft <= 0 || hoursLeft > 6) return;
-    const today = new Date().toDateString();
-    const lastShown = loadSafe(BOOST_REMINDER_KEY, null);
-    if (lastShown === today) return;
-    saveSafe(BOOST_REMINDER_KEY, today);
-    showActionToast(
-      `${data.credits} AI credits expire in ${Math.ceil(hoursLeft)}h — don't lose them!`,
-      'Use now →',
-      () => openProjectHelper(),
-      6000
-    );
-  }
-
-  function getAICredits() {
-    const data = loadSafe(AI_CREDITS_KEY, null);
-    if (data === null) {
-      const fresh = { credits: FREE_TRIAL_CREDITS, totalPurchased: 0, boostExpiresAt: null };
-      saveSafe(AI_CREDITS_KEY, fresh);
-      return fresh;
+  function redeemCode() {
+    const code = (E.accessCodeInput.value||'').trim().toUpperCase();
+    if (!code) { E.accessCodeInput.focus(); return; }
+    const codes = {
+      'MEA-DEMO-2025':  { days: 90,  tier: 'student' },
+      'MEA-PLUS-DEMO':  { days: 90,  tier: 'plus'    },
+      // 'WAEC-PROMO' and 'NECO-PROMO' — not in the official demo-code list,
+      // disabled here since they'd have been visible to anyone via view-source
+      // and grant free access. Re-enable only if this was an intentional campaign.
+      'JAMB-PROMO':     { days: 90,  tier: 'jamb'    },
+      'TEST7':          { days: 7,   tier: 'student' },
+    };
+    // ⚠️ These codes are still readable by anyone who views this file's source.
+    // For long-lived or high-value codes, validate them server-side (via the
+    // same Vercel API) instead of listing them in client JS.
+    if (codes[code]) {
+      grantAccess(codes[code].days, codes[code].tier);
+    } else {
+      E.accessCodeInput.style.borderColor = 'var(--red, #e55)';
+      setTimeout(() => { E.accessCodeInput.style.borderColor = ''; }, 1500);
+      alert('Invalid or expired code.');
     }
-    // Lazy-expire: purchased credits are a time-boxed "2-Day AI Boost", not
-    // a permanent balance — free trial credits (boostExpiresAt stays null
-    // until a real purchase happens) never expire this way. Checked here
-    // rather than with a timer, same pattern as everything else in this
-    // localStorage-only app — no server, so expiry is checked on access.
-    if (data.boostExpiresAt && Date.now() > data.boostExpiresAt && data.credits > 0) {
-      data.credits = 0;
-      data.boostExpiresAt = null;
-      saveSafe(AI_CREDITS_KEY, data);
+  }
+
+  /* ════════ SHARE ════════ */
+  /* ════════════════════════════════
+     SESSION SHARING
+  ════════════════════════════════ */
+
+  // Store last result for sharing
+  let _lastResult = null;
+  let _lastQuestions = [];
+  let _lastAnswers = [];
+
+  function showSectionBNudge() {
+    if (S.section !== 'A') return;
+    const tabB = document.getElementById('sectionTabB');
+    if (!tabB) return;
+
+    // Remove any existing nudge
+    document.getElementById('sectionBNudge')?.remove();
+
+    // Get Section B tab position
+    const rect = tabB.getBoundingClientRect();
+
+    // Create overlay container
+    const overlay = document.createElement('div');
+    overlay.id = 'sectionBNudge';
+    overlay.style.cssText = [
+      'position:fixed','inset:0',
+      'z-index:500',
+      'pointer-events:none',
+    ].join(';');
+
+    // Highlight ring around Section B tab
+    const ring = document.createElement('div');
+    ring.style.cssText = [
+      'position:absolute',
+      `top:${rect.top - 4}px`,
+      `left:${rect.left - 4}px`,
+      `width:${rect.width + 8}px`,
+      `height:${rect.height + 8}px`,
+      'border:2.5px solid var(--gold,#d4af37)',
+      'border-radius:10px',
+      'animation:sectionBPulse 1s ease infinite',
+      'pointer-events:none',
+    ].join(';');
+
+    // Tooltip card — centered on screen, pointing up to tab
+    const tipTop  = rect.bottom + 16;
+    const tipLeft = Math.max(16, Math.min(rect.left + rect.width/2 - 140, window.innerWidth - 296));
+
+    const tip = document.createElement('div');
+    tip.style.cssText = [
+      'position:absolute',
+      `top:${tipTop}px`,
+      `left:${tipLeft}px`,
+      'width:280px',
+      'background:rgba(10,22,40,0.97)',
+      'color:white',
+      'border:1.5px solid var(--gold,#d4af37)',
+      'border-radius:12px',
+      'padding:.85rem 1rem',
+      'font-size:.82rem','font-weight:500',
+      'line-height:1.55',
+      'text-align:center',
+      'box-shadow:0 8px 32px rgba(0,0,0,.5)',
+      'pointer-events:auto',
+      'cursor:pointer',
+    ].join(';');
+
+    // Arrow pointing UP toward the tab
+    const arrow = document.createElement('div');
+    const arrowLeft = rect.left + rect.width/2 - tipLeft - 8;
+    arrow.style.cssText = [
+      'position:absolute',
+      'top:-8px',
+      `left:${Math.max(12, Math.min(arrowLeft, 252))}px`,
+      'width:0','height:0',
+      'border-left:8px solid transparent',
+      'border-right:8px solid transparent',
+      'border-bottom:8px solid var(--gold,#d4af37)',
+    ].join(';');
+
+    // Hand emoji that slides up toward the tab
+    const hand = document.createElement('div');
+    hand.style.cssText = [
+      'position:absolute',
+      `top:${rect.bottom + 8}px`,
+      `left:${rect.left + rect.width/2 - 16}px`,
+      'font-size:1.5rem',
+      'animation:handSlideUp 1.2s ease infinite',
+      'pointer-events:none',
+    ].join(';');
+    hand.textContent = '👆';
+
+    tip.appendChild(arrow);
+    tip.innerHTML += '<strong style="color:var(--gold,#d4af37);display:block;margin-bottom:.3rem">Did you know?</strong>Tap <strong>Section B</strong> to switch to Theory questions anytime — your Section A answers are saved!<br/><span style="font-size:.72rem;color:rgba(255,255,255,.5);margin-top:.4rem;display:block">Tap here or Section B to dismiss</span>';
+    tip.insertBefore(arrow, tip.firstChild);
+
+    overlay.appendChild(ring);
+    overlay.appendChild(hand);
+    overlay.appendChild(tip);
+    document.body.appendChild(overlay);
+
+    // Clicking tip or overlay dismisses
+    tip.addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+
+    // Auto dismiss after 7 seconds
+    setTimeout(() => {
+      overlay.style.opacity = '0';
+      overlay.style.transition = 'opacity .4s';
+      setTimeout(() => overlay.remove(), 400);
+    }, 7000);
+  }
+
+  function showGentleInlinePopup(msg, anchorEl) {
+    document.querySelectorAll('.gentle-inline-popup').forEach(p => p.remove());
+    const popup = document.createElement('div');
+    popup.className = 'gentle-inline-popup';
+    popup.textContent = msg;
+    popup.style.cssText = [
+      'background:rgba(10,22,40,0.97)',
+      'color:white',
+      'border:1.5px solid var(--gold)',
+      'border-radius:var(--r-s)',
+      'padding:.55rem .9rem',
+      'font-size:.8rem','font-weight:600',
+      'margin-bottom:.5rem',
+      'text-align:center',
+      'animation:gentlePopIn .18s ease',
+    ].join(';');
+    if (anchorEl) {
+      anchorEl.parentNode.insertBefore(popup, anchorEl);
+      anchorEl.scrollIntoView({ behavior:'smooth', block:'nearest' });
     }
-    return data;
+    setTimeout(() => {
+      popup.style.opacity = '0';
+      popup.style.transition = 'opacity .3s';
+      setTimeout(() => popup.remove(), 300);
+    }, 3000);
   }
 
-  function hasAICredit() {
-    return getAICredits().credits > 0;
+  function renderTimingCard() {
+    const ta = S._timingAnalysis;
+    if (!ta) return;
+    const breakdown = document.getElementById('resultBreakdown');
+    if (!breakdown) return;
+    const existing = document.getElementById('timingCard');
+    if (existing) existing.remove();
+    const mins = Math.floor(ta.totalSec / 60);
+    const secs = ta.totalSec % 60;
+    const slowHtml = ta.slow.length ? `
+      <div class="tc-slow-title">Questions you spent the most time on:</div>
+      ${ta.slow.map(x => `<div class="tc-slow-row">
+        <span class="tc-slow-q">Q${x.i+1}</span>
+        <span class="tc-slow-text">${safe(x.q.question.substring(0,55))}…</span>
+        <span class="tc-slow-time">${Math.round(x.dur/1000)}s</span>
+      </div>`).join('')}` : '';
+
+    const card = document.createElement('div');
+    card.id = 'timingCard';
+    card.className = 'timing-card';
+    card.innerHTML = `
+      <div class="tc-head">⏱ Session Timing</div>
+      <div class="tc-stats">
+        <div class="tc-stat"><span class="tc-val">${mins}m ${secs}s</span><span class="tc-label">Total time</span></div>
+        <div class="tc-stat"><span class="tc-val">${ta.avg}s</span><span class="tc-label">Avg per question</span></div>
+      </div>
+      <div class="tc-verdict ${ta.avg < 60 ? 'tc-fast' : ta.avg < 90 ? 'tc-ok' : 'tc-slow'}">${ta.verdict}</div>
+      ${slowHtml}
+    `;
+    breakdown.after(card);
   }
 
-  /** Call only after a successful AI response — never charge for a failed call. */
-  function consumeAICredit() {
-    const data = getAICredits();
-    if (data.credits <= 0) return false;
-    data.credits -= 1;
-    saveSafe(AI_CREDITS_KEY, data);
-    updateAICreditBadges();
+  function shareSession() {
+    if (!_lastResult) return;
+    const payload = {
+      r: _lastResult,
+      q: _lastQuestions.slice(0,20).map((q,i) => ({
+        q: q.question,
+        o: q.options || [],
+        a: q.answer,
+        ua: _lastAnswers[i],
+        t: q._type,
+        e: q.explanation || '',
+      })),
+    };
+    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+    const url = window.location.origin + window.location.pathname + '?session=' + encoded;
+    const text = `📊 ${_lastResult.student} scored ${_lastResult.pct !== null ? _lastResult.pct + '%' : 'Theory'} in ${_lastResult.subject} (${_lastResult.exam})\n\nSee my full session on My Exams App:\n${url}\n\nThink you can beat it? 💪`;
+
+    if (navigator.share) {
+      navigator.share({ title: 'My Exams App Result', text, url }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => alert('📋 Result link copied! Paste in WhatsApp or anywhere.'));
+    } else {
+      prompt('Copy this link:', url);
+    }
+  }
+
+  function checkForSharedSession() {
+    const params = new URLSearchParams(window.location.search);
+    const sessionData = params.get('session');
+    if (!sessionData) return;
+    history.replaceState(null, '', window.location.pathname);
+    try {
+      const payload = JSON.parse(decodeURIComponent(escape(atob(sessionData))));
+      showSharedSession(payload);
+    } catch(e) {
+      console.warn('Could not parse shared session:', e);
+    }
+  }
+
+  function showSharedSession(payload) {
+    const r = payload.r;
+    const qs = payload.q || [];
+    const modal = document.getElementById('sharedSessionModal');
+    if (!modal) return;
+
+    const hasObj = r.pct !== null;
+    const pct    = r.pct || 0;
+    const grade  = !hasObj ? 'Theory' : pct>=75 ? 'Distinction' : pct>=60 ? 'Credit' : pct>=50 ? 'Pass' : 'Below Pass';
+    const emoji  = !hasObj ? '📖' : pct>=75 ? '🏆' : pct>=60 ? '🎯' : pct>=50 ? '✅' : '💪';
+    const color  = !hasObj ? '#666' : pct>=50 ? '#27ae60' : '#e74c3c';
+
+    document.getElementById('ssEmoji').textContent = emoji;
+    document.getElementById('ssScore').textContent = hasObj ? pct + '%' : 'Theory';
+    document.getElementById('ssScore').style.color = color;
+    document.getElementById('ssGrade').textContent = grade;
+    document.getElementById('ssGrade').style.color = color;
+    document.getElementById('ssMeta').innerHTML =
+      `<strong>${safe(r.student)}</strong> · ${safe(r.subject)} · ${safe(r.exam)} · ${safe(r.mode)}` +
+      `<br><span style="font-size:.8rem;color:#888">${safe(r.date)}</span>`;
+
+    if (hasObj) {
+      document.getElementById('ssStats').innerHTML =
+        `<span class="ss-stat green">✓ ${r.correct} correct</span>` +
+        `<span class="ss-stat red">✗ ${r.wrong} wrong</span>` +
+        `<span class="ss-stat">⊘ ${r.skipped} skipped</span>`;
+      document.getElementById('ssBarFill').style.width = pct + '%';
+      document.getElementById('ssBarFill').style.background = color;
+    }
+
+    // Show first 5 questions as preview
+    const preview = qs.slice(0, 5);
+    document.getElementById('ssQuestions').innerHTML = preview.length ? `
+      <div class="ss-qs-title">Session Preview (${preview.length} of ${qs.length} questions)</div>
+      ${preview.map((q,i) => {
+        const correct  = q.ua === q.a;
+        const answered = q.ua !== null && q.ua !== undefined;
+        const icon = !answered ? '⊘' : correct ? '✓' : '✗';
+        const cls  = !answered ? 'ss-q-skip' : correct ? 'ss-q-correct' : 'ss-q-wrong';
+        return `<div class="ss-q-row ${cls}">
+          <span class="ss-q-icon">${icon}</span>
+          <span class="ss-q-text">${safe(q.q.substring(0,80))}${q.q.length>80?'…':''}</span>
+        </div>`;
+      }).join('')}
+    ` : '';
+
+    // Store subject for try button
+    document.getElementById('ssTryBtn').dataset.subject = r.subject;
+    document.getElementById('ssTryBtn').addEventListener('click', () => {
+      modal.classList.add('hidden');
+      // Pre-select the subject on home screen
+      S.subject = r.subject;
+      showScreen('home');
+      setTimeout(() => {
+        const btn = document.querySelector(`.subject-btn[data-key="${r.subject}"]`);
+        if (btn) btn.click();
+      }, 300);
+    });
+
+    document.getElementById('ssClose').addEventListener('click', () => modal.classList.add('hidden'));
+    modal.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden'); });
+    modal.classList.remove('hidden');
+  }
+
+  /* ════════════════════════════════
+     AI EXPLANATIONS (Plus tier)
+  ════════════════════════════════ */
+  const SK_MEA_AI     = 'mea-ai-credits-v1';
+  const MEA_AI_QUOTA  = 100; // per quarter
+
+  function getMeaAICredits() {
+    const qtr = getMeaQuarter();
+    const d   = loadSafe(SK_MEA_AI);
+    if (!d || d.quarter !== qtr) {
+      saveSafe(SK_MEA_AI, { n: MEA_AI_QUOTA, quarter: qtr });
+      return MEA_AI_QUOTA;
+    }
+    return d.n;
+  }
+
+  function useMeaAICredit() {
+    const c = getMeaAICredits();
+    if (c <= 0) return false;
+    saveSafe(SK_MEA_AI, { n: c - 1, quarter: getMeaQuarter() });
     return true;
   }
 
-  function addAICredits(n) {
-    const data = getAICredits();
-    data.credits += n;
-    data.totalPurchased += n;
-    data.boostExpiresAt = Date.now() + AI_BOOST_WINDOW_MS; // (re)starts the 2-day window from this purchase
-    saveSafe(AI_CREDITS_KEY, data);
-    updateAICreditBadges();
+  function getMeaQuarter() {
+    const d = new Date();
+    return `${d.getFullYear()}-Q${Math.ceil((d.getMonth()+1)/3)}`;
   }
 
-  function updateAICreditBadges() {
-    const data = getAICredits();
-    const n = data.credits;
-    document.querySelectorAll('.ai-credit-badge').forEach(el => {
-      el.textContent = `✨ ${n} left`;
-    });
-    document.querySelectorAll('.ai-boost-expiry').forEach(el => {
-      if (data.boostExpiresAt && data.credits > 0) {
-        const hoursLeft = Math.max(0, Math.ceil((data.boostExpiresAt - Date.now()) / 3600000));
-        el.textContent = hoursLeft > 0 ? `Boost expires in ${hoursLeft}h` : '';
-        el.classList.toggle('hidden', hoursLeft <= 0);
-      } else {
-        el.textContent = '';
-        el.classList.add('hidden');
-      }
-    });
+  function updateMeaAICredits() {
+    if (!E.meaAiCredits) return;
+    const c = getMeaAICredits();
+    E.meaAiCredits.textContent = `${c} credit${c===1?'':'s'} left`;
+    E.meaAiCredits.style.color = c < 10 ? '#e74c3c' : '#27ae60';
   }
 
-  function showAIPaywall() {
-    document.getElementById('aiPaywallModal').classList.remove('hidden');
-  }
-  function hideAIPaywall() {
-    document.getElementById('aiPaywallModal').classList.add('hidden');
-  }
-
-  function initAIPaywall() {
-    document.getElementById('paywallClose').addEventListener('click', hideAIPaywall);
-    document.getElementById('paywallLaterBtn').addEventListener('click', hideAIPaywall);
-    document.getElementById('paywallPayBtn').addEventListener('click', purchaseAICredits);
-  }
-
-  /**
-   * Simple email-collection sheet, needed before a Paystack charge.
-   * Mirrors the pattern already used in My Exams App / My JAMB App.
-   */
-  function getEmailViaModal() {
-    return new Promise((resolve) => {
-      let overlay = document.getElementById('emailModalOverlay');
-      if (overlay) overlay.remove();
-
-      overlay = document.createElement('div');
-      overlay.id = 'emailModalOverlay';
-      overlay.className = 'overlay';
-      overlay.innerHTML = `
-        <div class="sheet">
-          <h3 class="sheet-title">Enter your email</h3>
-          <p class="sheet-sub">We'll send your payment receipt here.</p>
-          <input id="emailModalInput" type="email" inputmode="email" autocomplete="email" class="text-input" placeholder="you@example.com" style="margin-top:1rem;"/>
-          <p id="emailModalError" class="hidden" style="color:var(--red); font-size:.78rem; margin-top:.4rem;">Please enter a valid email address.</p>
-          <div style="display:flex; gap:.6rem; margin-top:1.1rem;">
-            <button id="emailModalCancel" class="btn btn-ghost" style="flex:1;">Cancel</button>
-            <button id="emailModalContinue" class="btn btn-primary" style="flex:1;">Continue</button>
-          </div>
-        </div>`;
-      document.body.appendChild(overlay);
-
-      const cleanup = (val) => { overlay.remove(); resolve(val); };
-      document.getElementById('emailModalCancel').addEventListener('click', () => cleanup(null));
-      overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(null); });
-
-      const submit = () => {
-        const input = document.getElementById('emailModalInput');
-        const errEl = document.getElementById('emailModalError');
-        const val = (input.value || '').trim();
-        if (!val.includes('@') || !val.includes('.')) { errEl.classList.remove('hidden'); return; }
-        cleanup(val);
-      };
-      document.getElementById('emailModalContinue').addEventListener('click', submit);
-      document.getElementById('emailModalInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
-    });
-  }
-
-  async function purchaseAICredits() {
-    const email = await getEmailViaModal();
-    if (!email) return;
-
-    if (typeof window.PaystackPop === 'undefined') {
-      showToast('Payment could not load — check your connection and try again.');
+  async function triggerMeaAI(qType) {
+    if (!(S.mode === 'practice' || S.reviewMode)) {
+      showInfoToast('Teach Me is only available in Practice Mode or when reviewing your results.');
+      return;
+    }
+    const isPlus = S.hasAccess && (loadSafe(SK.tier) === 'plus');
+    if (!S.hasAccess) {
+      showPaywall('upgrade');
+      return;
+    }
+    if (!isPlus) {
+      // Student Pass user — show upgrade prompt
+      showPlusUpgradePrompt();
+      return;
+    }
+    const credits = getMeaAICredits();
+    if (credits <= 0) {
+      alert(`You've used all ${MEA_AI_QUOTA} Teach Me credits for this quarter.\n\nTop up: ₦500 = 50 more explanations.`);
       return;
     }
 
-    const handler = window.PaystackPop.setup({
-      key: PAYSTACK_KEY,
-      email,
-      amount: AI_CREDIT_PACK_PRICE_KOBO,
-      currency: 'NGN',
-      ref: 'MSA-AI-' + Date.now(),
-      metadata: { custom_fields: [
-        { display_name: 'Product', variable_name: 'product', value: 'My Study App — 2-Day AI Boost (10 credits)' },
-      ]},
-      onClose() {},
-      callback(response) {
-        (async () => {
-          showToast('Confirming payment…');
-          try {
-            const res = await fetch(API_BASE + '/api/verify-payment', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ reference: response.reference }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data.verified) {
-              showToast('Could not confirm payment yet. If you were charged, contact support with reference: ' + response.reference, 5000);
-              return;
-            }
-            addAICredits(AI_CREDIT_PACK_SIZE);
-            hideAIPaywall();
-            showToast(`✅ 2-Day AI Boost unlocked — ${AI_CREDIT_PACK_SIZE} credits, use them in the next 48 hours!`, 4000);
-          } catch (err) {
-            showToast('Could not confirm payment — contact support with reference: ' + response.reference, 5000);
+    const q   = S.questions[S.idx];
+    const ans = S.answers[S.idx];
+    if (!q) return;
+
+    // Show panel
+    if (E.meaAiPanel) E.meaAiPanel.classList.remove('hidden');
+    if (E.meaAiLoading) E.meaAiLoading.classList.remove('hidden');
+    if (E.meaAiResponse) E.meaAiResponse.classList.add('hidden');
+    updateMeaAICredits();
+
+    let prompt = '';
+    if (qType === 'objective') {
+      const correctOpt  = q.options?.[q.answer] || q.answer;
+      const studentOpt  = ans !== null && ans !== undefined ? (q.options?.[ans] || ans) : 'Did not answer';
+      const wasCorrect  = ans === q.answer;
+      prompt = `You are a WAEC/NECO exam tutor helping a Nigerian student prepare for their exams.
+
+Question: ${q.question}
+Options: ${(q.options||[]).map((o,i)=>String.fromCharCode(65+i)+'. '+o).join(' | ')}
+Correct answer: ${correctOpt}
+Student answered: ${studentOpt} (${wasCorrect ? 'CORRECT ✓' : 'WRONG ✗'})
+Subject: ${SUBJECTS[S.subject]?.name || S.subject}
+Exam: ${q.exam || S.exam}
+
+Give a clear explanation in 3-4 sentences:
+1. Why the correct answer is right — the key concept or principle
+2. ${!wasCorrect ? "Why the student's choice was wrong and what trap they fell into" : "What makes this concept commonly tested in WAEC/NECO"}
+3. A memory tip or rule to remember for the exam
+
+Use plain English. Be encouraging. Keep it concise — this student is under exam pressure.`;
+    } else {
+      prompt = `You are a WAEC/NECO exam tutor helping a Nigerian student prepare.
+
+Theory question: ${q.question}
+Subject: ${SUBJECTS[S.subject]?.name || S.subject}
+Exam: ${q.exam || S.exam}
+
+The marking scheme awards points for: ${(q.markingScheme||[]).map(p=>p.point).join('; ')}
+
+Explain in 4-5 sentences:
+1. What the examiner is really asking for
+2. The key points that must appear in a top-scoring answer
+3. Common mistakes students make on this question
+4. One examiner tip for maximising marks
+
+Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
+    }
+
+    try {
+      if (!useMeaAICredit()) {
+        if (E.meaAiLoading) E.meaAiLoading.classList.add('hidden');
+        alert('No AI credits remaining.');
+        if (E.meaAiPanel) E.meaAiPanel.classList.add('hidden');
+        return;
+      }
+      // ⚙️ Calls the same Vercel project as snap-and-mark — add a /api/teach
+      // serverless function there that holds ANTHROPIC_API_KEY server-side
+      // and forwards { prompt } to Claude. Calling api.anthropic.com directly
+      // from the browser needs a key in the client bundle, which is visible
+      // to anyone in the network tab — never do that for a paid feature.
+      const res  = await fetch(API_BASE + '/api/teach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+      const data = await res.json();
+      const text = data.text || data.content?.map(c => c.text||'').join('') || 'Could not get explanation. Please try again.';
+
+      if (E.meaAiLoading) E.meaAiLoading.classList.add('hidden');
+      if (E.meaAiResponse) {
+        E.meaAiResponse.innerHTML = `
+          <div class="mea-ai-q">${safe(q.question.substring(0,90))}${q.question.length>90?'…':''}</div>
+          <div class="mea-ai-text">${safe(text).replace(/\n/g,'<br/>')}</div>`;
+        E.meaAiResponse.classList.remove('hidden');
+      }
+      updateMeaAICredits();
+    } catch(err) {
+      if (E.meaAiLoading) E.meaAiLoading.classList.add('hidden');
+      if (E.meaAiResponse) {
+        E.meaAiResponse.innerHTML = '<p style="color:#e74c3c;font-size:.85rem">Could not reach AI. Check your connection and try again.</p>';
+        E.meaAiResponse.classList.remove('hidden');
+      }
+    }
+  }
+
+  /* ════════════════════════════════
+     SNAP AND MARK
+  ════════════════════════════════ */
+  // ⚙️ Set your Vercel API URL here after deployment
+  const SNAP_API_URL   = 'https://editoby-api.vercel.app/api/mark';
+  const SK_SNAPS       = 'mea-snaps-v1';
+  const SNAP_QUARTERLY = 50; // snaps per quarter for Student Pass
+
+  function getSnapCredits() {
+    const qtr = getMeaQuarter();
+    const d   = loadSafe(SK_SNAPS);
+    if (!d || d.quarter !== qtr) {
+      saveSafe(SK_SNAPS, { n: SNAP_QUARTERLY, quarter: qtr });
+      return SNAP_QUARTERLY;
+    }
+    return d.n;
+  }
+
+  function useSnapCredit() {
+    const c = getSnapCredits();
+    if (c <= 0) return false;
+    saveSafe(SK_SNAPS, { n: c - 1, quarter: getMeaQuarter() });
+    return true;
+  }
+
+  function updateSnapCreditsBadge() {
+    if (!E.snapCreditsBadge) return;
+    const c = getSnapCredits();
+    E.snapCreditsBadge.textContent = `${c} snap${c===1?'':'s'} left this quarter`;
+    E.snapCreditsBadge.style.color = c < 5 ? '#e74c3c' : 'var(--text-dim)';
+  }
+
+  function triggerSnap() {
+    if (!S.hasAccess) { showPaywall('upgrade'); return; }
+    const credits = getSnapCredits();
+    if (credits <= 0) {
+      alert('You have used all your snap credits for this quarter.\n\nTop up: ₦300 = 10 more snaps.');
+      return;
+    }
+    // Open file picker — on mobile this triggers camera
+    if (E.snapFileInput) E.snapFileInput.click();
+  }
+
+  function handleSnapFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset input so same file can be reselected
+    e.target.value = '';
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file.');
+      return;
+    }
+
+    // Compress then send
+    compressImage(file, 800, 0.75)
+      .then(compressed => sendToMark(compressed))
+      .catch(err => {
+        console.error('Compression error:', err);
+        alert('Could not process image. Please try again.');
+      });
+  }
+
+  function compressImage(file, maxWidth, quality) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = ev => {
+        const img = new Image();
+        img.onerror = reject;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let w = img.width;
+          let h = img.height;
+
+          // Scale down if wider than maxWidth
+          if (w > maxWidth) {
+            h = Math.round(h * (maxWidth / w));
+            w = maxWidth;
           }
-        })();
-      },
+
+          canvas.width  = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+
+          // White background (prevents transparency issues)
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+
+          // Export as JPEG
+          const dataUrl = canvas.toDataURL('image/jpeg', quality);
+          const base64  = dataUrl.split(',')[1];
+
+          // Log compression ratio for debugging
+          const origKB = Math.round(file.size / 1024);
+          const compKB = Math.round(base64.length * 0.75 / 1024);
+          console.log(`Snap compressed: ${origKB}KB → ${compKB}KB`);
+
+          resolve({ base64, mediaType: 'image/jpeg', sizeKB: compKB });
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
     });
-    handler.openIframe();
   }
 
-  /* ────────────────────────────────
-     STUDY MODE — "EXPLAIN DIFFERENTLY"
-     When the canned explanation doesn't land, this reuses the same
-     AI tutor endpoint that powers the Project Helper to give the
-     student a different angle on the same concept — a simpler
-     analogy or a different approach — without leaving Study Mode.
-  ──────────────────────────────── */
-  async function explainDifferently(q) {
-    const resultEl = document.getElementById('explainDifferentlyResult');
-    const btn = document.getElementById('explainDifferentlyBtn');
-    if (!resultEl || !btn) return;
+  async function sendToMark({ base64, mediaType }) {
+    const q = S.questions[S.idx];
+    if (!q || q._type !== 'theory') return;
 
-    if (!hasAICredit()) { showAIPaywall(); return; }
+    // Show processing overlay
+    if (E.snapProcessing) E.snapProcessing.classList.remove('hidden');
 
-    btn.disabled = true;
-    btn.textContent = 'Thinking of another way to explain it…';
-    resultEl.innerHTML = '';
-
-    const subjectLabel = SUBJECT_LABELS[S.subject] || S.subject;
-    const prompt = `I'm studying ${subjectLabel}. Here's a question I'm reviewing:\n"${q.question}"\nOptions: ${q.options.join(', ')}\nThe correct answer is "${q.options[q.answer]}".\nThe explanation given was: "${q.explanation || 'none provided'}"\nI didn't fully understand that explanation — can you explain the underlying concept a different way, maybe with a simpler analogy or a different approach? Keep it short.`;
-
-    try {
-      const res = await fetch(API_BASE + '/api/project-helper', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject: subjectLabel, messages: [{ role: 'user', content: prompt }] }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.reply) {
-        consumeAICredit();
-        resultEl.innerHTML = `<div class="explain-ai-bubble">${safe(data.reply)}</div>`;
-        btn.classList.add('hidden');
-      } else {
-        showToast("Couldn't reach the AI tutor right now — check your connection and try again.");
-        btn.disabled = false; btn.textContent = '✨ Still confused? Explain this differently';
-      }
-    } catch (err) {
-      showToast("Couldn't reach the AI tutor right now — check your connection and try again.");
-      btn.disabled = false; btn.textContent = '✨ Still confused? Explain this differently';
-    }
-  }
-
-  /** Cache for AI explanations — the same flashcard/formula/note asked
-   * about twice (e.g. revisited via Previous/Next, or re-opened on a
-   * later visit) would otherwise burn another API call and another
-   * credit for what's very likely an identical answer. Keyed by a hash
-   * of the exact prompt sent, since the prompt already fully encodes the
-   * subject and the specific item being asked about. */
-  const EXPLAIN_CACHE_KEY = 'hh-explain-cache-v1';
-
-  function simpleHash(str) {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = (hash << 5) - hash + str.charCodeAt(i);
-      hash |= 0;
-    }
-    return hash.toString(36);
-  }
-
-  /** Same "Explain Differently" idea, generalised to work on any single
-   * Study Library item — a flashcard, a formula, or a note. Used by all
-   * three renderX() functions in the Study Library, each passing in its
-   * own subject-appropriate prompt and the specific DOM nodes to update.
-   * Kept as one shared function rather than three copies so the credit
-   * check, error handling, and button states can never drift apart. */
-  async function explainLibraryItem(prompt, btn, resultEl) {
-    if (!btn || !resultEl) return;
-
-    const cacheKey = simpleHash(prompt);
-    const cache = loadSafe(EXPLAIN_CACHE_KEY, {});
-    if (cache[cacheKey]) {
-      resultEl.innerHTML = `<div class="explain-ai-bubble">${safe(cache[cacheKey])}</div>`;
-      btn.classList.add('hidden');
+    if (!useSnapCredit()) {
+      if (E.snapProcessing) E.snapProcessing.classList.add('hidden');
+      alert('No snap credits remaining.');
       return;
     }
+    updateSnapCreditsBadge();
 
-    if (!hasAICredit()) { showAIPaywall(); return; }
-
-    const originalLabel = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Thinking…';
-    resultEl.innerHTML = '';
-
-    try {
-      const res = await fetch(API_BASE + '/api/project-helper', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject: SUBJECT_LABELS[LIB.subject] || LIB.subject, messages: [{ role: 'user', content: prompt }] }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.reply) {
-        consumeAICredit();
-        resultEl.innerHTML = `<div class="explain-ai-bubble">${safe(data.reply)}</div>`;
-        btn.classList.add('hidden');
-        const freshCache = loadSafe(EXPLAIN_CACHE_KEY, {});
-        freshCache[cacheKey] = data.reply;
-        saveSafe(EXPLAIN_CACHE_KEY, freshCache);
-      } else {
-        showToast("Couldn't reach the AI tutor right now — check your connection and try again.");
-        btn.disabled = false; btn.textContent = originalLabel;
-      }
-    } catch (err) {
-      showToast("Couldn't reach the AI tutor right now — check your connection and try again.");
-      btn.disabled = false; btn.textContent = originalLabel;
-    }
-  }
-
-  /* ────────────────────────────────
-     PROJECT & HOMEWORK HELPER
-  ──────────────────────────────── */
-  let phMessages = [];
-  let phSubject = 'Any subject';
-
-  function initProjectHelper() {
-    // Wiring happens lazily in openProjectHelper() since the DOM for
-    // this screen is built dynamically.
-  }
-
-  function openProjectHelper() {
-    phMessages = [];
-    renderProjectHelper();
-    showScreen('projectScreen');
-  }
-
-  function renderProjectHelper() {
-    const body = document.getElementById('projectBody');
-    const subjects = ['Any subject', 'Mathematics', 'English', 'Science', 'Social Studies', 'ICT'];
-
-    body.innerHTML = `
-      <div style="display:flex; align-items:center; justify-content:flex-end; margin-bottom:.4rem;">
-        <span class="ai-credit-badge">✨ ${getAICredits().credits} left</span>
-      </div>
-      <div class="ph-subject-chip-row" id="phChips">
-        ${subjects.map(s => `<button class="ph-chip ${s === phSubject ? 'active' : ''}" data-s="${s}">${s}</button>`).join('')}
-      </div>
-      ${phMessages.length === 0 ? `
-        <div class="ph-intro">
-          <div class="ph-intro-icon">🧭</div>
-          <h3>Tell me about your project</h3>
-          <p>I won't do it for you — I'll ask questions, explain ideas, and guide you<br>to the answer so you understand it and can explain it yourself.</p>
-        </div>` : `<div class="ph-chat" id="phChat">${phMessages.map(renderPhMsg).join('')}</div>`}
-      <div class="ph-input-row">
-        <textarea id="phInput" rows="1" placeholder="Describe your project, assignment, or homework question…"></textarea>
-        <button class="ph-send-btn" id="phSendBtn">➤</button>
-      </div>`;
-
-    document.querySelectorAll('#phChips .ph-chip').forEach(chip => {
-      chip.addEventListener('click', () => { phSubject = chip.dataset.s; renderProjectHelper(); });
-    });
-    document.getElementById('phSendBtn').addEventListener('click', sendProjectMessage);
-    document.getElementById('phInput').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendProjectMessage(); }
-    });
-  }
-
-  function renderPhMsg(m) {
-    return `<div class="ph-msg ${m.role === 'user' ? 'ph-msg-user' : 'ph-msg-ai'} ${m.loading ? 'loading' : ''}">${safe(m.text)}</div>`;
-  }
-
-  async function sendProjectMessage() {
-    const input = document.getElementById('phInput');
-    const text = input.value.trim();
-    if (!text) return;
-
-    if (!hasAICredit()) { showAIPaywall(); return; }
-
-    input.value = '';
-
-    phMessages.push({ role: 'user', text });
-    phMessages.push({ role: 'ai', text: 'Thinking…', loading: true });
-    renderProjectHelper();
-    scrollProjectChatToBottom();
+    const scheme = (q.markingScheme || []).map(s => ({
+      point: s.point,
+      marks: s.marks || 1,
+    }));
+    const totalMarks = scheme.reduce((sum, s) => sum + s.marks, 0);
 
     try {
-      const res = await fetch(API_BASE + '/api/project-helper', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const res = await fetch(SNAP_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          subject: phSubject,
-          messages: phMessages.filter(m => !m.loading).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })),
+          image:      base64,
+          mediaType,
+          question:   q.question,
+          scheme,
+          totalMarks,
+          subject:    SUBJECTS[S.subject]?.name || S.subject,
+          examBody:   q.exam || S.exam,
         }),
       });
-      const data = await res.json().catch(() => ({}));
-      phMessages.pop(); // remove loading bubble
-      if (res.ok && data.reply) {
-        consumeAICredit();
-        phMessages.push({ role: 'ai', text: data.reply });
-      } else {
-        phMessages.push({ role: 'ai', text: "I couldn't reach the server just now — check your connection and try again." });
+
+      if (E.snapProcessing) E.snapProcessing.classList.add('hidden');
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (err.code === 'IMAGE_TOO_LARGE') {
+          alert('Image is too large even after compression. Please try again with better lighting to avoid needing maximum quality.');
+        } else {
+          alert(err.error || 'Could not reach marking server. Check your connection.');
+        }
+        return;
       }
+
+      const result = await res.json();
+      showSnapResult(result);
+
     } catch (err) {
-      phMessages.pop();
-      phMessages.push({ role: 'ai', text: "I couldn't reach the server just now — check your connection and try again." });
+      if (E.snapProcessing) E.snapProcessing.classList.add('hidden');
+      console.error('Snap API error:', err);
+      alert('Could not reach the marking server. Check your internet connection and try again.');
     }
-    renderProjectHelper();
-    scrollProjectChatToBottom();
   }
 
-  function scrollProjectChatToBottom() {
-    const chat = document.getElementById('phChat');
-    if (chat) chat.scrollTop = chat.scrollHeight;
+  function showSnapResult(result) {
+    const { awarded, total, percent, grade, feedback, examinerNote, breakdown, handwritingWarning } = result;
+
+    const color = percent >= 60 ? '#27ae60' : percent >= 40 ? '#e67e22' : '#e74c3c';
+
+    if (E.snapResultScore) {
+      E.snapResultScore.textContent = `${awarded}/${total}`;
+      E.snapResultScore.style.color = color;
+    }
+    if (E.snapResultGrade) {
+      E.snapResultGrade.textContent = grade;
+      E.snapResultGrade.style.color = color;
+    }
+    if (E.snapResultPct) {
+      E.snapResultPct.textContent = `${percent}%`;
+      E.snapResultPct.style.color = color;
+    }
+
+    // Handwriting warning
+    if (E.snapHwWarning) {
+      E.snapHwWarning.classList.toggle('hidden', !handwritingWarning);
+    }
+
+    // Feedback
+    if (E.snapFeedback) E.snapFeedback.textContent = feedback;
+
+    // Breakdown
+    if (E.snapBreakdown && breakdown?.length) {
+      E.snapBreakdown.innerHTML = breakdown.map(b => {
+        const full = b.awarded >= b.maxMarks;
+        const none = b.awarded === 0;
+        const cls  = full ? 'sbr-full' : none ? 'sbr-none' : 'sbr-part';
+        const icon = full ? '✓' : none ? '✗' : '½';
+        return `<div class="snap-breakdown-row ${cls}">
+          <span class="sbr-icon">${icon}</span>
+          <div class="sbr-body">
+            <div class="sbr-point">${safe(b.point)}</div>
+            <div class="sbr-comment">${safe(b.comment || '')}</div>
+          </div>
+          <span class="sbr-marks">${b.awarded}/${b.maxMarks}</span>
+        </div>`;
+      }).join('');
+    }
+
+    // Examiner note
+    if (E.snapExaminerNote && examinerNote) {
+      E.snapExaminerNote.innerHTML = `📌 <strong>Remember:</strong> ${safe(examinerNote)}`;
+    }
+
+    if (E.snapResultModal) E.snapResultModal.classList.remove('hidden');
+
+    // Practice mode — mark as snapped and reveal marking scheme + model answer
+    if (S.mode === 'practice' && !S.reviewMode) {
+      S.answers[S.idx] = 'snapped';
+      S.showAnswer = true;
+      // Re-render theory panel to reveal full marking scheme
+      const q = S.questions[S.idx];
+      if (q && q._type === 'theory') renderTheory(q);
+    }
   }
 
-  /* ────────────────────────────────
-     LAUNCH BANNER (hidden until enabled)
-     Flip SHOW_LAUNCH_BANNER to true when ready to announce My Exams
-     App / My JAMB App. Edit launchBannerTitle/Sub text in index.html
-     (or via JS below) closer to the actual launch date.
-  ──────────────────────────────── */
-  const SHOW_LAUNCH_BANNER = false;
-  function initLaunchBanner() {
-    const banner = document.getElementById('launchBanner');
-    if (!banner) return;
-    const dismissed = loadSafe('hh-launch-banner-dismissed', false);
-    if (SHOW_LAUNCH_BANNER && !dismissed) banner.classList.remove('hidden');
-    document.getElementById('launchBannerClose')?.addEventListener('click', () => {
-      banner.classList.add('hidden');
-      saveSafe('hh-launch-banner-dismissed', true);
+  function showPlusUpgradePrompt() {
+    const modal = document.getElementById('exitConfirmModal');
+    const icon  = document.getElementById('exitModalIcon');
+    const title = document.getElementById('exitModalTitle');
+    const sub   = document.getElementById('exitModalSub');
+    const stay  = document.getElementById('exitModalStay');
+    const leave = document.getElementById('exitModalLeave');
+    if (!modal) { showPaywall('upgrade'); return; }
+
+    icon.textContent  = '🧠';
+    title.textContent = '"Teach Me" is a Plus Feature';
+    sub.textContent   = 'Tap "Teach Me" on any question and AI breaks it down — the concept, the trap, a memory tip. Upgrade to Student Pass Plus for ₦3,500/quarter.';
+
+    const newStay  = stay.cloneNode(true);
+    const newLeave = leave.cloneNode(true);
+    stay.parentNode.replaceChild(newStay, stay);
+    leave.parentNode.replaceChild(newLeave, leave);
+
+    document.getElementById('exitModalStay').textContent  = 'Not Now';
+    document.getElementById('exitModalLeave').textContent = 'Upgrade to Plus — ₦3,500 →';
+    document.getElementById('exitModalStay').style.cssText  = '';
+    document.getElementById('exitModalStay').addEventListener('click',  () => modal.classList.add('hidden'));
+    document.getElementById('exitModalLeave').addEventListener('click', () => {
+      modal.classList.add('hidden');
+      handlePayment('plus', 'quarterly');
+    });
+    modal.classList.remove('hidden');
+  }
+
+  /* ════════ BACK BUTTON WARNING TOAST ════════ */
+  let _backToastTimer = null;
+
+  function showBackWarningToast() {
+    let toast = document.getElementById('backWarningToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'backWarningToast';
+      toast.style.cssText = `
+        position:fixed; bottom:5rem; left:50%; transform:translateX(-50%);
+        background:#0a1628; color:white; border:1.5px solid #d4af37;
+        border-radius:10px; padding:.75rem 1.25rem;
+        font-family:var(--sans,sans-serif); font-size:.82rem; font-weight:500;
+        text-align:center; z-index:9999; max-width:320px; width:calc(100% - 2rem);
+        box-shadow:0 4px 20px rgba(0,0,0,.4); line-height:1.5;
+        animation:toastSlideUp .25s ease;
+      `;
+      document.body.appendChild(toast);
+    }
+    const isExam = S.mode === 'exam';
+    toast.innerHTML = isExam
+      ? '⚠️ <strong>Press back again to exit exam.</strong><br>Use <strong>← Prev / Next →</strong> to navigate questions.'
+      : '← <strong>Press back again to exit session.</strong><br>Use <strong>← Prev / Next →</strong> to navigate questions.';
+    toast.style.display = 'block';
+
+    if (_backToastTimer) clearTimeout(_backToastTimer);
+    _backToastTimer = setTimeout(hideBackWarningToast, 3000);
+  }
+
+  function hideBackWarningToast() {
+    const toast = document.getElementById('backWarningToast');
+    if (toast) toast.style.display = 'none';
+    if (_backToastTimer) { clearTimeout(_backToastTimer); _backToastTimer = null; }
+  }
+
+  /* ════════ SECTION SWITCHING ════════ */
+  function showSectionEndChoice(fromSection) {
+    const modal = document.getElementById('sectionEndModal');
+    const sub   = document.getElementById('sectionEndSub');
+    if (!modal) { showSectionTransition(); return; }
+
+    const isA = fromSection === 'A';
+    const count = isA ? S.sectionA.length : S.sectionB.length;
+    const type  = isA ? 'Objective' : 'Theory';
+    const label = isA ? 'Section A' : 'Section B';
+    sub.textContent = `You have finished ${label} (${count} ${type} questions). Choose what to do next — your answers in both sections are saved.`;
+
+    // Update icon and title
+    document.querySelector('#sectionEndModal .exit-modal-icon').textContent = isA ? '📋' : '📝';
+    document.querySelector('#sectionEndModal .exit-modal-title').textContent = `${label} Complete`;
+
+    modal.classList.remove('hidden');
+
+    const closeBtn   = document.getElementById('sectionEndClose');
+    const remainBtn  = document.getElementById('seRemainBtn');
+    const goBBtn     = document.getElementById('seGoBBtn');
+    const finishBtn  = document.getElementById('seFinishBtn');
+
+    // Clone all to clear old listeners
+    const newClose  = closeBtn.cloneNode(true);
+    const newRemain = remainBtn.cloneNode(true);
+    const newGoB    = goBBtn.cloneNode(true);
+    const newFinish = finishBtn.cloneNode(true);
+    closeBtn.parentNode.replaceChild(newClose, closeBtn);
+    remainBtn.parentNode.replaceChild(newRemain, remainBtn);
+    goBBtn.parentNode.replaceChild(newGoB, goBBtn);
+    finishBtn.parentNode.replaceChild(newFinish, finishBtn);
+
+    const hide = () => modal.classList.add('hidden');
+
+    // Close — stay in Section A, card dismisses, can reappear if they tap Next again
+    document.getElementById('sectionEndClose').addEventListener('click', hide);
+
+    // Remain in Section A — same as close, explicit wording
+    const remainBtn2  = document.getElementById('seRemainBtn');
+    const goBBtn2     = document.getElementById('seGoBBtn');
+    if (remainBtn2) remainBtn2.textContent = fromSection === 'A'
+      ? '📖 Remain in Section A — Review/Complete'
+      : '📖 Remain in Section B — Review/Complete';
+    if (goBBtn2) goBBtn2.textContent = fromSection === 'A'
+      ? '📋 Go to Section B →'
+      : '📋 Go to Section A ←';
+
+    document.getElementById('seRemainBtn').addEventListener('click', hide);
+
+    // Switch to other section
+    document.getElementById('seGoBBtn').addEventListener('click', () => {
+      hide();
+      switchSection(fromSection === 'A' ? 'B' : 'A');
+    });
+
+    // Finish — submit current state across both sections now
+    document.getElementById('seFinishBtn').addEventListener('click', () => {
+      hide();
+      confirmSubmit();
     });
   }
 
-  /* ────────────────────────────────
-     INIT
-  ──────────────────────────────── */
-  document.addEventListener('DOMContentLoaded', () => {
-    applyAIResourceOverlay();
-    initCategoryTabs();
-    initFeatureGrid();
-    initBackButtons();
-    loadStats();
-    renderCountdown();
-    initChallengeModule();
-    initGameExplainer();
-    initSpeedLevelPicker();
-    initWSChallenge();
-    initProjectHelper();
-    initAIPaywall();
-    initGamesPaywall();
-    initLaunchBanner();
-    checkIncomingChallengeLink();
-    renderDashboardNudge();
-    updateStudyPlanBanner();
-    updateAICreditBadges();
-    const planBanner = document.getElementById('studyPlanBanner');
-    if (planBanner) planBanner.addEventListener('click', openStudyPlan);
-  });
+  function showSectionTransition() {
+    // Show a modal prompting student to move to Section B
+    const modal = document.getElementById('exitConfirmModal');
+    const icon  = document.getElementById('exitModalIcon');
+    const title = document.getElementById('exitModalTitle');
+    const sub   = document.getElementById('exitModalSub');
+    const stay  = document.getElementById('exitModalStay');
+    const leave = document.getElementById('exitModalLeave');
+    if (!modal) { switchSection('B'); return; }
 
-  function initBackButtons() {
-    document.querySelectorAll('[data-back]').forEach(btn => {
-      btn.addEventListener('click', () => goBack(btn.dataset.back));
+    icon.textContent  = '📋';
+    title.textContent = 'Section A Complete';
+    sub.textContent   = 'You have reached the end of Section A (Objectives). Move to Section B (Theory) or stay to review your answers.';
+    leave.textContent = 'Go to Section B →';
+    const stayBtn  = stay.cloneNode(true);
+    const leaveBtn = leave.cloneNode(true);
+    stay.parentNode.replaceChild(stayBtn, stay);
+    leave.parentNode.replaceChild(leaveBtn, leave);
+    document.getElementById('exitModalStay').textContent  = 'Stay in Section A';
+    document.getElementById('exitModalLeave').textContent = 'Go to Section B →';
+    document.getElementById('exitModalStay').addEventListener('click',  () => modal.classList.add('hidden'));
+    document.getElementById('exitModalLeave').addEventListener('click', () => {
+      modal.classList.add('hidden');
+      switchSection('B');
     });
+    modal.classList.remove('hidden');
   }
 
-  // expose for other modules in this file
-  window._HH = { S, showScreen, showToast, loadSafe, saveSafe, getBank, API_BASE, recordSession, ensureUser };
+  function switchSection(section) {
+    if (section === S.section) return;
+    // Save answers for current section before switching
+    if (S.section === 'A') {
+      S.sectionA = S.questions.map((q, i) => ({...q, _savedAns: S.answers[i], _savedFlag: S.flagged[i]}));
+    } else {
+      S.sectionB = S.questions.map((q, i) => ({...q, _savedAns: S.answers[i], _savedFlag: S.flagged[i]}));
+    }
+    S.section = section;
+    const newPool = section === 'A' ? S.sectionA : S.sectionB;
+    // Explicitly preserve _type when cleaning up saved fields
+    S.questions = newPool.map(q => {
+      const c = {...q};
+      delete c._savedAns;
+      delete c._savedFlag;
+      // Ensure _type is always set correctly
+      if (!c._type) c._type = section === 'A' ? 'objective' : 'theory';
+      return c;
+    });
+    S.answers   = newPool.map(q => q._savedAns !== undefined ? q._savedAns : null);
+    S.flagged   = newPool.map(q => q._savedFlag || false);
+    S.idx = 0;
+    S.showAnswer = false;
+    buildPills();
+    renderQ();
+    if (E.sectionTabA) E.sectionTabA.classList.toggle('active', section === 'A');
+    if (E.sectionTabB) E.sectionTabB.classList.toggle('active', section === 'B');
+  }
 
+  function shareApp() {
+    const url  = window.location.href;
+    const text = '🎓 Preparing for WAEC/NECO? Try My Exams App!\nPast questions + model answers for 15 subjects + snap-and-mark theory.\n₦2,500 for 3 months — early access at ₦2,000.\n\n'+url;
+    if (navigator.share) navigator.share({title:'My Exams App',text,url}).catch(()=>{});
+    else if (navigator.clipboard) navigator.clipboard.writeText(text)
+      .then(()=>alert('📋 Copied! Paste in WhatsApp or SMS.'));
+    else prompt('Copy and share:',text);
+  }
+
+  /* ════════ SIDEBAR ════════ */
+  function openSidebar()  { E.quizSidebar.classList.add('sidebar-open'); E.sidebarBackdrop.classList.remove('hidden'); }
+  function closeSidebar() { E.quizSidebar.classList.remove('sidebar-open'); E.sidebarBackdrop.classList.add('hidden'); }
+
+  /* ════════ SCREENS ════════ */
+  function showScreen(name) {
+    ['home','quiz','result','class','teacherDash','parentDash','gamesHub','speedRound','trueFalse','memoryMatch','gameResult'].forEach(n => {
+      document.getElementById(n+'Screen').classList.toggle('active', n===name);
+    });
+    window.scrollTo(0,0);
+    if (name==='home') { renderHistory(); refreshStats(); renderStreak(); refreshUpgradeBar(); }
+    if (name==='result') { renderResultTeaser(); }
+    if (name==='quiz' && !S.hasAccess) { scheduleTeaserToast(); }
+    const qcBtn = document.getElementById('quizChallengeBtn');
+    if (qcBtn) qcBtn.classList.toggle('hidden', name === 'quiz');
+
+    // Hash-based navigation — reliable on Chrome mobile/PC and Firefox
+    if (name === 'quiz' || name === 'result') {
+      // Set hash without triggering hashchange (we only want it to trigger on back)
+      history.pushState(null, '', window.location.pathname + '#' + name);
+    } else {
+      // Going home — clear hash
+      history.pushState(null, '', window.location.pathname);
+    }
+  }
+
+  /* ════════ UPGRADE BAR ════════ */
+  function renderPlanBadge() {
+    const badge = document.getElementById('planBadge');
+    if (!badge) return;
+    if (!S.currentUser) { badge.classList.add('hidden'); return; }
+
+    const tier   = loadSafe(SK.tier) || 'free';
+    const access = loadSafe(SK.access);
+    const active = access?.expires && new Date(access.expires) > new Date();
+    const exp    = active ? new Date(access.expires) : null;
+    const expStr = exp ? exp.toLocaleDateString('en-NG', {day:'numeric',month:'short',year:'numeric'}) : '';
+
+    if (!active) {
+      badge.innerHTML = `<span>🆓 Free Trial</span><button class="plan-badge-upgrade" onclick="showPaywall('upgrade')">Upgrade →</button>`;
+      badge.className = 'plan-badge plan-free';
+    } else if (tier === 'plus') {
+      badge.innerHTML = `<span>⭐ Student Pass Plus${expStr ? ' · expires ' + expStr : ''}</span><button class="plan-badge-renew" onclick="handlePayment('plus','quarterly')">Renew →</button>`;
+      badge.className = 'plan-badge plan-plus';
+    } else {
+      // Student Pass — offer upgrade to Plus
+      badge.innerHTML = `<span>✅ Student Pass${expStr ? ' · expires ' + expStr : ''}</span><button class="plan-badge-upgrade" onclick="showPlusUpgradePrompt()">Upgrade to Plus →</button>`;
+      badge.className = 'plan-badge plan-student';
+    }
+    badge.classList.remove('hidden');
+  }
+
+  function refreshUpgradeBar() {
+    const qcBtn = document.getElementById('quizChallengeBtn');
+    if (!E.upgradeBar) return;
+    if (S.hasAccess) {
+      E.upgradeBar.style.display = 'none';
+      if (qcBtn && S.currentUser) qcBtn.classList.remove('hidden');
+      return;
+    }
+    // Show challenge button to free users too — they get paywall on click
+    // It acts as another conversion touchpoint
+    if (qcBtn && S.currentUser) qcBtn.classList.remove('hidden');
+    E.upgradeBar.style.display = '';
+    const remaining = Math.max(0, FREE_TRIAL_LIMIT - S.freeUsed);
+    const msgs = [
+      `⚡ ${remaining} free question${remaining===1?'':'s'} left — unlock unlimited access from ₦2,000`,
+      `🧠 Tap Teach Me you got it wrong — Student Pass Plus explains every answer`,
+      `📸 Snap your theory answers and get marked instantly — Student Pass`,
+      `🏆 WAEC & NECO prep — Teach Me, snap marking, community quiz from ₦2,000`,
+      `🔓 Unlimited sessions · All 15 subjects · Year-by-year papers — Student Pass`,
+      `💡 "Why is this correct?" — Teach Me for your weak areas. Plus tier ₦3,500.`,
+    ];
+    const idx = Math.floor(Date.now() / 30000) % msgs.length;
+    if (E.upgradeBarText) E.upgradeBarText.textContent = msgs[idx];
+  }
+
+  /* ════════ RESULT TEASER ════════ */
+  const RESULT_TEASERS = [
+    {
+      icon: '🧠',
+      title: 'Got questions wrong? Tap Teach Me.',
+      sub:   'Student Pass Plus — tap "Teach Me" on any question. AI breaks down the concept, the trap, the memory tip. ₦3,500/quarter.'
+    },
+    {
+      icon: '📸',
+      title: 'Snap your theory answers. Get marked in seconds.',
+      sub:   'Student Pass includes 50 snap-and-mark credits. No other exam prep app in Nigeria does this.'
+    },
+    {
+      icon: '💡',
+      title: '"Teach Me" — tap to understand any answer',
+      sub:   'Teach Me on Tap "Teach Me" and AI breaks down every question — the concept, the trap, the memory tip. Built for WAEC & NECO.'
+    },
+    {
+      icon: '📚',
+      title: 'You just scratched the surface.',
+      sub:   'Subscribers access all 15 subjects, all years — WAEC, NECO, GCE and NABTEB. Unlimited sessions.'
+    },
+    {
+      icon: '🎯',
+      title: 'Serious students subscribe.',
+      sub:   'Early access at ₦2,000/quarter — only 100 spots. Teach Me, snap marking, community quiz. All in.'
+    },
+    {
+      icon: '📅',
+      title: 'Drill past questions year by year.',
+      sub:   'Filter by 2019, 2020, 2021, 2022 or 2023 — or mix all years. Subscribers unlock every year.'
+    },
+    {
+      icon: '🏆',
+      title: 'Challenge your friends. See who scores higher.',
+      sub:   'Community quiz lets paid subscribers create a challenge, share the code on WhatsApp, and compare scores.'
+    },
+  ];
+
+  function renderResultTeaser() {
+    if (!E.resultUpgradTeaser) return;
+    if (S.hasAccess) { E.resultUpgradTeaser.style.display = 'none'; return; }
+    E.resultUpgradTeaser.style.display = '';
+    const t = RESULT_TEASERS[Math.floor(Math.random() * RESULT_TEASERS.length)];
+    const iconEl = E.resultUpgradTeaser.querySelector('.rut-icon');
+    if (iconEl) iconEl.textContent = t.icon;
+    if (E.rutTitle) E.rutTitle.textContent = t.title;
+    const subEl = E.resultUpgradTeaser.querySelector('.rut-sub');
+    if (subEl) subEl.textContent = t.sub;
+  }
+
+  /* ════════ TEASER TOAST (mid-session) ════════ */
+  const SESSION_TEASERS = [
+    '🧠 Tap Teach Me you got that wrong — Student Pass Plus explains every answer. ₦3,500/quarter.',
+    '💡 "Teach Me" — tap to understand any answer — Teach Me built for WAEC & NECO. Upgrade to Plus.',
+    '📸 Snap your theory answer and get it marked against the official scheme — Student Pass.',
+    '⚡ Unlimited sessions across all 15 subjects from ₦2,000 — early access, 100 spots only.',
+    '🏆 Challenge a friend on this subject — subscribe and create a quiz challenge now.',
+    '🔐 Lock in early access at ₦2,000/quarter before the price goes up. Limited spots left.',
+    '📅 Filter by exam year — drill 2023 WAEC only, or mix all years. Subscribers unlock everything.',
+  ];
+
+  let _teaserTimer = null;
+
+  function scheduleTeaserToast() {
+    if (S.hasAccess) return;
+    if (_teaserTimer) clearTimeout(_teaserTimer);
+    // Show at question 5 or after 90 seconds — whichever comes first
+    _teaserTimer = setTimeout(() => {
+      if (!S.hasAccess && S.inSession) showTeaserToast();
+    }, 90000);
+  }
+
+  function showTeaserToast() {
+    if (!E.teaserToast) return;
+    const msg = SESSION_TEASERS[Math.floor(Math.random() * SESSION_TEASERS.length)];
+    if (E.teaserToastText) E.teaserToastText.textContent = msg;
+    E.teaserToast.classList.remove('hidden');
+    // Auto-hide after 8 seconds
+    setTimeout(hideTeaserToast, 8000);
+  }
+
+  function hideTeaserToast() {
+    if (E.teaserToast) E.teaserToast.classList.add('hidden');
+  }
+
+  /* ════════ UTILS ════════ */
+  /* ════════ INFO TOAST (replaces native alert() for simple notices) ════════ */
+  function showInfoToast(message) {
+    let toast = document.getElementById('meaInfoToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'meaInfoToast';
+      toast.style.cssText = `
+        position:fixed; bottom:5rem; left:50%; transform:translateX(-50%);
+        background:#0a1628; color:white; border:1.5px solid var(--gold,#d4af37);
+        border-radius:10px; padding:.75rem 1.25rem;
+        font-family:var(--sans,sans-serif); font-size:.82rem; font-weight:500;
+        text-align:center; z-index:9999; max-width:320px; width:calc(100% - 2rem);
+        box-shadow:0 4px 20px rgba(0,0,0,.4); line-height:1.5;
+      `;
+      document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.style.display = 'block';
+    clearTimeout(toast._hideTimer);
+    toast._hideTimer = setTimeout(() => { toast.style.display = 'none'; }, 3500);
+  }
+
+  function safe(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+  }
+  function shuffle(a) {
+    const r=[...a];
+    for(let i=r.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[r[i],r[j]]=[r[j],r[i]];}
+    return r;
+  }
+  function saveSafe(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+  function loadSafe(k,d=null){try{const v=localStorage.getItem(k);return v!==null?JSON.parse(v):d;}catch(e){return d;}}
+  function todayStr(){return new Date().toISOString().slice(0,10);}
+
+  // Inline onclick="..." attributes (in index.html and in HTML strings built
+  // by this file) can only see truly global functions — anything defined
+  // inside this closure is invisible to them, causing "X is not defined"
+  // errors. Expose every function referenced that way here.
+  window.showPlusUpgradePrompt = showPlusUpgradePrompt;
+  window.handlePayment         = handlePayment;
+  window.showPaywall           = showPaywall;
+  window.upgradeToPlus         = upgradeToPlus;
+
+  init();
 })();
