@@ -1585,9 +1585,14 @@
     document.querySelectorAll('#gamesHubBody .game-type-card').forEach(card => {
       card.addEventListener('click', () => {
         const g = card.dataset.game;
-        if (g === 'sequence' || g === 'equation') startMathGame(g);
-        else if (g === 'recent') openGameHistory();
-        else renderGamesSubjectPicker(g);
+        try {
+          if (g === 'sequence' || g === 'equation') startMathGame(g);
+          else if (g === 'recent') openGameHistory();
+          else renderGamesSubjectPicker(g);
+        } catch (e) {
+          alert('DEBUG (' + g + '): ' + e.message);
+          console.error(e);
+        }
       });
     });
   }
