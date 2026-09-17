@@ -1590,6 +1590,7 @@
           else if (g === 'recent') openGameHistory();
           else renderGamesSubjectPicker(g);
         } catch (e) {
+          alert('DEBUG (' + g + '): ' + e.message);
           console.error(e);
         }
       });
