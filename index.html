@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=41j"/>
+  <link rel="stylesheet" href="css/styles.css?v=41k"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="icon" type="image/x-icon" href="favicon.ico"/>
   <link rel="apple-touch-icon" href="icon-192.png"/>
@@ -60,6 +60,16 @@
             <div class="hdb-text-wrap">
               <span class="hdb-text">Games</span>
               <span class="hdb-sub">Speed Round · True/False · Memory Match</span>
+            </div>
+            <span class="hdb-arrow">→</span>
+          </div>
+
+          <!-- Community — contribute questions/explanations, practice community-submitted content -->
+          <div class="hero-dash-banner hero-community-banner" id="communityNavCard">
+            <span class="hdb-icon">✍️</span>
+            <div class="hdb-text-wrap">
+              <span class="hdb-text">Community</span>
+              <span class="hdb-sub">Contribute questions · Practice community picks</span>
             </div>
             <span class="hdb-arrow">→</span>
           </div>
@@ -705,6 +715,36 @@
     </div>
   </section>
 
+  <!-- ════════════════ COMMUNITY HUB (apply / status / menu) ════════════════ -->
+  <section id="communityScreen" class="screen">
+    <div class="result-page">
+      <div class="card" style="padding:2rem; max-width:680px; width:100%; margin:0 0 1rem;">
+        <button class="ghost-link" id="communityBackBtn" style="margin-bottom:.5rem;">← Back</button>
+        <div id="communityBody"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ COMMUNITY SUBMIT FORM ════════════════ -->
+  <section id="communitySubmitScreen" class="screen">
+    <div class="result-page">
+      <div class="card" style="padding:2rem; max-width:680px; width:100%; margin:0 0 1rem;">
+        <button class="ghost-link" id="communitySubmitBackBtn" style="margin-bottom:.5rem;">← Back</button>
+        <div id="communitySubmitBody"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ COMMUNITY PRACTICE (subject picker + quiz) ════════════════ -->
+  <section id="communityPracticeScreen" class="screen">
+    <div class="result-page">
+      <div class="card" style="padding:2rem; max-width:720px; width:100%; margin:0 0 1rem;">
+        <button class="ghost-link" id="communityPracticeBackBtn" style="margin-bottom:.5rem;">← Back</button>
+        <div id="communityPracticeBody"></div>
+      </div>
+    </div>
+  </section>
+
   <!-- SNAP AND MARK RESULTS -->
   <div id="snapResultModal" class="snap-overlay hidden">
     <div class="snap-result-card">
@@ -951,7 +991,7 @@
 
 </div><!-- #app -->
 <script src="https://js.paystack.co/v1/inline.js"></script>
-<script src="data/questions.js?v=41j"></script>
-<script src="js/app.js?v=41j"></script>
+<script src="data/questions.js?v=41k"></script>
+<script src="js/app.js?v=41k"></script>
 </body>
 </html>

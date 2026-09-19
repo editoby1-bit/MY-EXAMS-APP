@@ -13,6 +13,7 @@
     tier:    'mea-tier-v1',            // 'student' | 'plus'
     class:   'mea-class-v1',           // { classCode, name, pin } — this device's class membership
     classAdmin: 'mea-class-admin-v1',  // { classCode, adminSecret, schoolName } — teacher device only
+    contributor: 'mea-contributor-v1', // { id, contributorSecret, status } — this device's contributor identity
   };
   const FREE_TRIAL_LIMIT    = 10;   // lifetime questions, not daily
   const FREE_SNAP_LIMIT     = 3;    // lifetime snaps on free tier
@@ -139,6 +140,16 @@
     if (ghb) ghb.addEventListener('click', () => showScreen('home'));
     const gyb = document.getElementById('gameHistoryBackBtn');
     if (gyb) gyb.addEventListener('click', () => showScreen('gamesHub'));
+
+    // Community
+    const communityNav = document.getElementById('communityNavCard');
+    if (communityNav) communityNav.addEventListener('click', openCommunityScreen);
+    const cmb = document.getElementById('communityBackBtn');
+    if (cmb) cmb.addEventListener('click', () => showScreen('home'));
+    const csb = document.getElementById('communitySubmitBackBtn');
+    if (csb) csb.addEventListener('click', () => { showScreen('community'); renderCommunityHub(); });
+    const cpb = document.getElementById('communityPracticeBackBtn');
+    if (cpb) cpb.addEventListener('click', () => { showScreen('community'); renderCommunityHub(); });
 
     // Direct-link entry points for teacher/parent dashboards — e.g.
     // ?dash=teacher (this device's saved admin credentials, from Create
@@ -1533,6 +1544,7 @@
      from tracked practice/exam/challenge sessions. Uses its own
      namespaced state object G so it never touches the main quiz state S. */
   let G = null;
+  let CP = null; // Community Questions practice session state
 
   function gameObjectivePool(subjectKey) {
     const bank = EXAM_BANK[subjectKey];
@@ -2069,6 +2081,289 @@
     document.getElementById('gamePlayAgainBtn').addEventListener('click', () => G.subject ? startGame(G.type, G.subject) : startMathGame(G.type));
     document.getElementById('gameChangeBtn').addEventListener('click', () => { showScreen('gamesHub'); renderGamesHub(); });
     document.getElementById('gameHomeBtn').addEventListener('click', () => showScreen('home'));
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     COMMUNITY QUESTIONS / CONTRIBUTOR PORTAL
+     Talks to /api/contribute on the same shared editoby-api backend
+     Challenge Mode and School & Class use. Community Questions are a
+     separate pool from the official past-question bank — contributor
+     content never touches EXAM_BANK.
+     ════════════════════════════════════════════════════════════ */
+  async function contribApi(action, body) {
+    const res = await fetch(API_BASE + '/api/contribute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...body }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  }
+
+  function getContributor() { return loadSafe(SK.contributor); }
+  function saveContributor(c) { saveSafe(SK.contributor, c); }
+
+  function openCommunityScreen() {
+    showScreen('community');
+    renderCommunityHub();
+  }
+
+  async function renderCommunityHub() {
+    const body = document.getElementById('communityBody');
+    let c = getContributor();
+
+    body.innerHTML = `<p style="color:var(--text-dim); font-size:.85rem;">Loading…</p>`;
+
+    if (c && c.id && c.contributorSecret) {
+      // Refresh status from the server — it may have changed since last visit.
+      try {
+        const r = await contribApi('contributor_status', { id: c.id, contributorSecret: c.contributorSecret });
+        c = { ...c, status: r.status, acceptedCount: r.acceptedCount, flaggedCount: r.flaggedCount, rejectedCount: r.rejectedCount };
+        saveContributor(c);
+      } catch (e) {
+        // Keep showing last-known status if the server call fails
+      }
+    }
+
+    if (!c) {
+      renderCommunityApplyForm(body);
+      return;
+    }
+    if (c.status === 'pending') {
+      body.innerHTML = `
+        <h2 style="margin:.25rem 0 .5rem;">✍️ Community</h2>
+        <p style="color:var(--text-dim); font-size:.9rem;">Your application to become a contributor is under review. Check back soon!</p>
+      `;
+      return;
+    }
+    if (c.status === 'rejected') {
+      body.innerHTML = `
+        <h2 style="margin:.25rem 0 .5rem;">✍️ Community</h2>
+        <p style="color:var(--text-dim); font-size:.9rem;">Your contributor application wasn't approved this time.</p>
+      `;
+      return;
+    }
+    // approved
+    body.innerHTML = `
+      <h2 style="margin:.25rem 0 .5rem;">✍️ Community</h2>
+      <p style="color:var(--text-dim); font-size:.9rem; margin-bottom:1rem;">You're an approved contributor. ${c.acceptedCount || 0} accepted${c.flaggedCount ? ` · ${c.flaggedCount} under review` : ''}${c.rejectedCount ? ` · ${c.rejectedCount} rejected` : ''}.</p>
+      <div class="game-type-card" id="communitySubmitCard">
+        <span class="gtc-icon">📝</span>
+        <div class="gtc-body"><div class="gtc-title">Submit a question or explanation</div><div class="gtc-sub">Add a new question, or explain one for other students.</div></div>
+      </div>
+      <div class="game-type-card" id="communityPracticeCard">
+        <span class="gtc-icon">🌍</span>
+        <div class="gtc-body"><div class="gtc-title">Practice Community Questions</div><div class="gtc-sub">Try questions other students have contributed.</div></div>
+      </div>
+    `;
+    document.getElementById('communitySubmitCard').addEventListener('click', openCommunitySubmit);
+    document.getElementById('communityPracticeCard').addEventListener('click', openCommunityPractice);
+  }
+
+  function renderCommunityApplyForm(body) {
+    body.innerHTML = `
+      <h2 style="margin:.25rem 0 .5rem;">✍️ Become a Contributor</h2>
+      <p style="color:var(--text-dim); font-size:.9rem; margin-bottom:1rem;">Submit past questions or explanations to help other students. Applications are reviewed before you can start.</p>
+      <input type="text" id="commApplyName" class="text-field" placeholder="Your full name" style="width:100%; margin-bottom:.6rem;">
+      <input type="text" id="commApplyContact" class="text-field" placeholder="Phone or email" style="width:100%; margin-bottom:.6rem;">
+      <button class="btn-primary" id="commApplyBtn" style="width:100%;">Apply to Contribute</button>
+      <p style="margin-top:1rem; font-size:.8rem;"><a href="#" id="commRecoverLink" style="color:var(--gold-dk);">Already applied on another device?</a></p>
+      <div id="commApplyError" style="color:var(--red); font-size:.82rem; margin-top:.5rem;"></div>
+    `;
+    document.getElementById('commApplyBtn').addEventListener('click', async () => {
+      const name = document.getElementById('commApplyName').value.trim();
+      const contact = document.getElementById('commApplyContact').value.trim();
+      const errEl = document.getElementById('commApplyError');
+      errEl.textContent = '';
+      if (!name || !contact) { errEl.textContent = 'Please fill in both fields.'; return; }
+      try {
+        const r = await contribApi('apply_contributor', { name, contact, app: 'mea' });
+        saveContributor({ id: r.id, contributorSecret: r.contributorSecret, status: r.status });
+        renderCommunityHub();
+      } catch (e) {
+        errEl.textContent = e.message || 'Something went wrong — please try again.';
+      }
+    });
+    document.getElementById('commRecoverLink').addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      const contact = prompt('Enter the phone or email you applied with:');
+      if (!contact) return;
+      try {
+        const r = await contribApi('contributor_recover', { contact: contact.trim() });
+        saveContributor({ id: r.id, contributorSecret: r.contributorSecret, status: r.status });
+        renderCommunityHub();
+      } catch (e) {
+        alert(e.message || 'No application found for that contact.');
+      }
+    });
+  }
+
+  function openCommunitySubmit() {
+    showScreen('communitySubmit');
+    renderCommunitySubmitForm();
+  }
+
+  function renderCommunitySubmitForm() {
+    const body = document.getElementById('communitySubmitBody');
+    const subjectOptions = Object.entries(SUBJECTS).map(([key, meta]) => `<option value="${key}">${safe(meta.name)}</option>`).join('');
+    body.innerHTML = `
+      <h2 style="margin:.25rem 0 1rem;">📝 Submit to Community</h2>
+      <div style="display:flex; gap:.5rem; margin-bottom:1rem;">
+        <button class="exam-pill comm-type-btn active" data-type="question" style="flex:1;">New Question</button>
+        <button class="exam-pill comm-type-btn" data-type="explanation" style="flex:1;">Explain a Question</button>
+      </div>
+      <div id="commSubjectWrap" style="margin-bottom:.6rem;">
+        <label style="font-size:.8rem; color:var(--text-dim);">Subject</label>
+        <select id="commSubject" class="text-field" style="width:100%;">${subjectOptions}</select>
+      </div>
+      <div id="commFormFields"></div>
+      <div id="commSubmitError" style="color:var(--red); font-size:.82rem; margin:.5rem 0;"></div>
+      <button class="btn-primary" id="commSubmitBtn" style="width:100%; margin-top:.5rem;">Submit</button>
+      <div id="commSubmitResult" style="margin-top:1rem;"></div>
+    `;
+    let currentType = 'question';
+    function renderFields() {
+      const wrap = document.getElementById('commFormFields');
+      if (currentType === 'question') {
+        wrap.innerHTML = `
+          <textarea id="commQText" class="text-field" placeholder="Question text" rows="2" style="width:100%; margin-bottom:.6rem;"></textarea>
+          ${[0,1,2,3].map(i => `<input type="text" class="text-field comm-opt" data-i="${i}" placeholder="Option ${String.fromCharCode(65+i)}" style="width:100%; margin-bottom:.4rem;">`).join('')}
+          <label style="font-size:.8rem; color:var(--text-dim);">Correct answer</label>
+          <select id="commAnswerIdx" class="text-field" style="width:100%; margin-bottom:.6rem;">
+            <option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option>
+          </select>
+        `;
+      } else {
+        wrap.innerHTML = `
+          <textarea id="commQuestionText" class="text-field" placeholder="Paste or type the question you're explaining" rows="2" style="width:100%; margin-bottom:.6rem;"></textarea>
+          <textarea id="commExplanation" class="text-field" placeholder="Your explanation" rows="4" style="width:100%; margin-bottom:.6rem;"></textarea>
+        `;
+      }
+    }
+    renderFields();
+    document.querySelectorAll('.comm-type-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.comm-type-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentType = btn.dataset.type;
+        document.getElementById('commSubmitResult').innerHTML = '';
+        renderFields();
+      });
+    });
+    document.getElementById('commSubmitBtn').addEventListener('click', async () => {
+      const errEl = document.getElementById('commSubmitError');
+      const resultEl = document.getElementById('commSubmitResult');
+      errEl.textContent = '';
+      resultEl.innerHTML = '';
+      const c = getContributor();
+      if (!c || c.status !== 'approved') { errEl.textContent = 'You need to be an approved contributor to submit.'; return; }
+      const subject = document.getElementById('commSubject').value;
+      let payload, type = currentType;
+      if (type === 'question') {
+        const question = document.getElementById('commQText').value.trim();
+        const options = [...document.querySelectorAll('.comm-opt')].map(inp => inp.value.trim());
+        const answer = parseInt(document.getElementById('commAnswerIdx').value, 10);
+        if (!question) { errEl.textContent = 'Question text is required.'; return; }
+        if (options.some(o => !o)) { errEl.textContent = 'All 4 options are required.'; return; }
+        payload = { question, options, answer };
+      } else {
+        const questionText = document.getElementById('commQuestionText').value.trim();
+        const explanation = document.getElementById('commExplanation').value.trim();
+        if (!questionText || !explanation) { errEl.textContent = 'Both fields are required.'; return; }
+        payload = { questionText, explanation };
+      }
+      document.getElementById('commSubmitBtn').disabled = true;
+      document.getElementById('commSubmitBtn').textContent = 'Submitting…';
+      try {
+        const r = await contribApi('submit_content', { contributorId: c.id, contributorSecret: c.contributorSecret, app: 'mea', type, subject, payload });
+        if (r.status === 'live') {
+          resultEl.innerHTML = `<p style="color:var(--green); font-weight:600;">✓ Published! Other students can now see this.</p>`;
+        } else {
+          resultEl.innerHTML = `<p style="color:var(--amber); font-weight:600;">Submitted — a human will take a quick look before it goes live${r.aiReason ? ` (${safe(r.aiReason)})` : ''}.</p>`;
+        }
+      } catch (e) {
+        errEl.textContent = e.message || 'Something went wrong — please try again.';
+      }
+      document.getElementById('commSubmitBtn').disabled = false;
+      document.getElementById('commSubmitBtn').textContent = 'Submit';
+    });
+  }
+
+  function openCommunityPractice() {
+    showScreen('communityPractice');
+    renderCommunitySubjectPicker();
+  }
+
+  function renderCommunitySubjectPicker() {
+    const body = document.getElementById('communityPracticeBody');
+    const subjectOptions = Object.entries(SUBJECTS).map(([key, meta]) => `
+      <button class="subject-btn" data-subject="${key}">
+        <span class="sub-icon">${meta.icon}</span>
+        <span class="sub-name">${safe(meta.name)}</span>
+      </button>`).join('');
+    body.innerHTML = `
+      <h2 style="margin:.25rem 0 1rem;">🌍 Practice Community Questions</h2>
+      <div class="subject-grid">${subjectOptions}</div>
+    `;
+    document.querySelectorAll('#communityPracticeBody .subject-btn').forEach(btn => {
+      btn.addEventListener('click', () => startCommunityPractice(btn.dataset.subject));
+    });
+  }
+
+  async function startCommunityPractice(subject) {
+    const body = document.getElementById('communityPracticeBody');
+    body.innerHTML = `<p style="color:var(--text-dim); font-size:.85rem;">Loading…</p>`;
+    let items;
+    try {
+      const r = await contribApi('get_community_questions', { app: 'mea', subject });
+      items = (r.items || []).filter(it => it.type === 'question');
+    } catch (e) {
+      body.innerHTML = `<p style="color:var(--red); font-size:.85rem;">Couldn't load — please try again.</p>`;
+      return;
+    }
+    if (!items.length) {
+      body.innerHTML = `<p style="color:var(--text-dim); font-size:.9rem;">No community questions yet for ${safe(SUBJECTS[subject]?.name || subject)}. Be the first to contribute one!</p>`;
+      return;
+    }
+    CP = { subject, items: shuffleArr(items), idx: 0, score: 0 };
+    renderCommunityPracticeQ();
+  }
+
+  function renderCommunityPracticeQ() {
+    const body = document.getElementById('communityPracticeBody');
+    if (CP.idx >= CP.items.length) {
+      body.innerHTML = `
+        <h2 style="margin:.25rem 0 1rem;">🌍 Done!</h2>
+        <p style="font-size:1.1rem; margin-bottom:1rem;">You got ${CP.score}/${CP.items.length} correct.</p>
+        <button class="btn-primary" id="commPracticeAgainBtn">Practice Another Subject</button>
+      `;
+      document.getElementById('commPracticeAgainBtn').addEventListener('click', renderCommunitySubjectPicker);
+      return;
+    }
+    const q = CP.items[CP.idx];
+    body.innerHTML = `
+      <div class="game-progress"><span>Question ${CP.idx + 1}/${CP.items.length}</span><span class="game-score-live">Score: ${CP.score}</span></div>
+      <p class="game-question">${safe(q.payload.question)}</p>
+      <div id="commPracticeOptions">
+        ${q.payload.options.map((opt, i) => `<button class="game-option-btn" data-i="${i}">${safe(opt)}</button>`).join('')}
+      </div>
+    `;
+    document.querySelectorAll('#commPracticeOptions .game-option-btn').forEach(btn => {
+      btn.addEventListener('click', () => answerCommunityPractice(parseInt(btn.dataset.i)));
+    });
+  }
+
+  function answerCommunityPractice(choiceIdx) {
+    const q = CP.items[CP.idx];
+    const correct = choiceIdx === q.payload.answer;
+    if (correct) CP.score++;
+    document.querySelectorAll('#commPracticeOptions .game-option-btn').forEach((btn, i) => {
+      btn.disabled = true;
+      if (i === q.payload.answer) btn.classList.add('correct');
+      else if (i === choiceIdx) btn.classList.add('wrong');
+    });
+    setTimeout(() => { CP.idx++; renderCommunityPracticeQ(); }, 700);
   }
 
   /* ════════ RESULTS ════════ */
@@ -4491,7 +4786,7 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
 
   /* ════════ SCREENS ════════ */
   function showScreen(name) {
-    ['home','quiz','result','class','teacherDash','parentDash','gamesHub','speedRound','trueFalse','memoryMatch','mathGame','gameHistory','gameResult'].forEach(n => {
+    ['home','quiz','result','class','teacherDash','parentDash','gamesHub','speedRound','trueFalse','memoryMatch','mathGame','gameHistory','gameResult','community','communitySubmit','communityPractice'].forEach(n => {
       document.getElementById(n+'Screen').classList.toggle('active', n===name);
     });
     window.scrollTo(0,0);
