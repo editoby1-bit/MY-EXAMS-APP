@@ -2185,17 +2185,37 @@
         errEl.textContent = e.message || 'Something went wrong — please try again.';
       }
     });
-    document.getElementById('commRecoverLink').addEventListener('click', async (ev) => {
+    document.getElementById('commRecoverLink').addEventListener('click', (ev) => {
       ev.preventDefault();
-      const contact = prompt('Enter the phone or email you applied with:');
-      if (!contact) return;
+      renderCommunityRecoverForm(body);
+    });
+  }
+
+  function renderCommunityRecoverForm(body) {
+    body.innerHTML = `
+      <h2 style="margin:.25rem 0 .5rem;">Find Your Application</h2>
+      <p style="color:var(--text-dim); font-size:.9rem; margin-bottom:1rem;">Enter the phone or email you applied with, to restore your contributor account on this device.</p>
+      <input type="text" id="commRecoverContact" class="text-field" placeholder="Phone or email" style="width:100%; margin-bottom:.6rem;">
+      <button class="btn-primary" id="commRecoverBtn" style="width:100%;">Find My Account</button>
+      <p style="margin-top:1rem; font-size:.8rem;"><a href="#" id="commBackToApplyLink" style="color:var(--gold-dk);">← Back to apply</a></p>
+      <div id="commRecoverError" style="color:var(--red); font-size:.82rem; margin-top:.5rem;"></div>
+    `;
+    document.getElementById('commRecoverBtn').addEventListener('click', async () => {
+      const contact = document.getElementById('commRecoverContact').value.trim();
+      const errEl = document.getElementById('commRecoverError');
+      errEl.textContent = '';
+      if (!contact) { errEl.textContent = 'Please enter a phone or email.'; return; }
       try {
-        const r = await contribApi('contributor_recover', { contact: contact.trim() });
+        const r = await contribApi('contributor_recover', { contact });
         saveContributor({ id: r.id, contributorSecret: r.contributorSecret, status: r.status });
         renderCommunityHub();
       } catch (e) {
-        alert(e.message || 'No application found for that contact.');
+        errEl.textContent = e.message || 'No application found for that contact.';
       }
+    });
+    document.getElementById('commBackToApplyLink').addEventListener('click', (ev) => {
+      ev.preventDefault();
+      renderCommunityApplyForm(body);
     });
   }
 
