@@ -150,6 +150,9 @@
     if (csb) csb.addEventListener('click', () => { showScreen('community'); renderCommunityHub(); });
     const cpb = document.getElementById('communityPracticeBackBtn');
     if (cpb) cpb.addEventListener('click', () => { showScreen('community'); renderCommunityHub(); });
+    const cab = document.getElementById('communityAdminBackBtn');
+    if (cab) cab.addEventListener('click', () => { showScreen('community'); renderCommunityHub(); });
+    if (window.location.hash === '#community-admin') openCommunityAdmin();
 
     // Direct-link entry points for teacher/parent dashboards — e.g.
     // ?dash=teacher (this device's saved admin credentials, from Create
@@ -2128,6 +2131,7 @@
 
     if (!c) {
       renderCommunityApplyForm(body);
+      attachCommunityAdminLink(body);
       return;
     }
     if (c.status === 'pending') {
@@ -2135,6 +2139,7 @@
         <h2 style="margin:.25rem 0 .5rem;">✍️ Community</h2>
         <p style="color:var(--text-dim); font-size:.9rem;">Your application to become a contributor is under review. Check back soon!</p>
       `;
+      attachCommunityAdminLink(body);
       return;
     }
     if (c.status === 'rejected') {
@@ -2142,6 +2147,7 @@
         <h2 style="margin:.25rem 0 .5rem;">✍️ Community</h2>
         <p style="color:var(--text-dim); font-size:.9rem;">Your contributor application wasn't approved this time.</p>
       `;
+      attachCommunityAdminLink(body);
       return;
     }
     // approved
@@ -2159,6 +2165,15 @@
     `;
     document.getElementById('communitySubmitCard').addEventListener('click', openCommunitySubmit);
     document.getElementById('communityPracticeCard').addEventListener('click', openCommunityPractice);
+    attachCommunityAdminLink(body);
+  }
+
+  function attachCommunityAdminLink(body) {
+    body.insertAdjacentHTML('beforeend', '<p style="margin-top:1.5rem; text-align:center;"><a href="#" id="communityAdminLink" style="font-size:.72rem; color:var(--text-dim);">⚙ Admin</a></p>');
+    document.getElementById('communityAdminLink').addEventListener('click', (ev) => {
+      ev.preventDefault();
+      openCommunityAdmin();
+    });
   }
 
   function renderCommunityApplyForm(body) {
@@ -2384,6 +2399,137 @@
       else if (i === choiceIdx) btn.classList.add('wrong');
     });
     setTimeout(() => { CP.idx++; renderCommunityPracticeQ(); }, 700);
+  }
+
+  /* ── Community Admin (founder-only — approve contributors, resolve
+     flagged submissions, all from inside the app instead of curl) ── */
+  const ADMIN_KEY_STORAGE = 'meaCommAdminKey';
+
+  function openCommunityAdmin() {
+    showScreen('communityAdmin');
+    renderCommunityAdmin();
+  }
+
+  function renderCommunityAdmin() {
+    const savedKey = loadSafe(ADMIN_KEY_STORAGE, null);
+    if (savedKey) {
+      renderAdminDashboard(savedKey);
+    } else {
+      renderAdminLogin();
+    }
+  }
+
+  function renderAdminLogin() {
+    const body = document.getElementById('communityAdminBody');
+    body.innerHTML = `
+      <h2 style="margin:.25rem 0 1rem;">⚙ Community Admin</h2>
+      <input type="password" id="adminKeyInput" class="text-field" placeholder="Admin passphrase" style="width:100%; margin-bottom:.6rem;">
+      <button class="btn-primary" id="adminUnlockBtn" style="width:100%;">Unlock</button>
+      <div id="adminLoginError" style="color:var(--red); font-size:.82rem; margin-top:.5rem;"></div>
+    `;
+    document.getElementById('adminUnlockBtn').addEventListener('click', async () => {
+      const key = document.getElementById('adminKeyInput').value.trim();
+      const errEl = document.getElementById('adminLoginError');
+      errEl.textContent = '';
+      if (!key) { errEl.textContent = 'Enter the admin passphrase.'; return; }
+      try {
+        await contribApi('admin_list_pending_contributors', { adminKey: key });
+        saveSafe(ADMIN_KEY_STORAGE, key);
+        renderAdminDashboard(key);
+      } catch (e) {
+        errEl.textContent = 'Wrong passphrase.';
+      }
+    });
+  }
+
+  async function renderAdminDashboard(adminKey) {
+    const body = document.getElementById('communityAdminBody');
+    body.innerHTML = `<p style="color:var(--text-dim); font-size:.85rem;">Loading…</p>`;
+    let pending, flagged;
+    try {
+      [pending, flagged] = await Promise.all([
+        contribApi('admin_list_pending_contributors', { adminKey }),
+        contribApi('admin_list_flagged', { adminKey }),
+      ]);
+    } catch (e) {
+      saveSafe(ADMIN_KEY_STORAGE, null);
+      renderAdminLogin();
+      return;
+    }
+    const pendingList = pending.items || [];
+    const flaggedList = flagged.items || [];
+
+    body.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h2 style="margin:0;">⚙ Community Admin</h2>
+        <a href="#" id="adminLogoutLink" style="font-size:.78rem; color:var(--text-dim);">Log out</a>
+      </div>
+
+      <h3 style="font-size:.95rem; margin:.5rem 0;">Pending Contributors (${pendingList.length})</h3>
+      <div id="adminPendingList">
+        ${pendingList.length === 0 ? '<p style="color:var(--text-dim); font-size:.85rem;">None right now.</p>' : pendingList.map(c => `
+          <div style="padding:.7rem .9rem; background:var(--cream-w); border-radius:var(--r-m); margin-bottom:.5rem;">
+            <div style="font-weight:600; font-size:.9rem;">${safe(c.name)}</div>
+            <div style="font-size:.8rem; color:var(--text-dim); margin-bottom:.5rem;">${safe(c.contact)} · applied ${new Date(c.appliedAt).toLocaleDateString()}</div>
+            <button class="btn-primary admin-approve-contributor" data-id="${c.id}" style="padding:.4rem .9rem; font-size:.82rem;">Approve</button>
+            <button class="btn-secondary admin-reject-contributor" data-id="${c.id}" style="padding:.4rem .9rem; font-size:.82rem;">Reject</button>
+          </div>
+        `).join('')}
+      </div>
+
+      <h3 style="font-size:.95rem; margin:1.25rem 0 .5rem;">Flagged Submissions (${flaggedList.length})</h3>
+      <div id="adminFlaggedList">
+        ${flaggedList.length === 0 ? '<p style="color:var(--text-dim); font-size:.85rem;">None right now.</p>' : flaggedList.map(s => `
+          <div style="padding:.7rem .9rem; background:var(--cream-w); border-radius:var(--r-m); margin-bottom:.5rem;">
+            <div style="font-weight:600; font-size:.9rem;">${safe(s.contributorName || 'Unknown')} · ${safe(s.subject)} · ${s.type === 'question' ? 'New Question' : 'Explanation'}</div>
+            <div style="font-size:.85rem; margin:.4rem 0;">
+              ${s.type === 'question'
+                ? `${safe(s.payload.question)}<br><span style="color:var(--text-dim);">${s.payload.options.map((o,i) => `${String.fromCharCode(65+i)}) ${safe(o)}${i === s.payload.answer ? ' ✓' : ''}`).join(' &nbsp; ')}</span>`
+                : `<em>${safe(s.payload.questionText)}</em><br>${safe(s.payload.explanation)}`}
+            </div>
+            <div style="font-size:.78rem; color:var(--amber); margin-bottom:.5rem;">AI flagged: ${safe(s.aiReason || 'needs review')}</div>
+            <button class="btn-primary admin-approve-submission" data-id="${s.id}" style="padding:.4rem .9rem; font-size:.82rem;">Approve</button>
+            <button class="btn-secondary admin-reject-submission" data-id="${s.id}" style="padding:.4rem .9rem; font-size:.82rem;">Reject</button>
+          </div>
+        `).join('')}
+      </div>
+    `;
+
+    document.getElementById('adminLogoutLink').addEventListener('click', (ev) => {
+      ev.preventDefault();
+      saveSafe(ADMIN_KEY_STORAGE, null);
+      renderAdminLogin();
+    });
+    document.querySelectorAll('.admin-approve-contributor').forEach(btn => {
+      btn.addEventListener('click', () => decideContributor(adminKey, btn.dataset.id, true));
+    });
+    document.querySelectorAll('.admin-reject-contributor').forEach(btn => {
+      btn.addEventListener('click', () => decideContributor(adminKey, btn.dataset.id, false));
+    });
+    document.querySelectorAll('.admin-approve-submission').forEach(btn => {
+      btn.addEventListener('click', () => decideSubmission(adminKey, btn.dataset.id, true));
+    });
+    document.querySelectorAll('.admin-reject-submission').forEach(btn => {
+      btn.addEventListener('click', () => decideSubmission(adminKey, btn.dataset.id, false));
+    });
+  }
+
+  async function decideContributor(adminKey, id, approve) {
+    try {
+      await contribApi('admin_decide_contributor', { adminKey, id, approve });
+      renderAdminDashboard(adminKey);
+    } catch (e) {
+      alert(e.message || 'Something went wrong.');
+    }
+  }
+
+  async function decideSubmission(adminKey, id, approve) {
+    try {
+      await contribApi('admin_decide_submission', { adminKey, id, approve });
+      renderAdminDashboard(adminKey);
+    } catch (e) {
+      alert(e.message || 'Something went wrong.');
+    }
   }
 
   /* ════════ RESULTS ════════ */
@@ -4806,7 +4952,7 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
 
   /* ════════ SCREENS ════════ */
   function showScreen(name) {
-    ['home','quiz','result','class','teacherDash','parentDash','gamesHub','speedRound','trueFalse','memoryMatch','mathGame','gameHistory','gameResult','community','communitySubmit','communityPractice'].forEach(n => {
+    ['home','quiz','result','class','teacherDash','parentDash','gamesHub','speedRound','trueFalse','memoryMatch','mathGame','gameHistory','gameResult','community','communitySubmit','communityPractice','communityAdmin'].forEach(n => {
       document.getElementById(n+'Screen').classList.toggle('active', n===name);
     });
     window.scrollTo(0,0);
