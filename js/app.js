@@ -4,6 +4,69 @@
 ═══════════════════════════════════════════════════════════ */
 (() => {
 
+  /* ════════ PASSAGE-GROUPED QUESTIONS ════════
+     Comprehension / cloze content is stored in EXAM_BANK[subject].objective
+     as ONE entry:
+       { passageId:'eng-waec-2019-p1', passageTitle:'Comprehension Passage',
+         exam:'WAEC', year:2019, instruction:'…', passage:'…',
+         questions:[ {question, options, answer, explanation}, … ] }
+     Flattened ONCE here into ordinary objective questions that each carry
+     their passage, plus a stable generated id (`<passageId>-q<n>`) when the
+     question has none — so challenges, dashboards (keyed on id) and history
+     keep working unchanged. Existing flat questions are untouched. */
+  (function normalizePassageBank(bank) {
+    Object.keys(bank).forEach(subject => {
+      const arr = bank[subject] && bank[subject].objective;
+      if (!Array.isArray(arr) || !arr.some(e => e && Array.isArray(e.questions))) return;
+      const flat = [];
+      arr.forEach((entry, gi) => {
+        if (!entry || !Array.isArray(entry.questions)) { flat.push(entry); return; }
+        const pid = entry.passageId || `${subject}-passage-${gi}`;
+        entry.questions.forEach((q, k) => flat.push({
+          ...q,
+          id: q.id || `${pid}-q${k + 1}`,
+          exam: q.exam ?? entry.exam,
+          year: q.year ?? entry.year,
+          passage: entry.passage,
+          passageId: pid,
+          passageTitle: entry.passageTitle || 'Passage',
+          passageInstruction: entry.instruction || '',
+          passagePart: k + 1,
+          passageSize: entry.questions.length,
+        }));
+      });
+      bank[subject].objective = flat;
+    });
+  })(EXAM_BANK);
+
+  // Selection units: a standalone question = unit of 1; all questions sharing
+  // a passageId = one unit, in passage order. Unit order = first appearance.
+  function toUnits(pool) {
+    const units = [], byId = new Map();
+    pool.forEach(q => {
+      if (!q.passageId) { units.push([q]); return; }
+      let u = byId.get(q.passageId);
+      if (!u) { u = []; byId.set(q.passageId, u); units.push(u); }
+      u.push(q);
+    });
+    units.forEach(u => { if (u.length > 1) u.sort((a, b) => (a.passagePart || 0) - (b.passagePart || 0)); });
+    return units;
+  }
+  // Takes up to `count` questions from ordered units without splitting a
+  // passage (a passage is only taken if it fits whole). If nothing fits at
+  // all, the first unit is trimmed rather than returning nothing.
+  function fillFromUnits(units, count) {
+    const out = [];
+    for (const u of units) {
+      if (out.length >= count) break;
+      if (out.length + u.length <= count) out.push(...u);
+    }
+    if (!out.length && units.length) out.push(...units[0].slice(0, count));
+    return out;
+  }
+  const shuffleGrouped = list => shuffle(toUnits(list)).flat();
+  const takeGrouped    = (list, count) => fillFromUnits(toUnits(list), count);
+
   const SK = {
     users:   'mea-users-v1',
     current: 'mea-current-v1',
@@ -574,7 +637,7 @@
       let qs = raw.filter(examFilter);
       if (!qs.length) qs = raw.filter(q => !q.exam || q.exam === S.exam);
       if (!qs.length) qs = [...raw];
-      return shuffle(qs).map(q => ({...q, _type: type === 'objective' ? 'objective' : 'theory'}));
+      return shuffleGrouped(qs).map(q => ({...q, _type: type === 'objective' ? 'objective' : 'theory'}));
     };
 
     let pool = [];
@@ -584,7 +647,7 @@
       pool = getPool('theory');
     } else if (S.type === 'both' && S.bothMode === 'sections') {
       // Sections mode — keep pools separate, start with Section A
-      S.sectionA = getPool('objective').slice(0, S.count);
+      S.sectionA = takeGrouped(getPool('objective'), S.count === 'all' ? Infinity : Number(S.count));
       S.sectionB = getPool('theory').slice(0, Math.max(3, Math.ceil(S.count * 0.2)));
       S.section  = 'A';
       pool = [...S.sectionA];
@@ -600,8 +663,8 @@
       return;
     }
 
-    const n = S.count === 'all' ? pool.length : Math.min(Number(S.count), pool.length);
-    S.questions  = pool.slice(0, n);
+    S.questions  = takeGrouped(pool, S.count === 'all' ? pool.length : Math.min(Number(S.count), pool.length));
+    const n = S.questions.length;
     S.answers    = new Array(n).fill(null);
     S.flagged    = new Array(n).fill(false);
     S.qTimings   = new Array(n).fill(null);
@@ -843,7 +906,32 @@
   }
 
   /* ════════ OBJECTIVE ════════ */
+  // Shared passage above a comprehension/cloze question. Opens expanded on
+  // arriving at a new passage; keeps the student's open/closed choice while
+  // they move within the same passage.
+  function renderPassage(q) {
+    let box = document.getElementById('passageBox');
+    if (!box) {
+      box = document.createElement('details');
+      box.id = 'passageBox';
+      box.className = 'passage-box hidden';
+      E.objectiveQuestion.parentNode.insertBefore(box, E.objectiveQuestion);
+    }
+    if (!q.passage) { box.classList.add('hidden'); box.dataset.pid = ''; return; }
+    if (box.dataset.pid !== q.passageId) {
+      box.dataset.pid = q.passageId;
+      box.open = true;
+      box.innerHTML = `<summary><span class="passage-title">${safe(q.passageTitle)}</span><span class="passage-part" id="passagePartTag"></span></summary>`
+        + (q.passageInstruction ? `<p class="passage-instr">${safe(q.passageInstruction)}</p>` : '')
+        + `<div class="passage-text">${safe(q.passage).replace(/\n/g,'<br>')}</div>`;
+    }
+    const tag = document.getElementById('passagePartTag');
+    if (tag) tag.textContent = `Question ${q.passagePart} of ${q.passageSize} on this passage`;
+    box.classList.remove('hidden');
+  }
+
   function renderObjective(q, ans) {
+    renderPassage(q);
     E.objectiveQuestion.innerHTML = safe(q.question).replace(/\n/g,'<br>');
     E.optionsList.innerHTML = '';
     E.explanationArea.innerHTML = '';
@@ -1552,7 +1640,8 @@
   function gameObjectivePool(subjectKey) {
     const bank = EXAM_BANK[subjectKey];
     if (!bank || !bank.objective) return [];
-    return bank.objective.filter(q => Array.isArray(q.options) && q.options.length >= 2);
+    // Passage-bound questions are meaningless in a game loop without the passage.
+    return bank.objective.filter(q => Array.isArray(q.options) && q.options.length >= 2 && !q.passage);
   }
 
   // Memory Match needs short text to fit on a card — a subject can pass
@@ -3524,14 +3613,15 @@
     if (!pool.length) return [];
     const recentIds = loadSafe(RECENT_QS_STORE, []);
     const recentSet = new Set(recentIds);
-    const fresh = shuffle(pool.filter(q => q.id && !recentSet.has(q.id)));
-    const stale = pool.filter(q => q.id && recentSet.has(q.id))
-      .sort((a, b) => recentIds.indexOf(a.id) - recentIds.indexOf(b.id)); // oldest-used first
+    // Passage questions travel as one unit; a unit is "recent" if any of
+    // its questions was used recently.
+    const units = toUnits(pool.filter(q => q.id));
+    const isStale = u => u.some(q => recentSet.has(q.id));
+    const fresh = shuffle(units.filter(u => !isStale(u)));
+    const stale = units.filter(isStale)
+      .sort((a, b) => recentIds.indexOf(a[0].id) - recentIds.indexOf(b[0].id)); // oldest-used first
 
-    const selected = fresh.slice(0, count);
-    if (selected.length < count) {
-      selected.push(...stale.slice(0, count - selected.length));
-    }
+    const selected = fillFromUnits([...fresh, ...stale], count);
 
     // Remember these as recently used (most-recent at the end), capped.
     const usedIds = selected.map(q => q.id).filter(Boolean);
@@ -4410,6 +4500,10 @@
     return true;
   }
 
+  function refundMeaAICredit() {
+    saveSafe(SK_MEA_AI, { n: getMeaAICredits() + 1, quarter: getMeaQuarter() });
+  }
+
   function getMeaQuarter() {
     const d = new Date();
     return `${d.getFullYear()}-Q${Math.ceil((d.getMonth()+1)/3)}`;
@@ -4437,15 +4531,18 @@
       showPlusUpgradePrompt();
       return;
     }
-    const credits = getMeaAICredits();
-    if (credits <= 0) {
-      alert(`You've used all ${MEA_AI_QUOTA} Teach Me credits for this quarter.\n\nTop up: ₦500 = 50 more explanations.`);
-      return;
-    }
-
     const q   = S.questions[S.idx];
     const ans = S.answers[S.idx];
     if (!q) return;
+
+    // Explanations already fetched on this device stay viewable at 0 credits.
+    const cacheKey = teachCacheKey(q, qType);
+    const local = getCachedTeach(cacheKey);
+    const credits = getMeaAICredits();
+    if (credits <= 0 && !local) {
+      alert(`You've used all ${MEA_AI_QUOTA} Teach Me credits for this quarter.\n\nTop up: ₦500 = 50 more explanations.`);
+      return;
+    }
 
     // Show panel
     if (E.meaAiPanel) E.meaAiPanel.classList.remove('hidden');
@@ -4453,32 +4550,60 @@
     if (E.meaAiResponse) E.meaAiResponse.classList.add('hidden');
     updateMeaAICredits();
 
+    const L = i => String.fromCharCode(65 + i);
+    const subjName = SUBJECTS[S.subject]?.name || S.subject;
+    const examName = q.exam || S.exam;
+
+    // Student-specific line lives OUTSIDE the cached explanation, so one
+    // explanation per question serves every student.
+    let youLine = '';
+    if (qType === 'objective') {
+      const answered = ans !== null && ans !== undefined;
+      youLine = !answered
+        ? `<div class="ai-you">You didn't answer this one. The answer is <strong>${L(q.answer)}</strong>.</div>`
+        : ans === q.answer
+          ? `<div class="ai-you ai-you-right">You chose <strong>${L(ans)}</strong> — correct ✓</div>`
+          : `<div class="ai-you ai-you-wrong">You chose <strong>${L(ans)}</strong>. The answer is <strong>${L(q.answer)}</strong>.</div>`;
+    }
+    const show = text => {
+      if (E.meaAiLoading) E.meaAiLoading.classList.add('hidden');
+      if (E.meaAiResponse) {
+        E.meaAiResponse.innerHTML = `
+          <div class="mea-ai-q">${safe(q.question.substring(0,90))}${q.question.length>90?'…':''}</div>
+          ${youLine}
+          <div class="mea-ai-text">${safe(text).replace(/\n/g,'<br/>')}</div>`;
+        E.meaAiResponse.classList.remove('hidden');
+      }
+      updateMeaAICredits();
+    };
+
+    // Layer 1 — this device already has it: instant, free, offline.
+    // (Layer 2, shared across ALL students, is the server-side Redis cache
+    // in /api/teach keyed on the `teach` fields sent below.)
+    if (local) { show(local); return; }
+
     let prompt = '';
     if (qType === 'objective') {
-      const correctOpt  = q.options?.[q.answer] || q.answer;
-      const studentOpt  = ans !== null && ans !== undefined ? (q.options?.[ans] || ans) : 'Did not answer';
-      const wasCorrect  = ans === q.answer;
-      prompt = `You are a WAEC/NECO exam tutor helping a Nigerian student prepare for their exams.
-
+      prompt = `You are a WAEC/NECO exam tutor helping Nigerian students prepare for their exams.
+${q.passage ? `\nThis question is based on the following ${q.passageTitle || 'passage'}:\n---\n${q.passage}\n---\n` : ''}
 Question: ${q.question}
-Options: ${(q.options||[]).map((o,i)=>String.fromCharCode(65+i)+'. '+o).join(' | ')}
-Correct answer: ${correctOpt}
-Student answered: ${studentOpt} (${wasCorrect ? 'CORRECT ✓' : 'WRONG ✗'})
-Subject: ${SUBJECTS[S.subject]?.name || S.subject}
-Exam: ${q.exam || S.exam}
+Options: ${(q.options||[]).map((o,i)=>L(i)+'. '+o).join(' | ')}
+Correct answer: ${L(q.answer)}. ${q.options?.[q.answer] ?? ''}
+Subject: ${subjName}
+Exam: ${examName}
 
-Give a clear explanation in 3-4 sentences:
-1. Why the correct answer is right — the key concept or principle
-2. ${!wasCorrect ? "Why the student's choice was wrong and what trap they fell into" : "What makes this concept commonly tested in WAEC/NECO"}
+Give a clear explanation in 3-5 sentences:
+1. Why the correct answer is right — the key concept or principle${q.passage ? ', pointing to what in the passage supports it' : ''}
+2. Briefly, why each other option is wrong (the trap in each)
 3. A memory tip or rule to remember for the exam
 
-Use plain English. Be encouraging. Keep it concise — this student is under exam pressure.`;
+Use plain English. Be encouraging. Keep it concise — students are under exam pressure.`;
     } else {
       prompt = `You are a WAEC/NECO exam tutor helping a Nigerian student prepare.
 
 Theory question: ${q.question}
-Subject: ${SUBJECTS[S.subject]?.name || S.subject}
-Exam: ${q.exam || S.exam}
+Subject: ${subjName}
+Exam: ${examName}
 
 The marking scheme awards points for: ${(q.markingScheme||[]).map(p=>p.point).join('; ')}
 
@@ -4498,34 +4623,55 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
         if (E.meaAiPanel) E.meaAiPanel.classList.add('hidden');
         return;
       }
-      // ⚙️ Calls the same Vercel project as snap-and-mark — add a /api/teach
-      // serverless function there that holds ANTHROPIC_API_KEY server-side
-      // and forwards { prompt } to Claude. Calling api.anthropic.com directly
-      // from the browser needs a key in the client bundle, which is visible
-      // to anyone in the network tab — never do that for a paid feature.
+      // `prompt` keeps today's /api/teach working unchanged; `teach` lets the
+      // updated backend build the prompt server-side and cache by content.
       const res  = await fetch(API_BASE + '/api/teach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({
+          prompt,
+          teach: { app: 'mea', v: 1, qType, id: q.id || null, subject: S.subject, exam: examName,
+                   question: q.question, options: q.options || null, answer: q.answer ?? null,
+                   markingScheme: qType === 'objective' ? null : (q.markingScheme || []).map(p => p.point),
+                   passage: q.passage || null, passageTitle: q.passageTitle || null }
+        })
       });
-      const data = await res.json();
-      const text = data.text || data.content?.map(c => c.text||'').join('') || 'Could not get explanation. Please try again.';
-
-      if (E.meaAiLoading) E.meaAiLoading.classList.add('hidden');
-      if (E.meaAiResponse) {
-        E.meaAiResponse.innerHTML = `
-          <div class="mea-ai-q">${safe(q.question.substring(0,90))}${q.question.length>90?'…':''}</div>
-          <div class="mea-ai-text">${safe(text).replace(/\n/g,'<br/>')}</div>`;
-        E.meaAiResponse.classList.remove('hidden');
-      }
-      updateMeaAICredits();
+      const data = await res.json().catch(() => ({}));
+      const text = data.text || data.content?.map(c => c.text||'').join('') || '';
+      if (!res.ok || !text) throw new Error('empty');
+      putCachedTeach(cacheKey, text);
+      show(text);
     } catch(err) {
+      refundMeaAICredit(); // student got nothing — don't charge them
       if (E.meaAiLoading) E.meaAiLoading.classList.add('hidden');
       if (E.meaAiResponse) {
         E.meaAiResponse.innerHTML = '<p style="color:#e74c3c;font-size:.85rem">Could not reach AI. Check your connection and try again.</p>';
         E.meaAiResponse.classList.remove('hidden');
       }
+      updateMeaAICredits();
     }
+  }
+
+  const SK_TEACH_CACHE = 'mea-teach-cache-v1';
+  const TEACH_CACHE_CAP = 200;
+  function teachCacheKey(q, qType) {
+    const str = JSON.stringify([qType, q.id || '', q.passageId || '', q.question, q.options || null, q.answer ?? null]);
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+    return 't' + (h >>> 0).toString(36);
+  }
+  function getCachedTeach(key) {
+    const c = loadSafe(SK_TEACH_CACHE, {});
+    return c && c[key] ? c[key].t : null;
+  }
+  function putCachedTeach(key, text) {
+    const c = loadSafe(SK_TEACH_CACHE, {}) || {};
+    c[key] = { t: text, at: Date.now() };
+    const keys = Object.keys(c);
+    if (keys.length > TEACH_CACHE_CAP) {
+      keys.sort((a, b) => c[a].at - c[b].at).slice(0, keys.length - TEACH_CACHE_CAP).forEach(k => delete c[k]);
+    }
+    saveSafe(SK_TEACH_CACHE, c);
   }
 
   /* ════════════════════════════════
