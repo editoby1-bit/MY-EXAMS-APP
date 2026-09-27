@@ -2,7 +2,9 @@
    MY EXAMS APP — Question Bank v1.0
    Covers: WAEC, NECO, GCE, NABTEB
    15 Subjects | Objective + Theory
-   Sources: Official WAEC/NECO past questions (public domain)
+   Sources: WAEC/NECO/GCE/NABTEB past questions. Past examination
+   papers remain the copyright of the examining bodies; they are not
+   public domain.
 ═══════════════════════════════════════════════════════════════ */
 
 const EXAM_BANK = {
@@ -1051,7 +1053,7 @@ const SUBJECTS = {
     {id:'math-gen050',exam:'NECO',year:2019,question:'The sum of the first 8 terms of an AP is 100 and the first term is 4. Find the common difference.',options:['2','3','4','5'],answer:0,explanation:'Sₙ = n/2[2a+(n−1)d]. 100 = 8/2[8+7d] = 4[8+7d]. 25 = 8+7d. 7d=17... d≈2. Checking: d=2 gives S₈=4[2(4)+7(2)]=4×22=88. Recalculate: 100=4[8+7d], 25=8+7d, 7d=17, d=17/7≈2.43. Closest answer is 2.'},
     {id:'math-gen051',exam:'NECO',year:2019,question:'Express cos 120° exactly.',options:['√3/2','−√3/2','1/2','−1/2'],answer:3,explanation:'120° = 180°−60°. cos(180°−θ) = −cos θ. cos60° = 1/2. So cos120° = −1/2.'},
     {id:'math-gen052',exam:'NECO',year:2023,question:'How many ways can 5 people be seated in a row?',options:['25','60','120','720'],answer:2,explanation:'5! = 5×4×3×2×1 = 120 ways.'},
-    {id:'math-gen053',exam:'NECO',year:2023,question:'Find the value of ∫(2x+3)dx between x=0 and x=2.',options:['8','10','12','14'],answer:2,explanation:'∫(2x+3)dx = x²+3x. At x=2: 4+6=10. At x=0: 0. Result = 10−0 = 10. Wait: [x²+3x]₀² = (4+6)−0 = 10. Answer B.'},
+    {id:'math-gen053',exam:'NECO',year:2023,question:'Find the value of ∫(2x+3)dx between x=0 and x=2.',options:['8','10','12','14'],answer:1,explanation:'∫(2x+3)dx = x² + 3x. Evaluate from 0 to 2: (2² + 3×2) − (0 + 0) = 4 + 6 = 10.'},
   ]);
 
   add('mathematics','theory',[

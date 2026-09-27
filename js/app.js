@@ -4480,30 +4480,6 @@
   /* ════════════════════════════════
      AI EXPLANATIONS (Plus tier)
   ════════════════════════════════ */
-  const SK_MEA_AI     = 'mea-ai-credits-v1';
-  const MEA_AI_QUOTA  = 100; // per quarter
-
-  function getMeaAICredits() {
-    const qtr = getMeaQuarter();
-    const d   = loadSafe(SK_MEA_AI);
-    if (!d || d.quarter !== qtr) {
-      saveSafe(SK_MEA_AI, { n: MEA_AI_QUOTA, quarter: qtr });
-      return MEA_AI_QUOTA;
-    }
-    return d.n;
-  }
-
-  function useMeaAICredit() {
-    const c = getMeaAICredits();
-    if (c <= 0) return false;
-    saveSafe(SK_MEA_AI, { n: c - 1, quarter: getMeaQuarter() });
-    return true;
-  }
-
-  function refundMeaAICredit() {
-    saveSafe(SK_MEA_AI, { n: getMeaAICredits() + 1, quarter: getMeaQuarter() });
-  }
-
   function getMeaQuarter() {
     const d = new Date();
     return `${d.getFullYear()}-Q${Math.ceil((d.getMonth()+1)/3)}`;
@@ -4511,9 +4487,8 @@
 
   function updateMeaAICredits() {
     if (!E.meaAiCredits) return;
-    const c = getMeaAICredits();
-    E.meaAiCredits.textContent = `${c} credit${c===1?'':'s'} left`;
-    E.meaAiCredits.style.color = c < 10 ? '#e74c3c' : '#27ae60';
+    E.meaAiCredits.textContent = 'Unlimited · Plus';
+    E.meaAiCredits.style.color = '#27ae60';
   }
 
   async function triggerMeaAI(qType) {
@@ -4535,14 +4510,9 @@
     const ans = S.answers[S.idx];
     if (!q) return;
 
-    // Explanations already fetched on this device stay viewable at 0 credits.
+    // Teach Me is a Plus feature and unlimited for Plus — no credits.
     const cacheKey = teachCacheKey(q, qType);
     const local = getCachedTeach(cacheKey);
-    const credits = getMeaAICredits();
-    if (credits <= 0 && !local) {
-      alert(`You've used all ${MEA_AI_QUOTA} Teach Me credits for this quarter.\n\nTop up: ₦500 = 50 more explanations.`);
-      return;
-    }
 
     // Show panel
     if (E.meaAiPanel) E.meaAiPanel.classList.remove('hidden');
@@ -4582,6 +4552,12 @@
     // in /api/teach keyed on the `teach` fields sent below.)
     if (local) { show(local); return; }
 
+    // Layer 2 — pre-generated for the whole official bank
+    // (data/explanations/<subject>.json, downloaded once per subject on
+    // first Teach Me tap). No AI call at all.
+    const premade = await getPremadeTeach(S.subject, cacheKey);
+    if (premade) { putCachedTeach(cacheKey, premade); show(premade); return; }
+
     let prompt = '';
     if (qType === 'objective') {
       prompt = `You are a WAEC/NECO exam tutor helping Nigerian students prepare for their exams.
@@ -4617,12 +4593,6 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     }
 
     try {
-      if (!useMeaAICredit()) {
-        if (E.meaAiLoading) E.meaAiLoading.classList.add('hidden');
-        alert('No AI credits remaining.');
-        if (E.meaAiPanel) E.meaAiPanel.classList.add('hidden');
-        return;
-      }
       // `prompt` keeps today's /api/teach working unchanged; `teach` lets the
       // updated backend build the prompt server-side and cache by content.
       const res  = await fetch(API_BASE + '/api/teach', {
@@ -4630,7 +4600,7 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt,
-          teach: { app: 'mea', v: 1, qType, id: q.id || null, subject: S.subject, exam: examName,
+          teach: { app: 'mea', v: 1, qType, id: q.id || null, subject: S.subject, subjectName: subjName, exam: examName,
                    question: q.question, options: q.options || null, answer: q.answer ?? null,
                    markingScheme: qType === 'objective' ? null : (q.markingScheme || []).map(p => p.point),
                    passage: q.passage || null, passageTitle: q.passageTitle || null }
@@ -4642,7 +4612,6 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
       putCachedTeach(cacheKey, text);
       show(text);
     } catch(err) {
-      refundMeaAICredit(); // student got nothing — don't charge them
       if (E.meaAiLoading) E.meaAiLoading.classList.add('hidden');
       if (E.meaAiResponse) {
         E.meaAiResponse.innerHTML = '<p style="color:#e74c3c;font-size:.85rem">Could not reach AI. Check your connection and try again.</p>';
@@ -4650,6 +4619,20 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
       }
       updateMeaAICredits();
     }
+  }
+
+  // Pre-generated explanations, one file per subject, fetched at most once
+  // per page load. A missing file or no network just means "no pre-made
+  // explanation" — the live /api/teach path takes over.
+  const _premade = new Map();
+  async function getPremadeTeach(subject, key) {
+    if (!_premade.has(subject)) {
+      _premade.set(subject, fetch(`data/explanations/${encodeURIComponent(subject)}.json`, { cache: 'no-cache' })
+        .then(r => (r.ok ? r.json() : {}))
+        .catch(() => { _premade.delete(subject); return {}; }));
+    }
+    const data = await _premade.get(subject);
+    return data && typeof data[key] === 'string' ? data[key] : null;
   }
 
   const SK_TEACH_CACHE = 'mea-teach-cache-v1';
