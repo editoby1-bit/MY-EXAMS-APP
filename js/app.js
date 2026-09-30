@@ -4493,7 +4493,13 @@
     return d.n;
   }
 
+  // Teach Me is a Plus-only feature, and Plus gets it unlimited: each
+  // explanation is generated once and cached for everyone, so usage can't
+  // grow the API bill. The credit helpers are kept as no-ops for Plus.
+  function isMeaPlus() { return S.hasAccess && loadSafe(SK.tier) === 'plus'; }
+
   function useMeaAICredit() {
+    if (isMeaPlus()) return true;
     const c = getMeaAICredits();
     if (c <= 0) return false;
     saveSafe(SK_MEA_AI, { n: c - 1, quarter: getMeaQuarter() });
@@ -4501,6 +4507,7 @@
   }
 
   function refundMeaAICredit() {
+    if (isMeaPlus()) return;
     saveSafe(SK_MEA_AI, { n: getMeaAICredits() + 1, quarter: getMeaQuarter() });
   }
 
@@ -4511,6 +4518,7 @@
 
   function updateMeaAICredits() {
     if (!E.meaAiCredits) return;
+    if (isMeaPlus()) { E.meaAiCredits.textContent = 'Unlimited'; E.meaAiCredits.style.color = '#27ae60'; return; }
     const c = getMeaAICredits();
     E.meaAiCredits.textContent = `${c} credit${c===1?'':'s'} left`;
     E.meaAiCredits.style.color = c < 10 ? '#e74c3c' : '#27ae60';
@@ -4539,7 +4547,7 @@
     const cacheKey = teachCacheKey(q, qType);
     const local = getCachedTeach(cacheKey);
     const credits = getMeaAICredits();
-    if (credits <= 0 && !local) {
+    if (credits <= 0 && !local && !isPlus) {
       alert(`You've used all ${MEA_AI_QUOTA} Teach Me credits for this quarter.\n\nTop up: ₦500 = 50 more explanations.`);
       return;
     }
