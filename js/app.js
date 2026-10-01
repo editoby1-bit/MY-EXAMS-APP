@@ -1302,6 +1302,7 @@
         saveClassMembership({ classCode, name, pin });
         if (result.entitlement) {
           grantAccess(result.entitlement.days, result.entitlement.tier);
+          if (result.snapToken) setSnapPass(result.snapToken, result.snapsLeft);
         } else {
           showInfoToast('Joined class!');
         }
@@ -2880,7 +2881,6 @@
     exp.setDate(exp.getDate() + days);
     // `start` anchors the snap periods: a new payment starts a fresh batch.
     saveSafe(SK.access, { expires: exp.toISOString(), start: Date.now() });
-    try { localStorage.removeItem('mea-snaps-v1'); } catch {} // = SK_SNAPS, declared further down
     saveSafe(SK.tier, tier || 'student');
     S.hasAccess = true;
     S.tier = tier || 'student';
@@ -2913,6 +2913,7 @@
         // Trust the server's determination of tier/days (based on amount
         // actually paid), not whatever the client thinks it bought.
         grantAccess(data.days || fallbackDays, data.tier || fallbackTier);
+        if (data.snapToken) setSnapPass(data.snapToken, data.snapsLeft);
         return true;
       }
       alert('We could not confirm this payment yet. If you were charged, please contact support with reference: ' + reference);
@@ -4201,6 +4202,10 @@
     // same Vercel API) instead of listing them in client JS.
     if (codes[code]) {
       grantAccess(codes[code].days, codes[code].tier);
+      // Demo snaps come from the server (5 per code per network).
+      fetch(API_BASE + '/api/verify-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ demoSnaps: true, code }) })
+        .then(r => r.json()).then(d => { if (d.ok) setSnapPass(d.snapToken, d.snapsLeft); }).catch(() => {});
     } else {
       E.accessCodeInput.style.borderColor = 'var(--red, #e55)';
       setTimeout(() => { E.accessCodeInput.style.borderColor = ''; }, 1500);
@@ -4696,55 +4701,59 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
   // ⚙️ Set your Vercel API URL here after deployment
   const SNAP_API_URL   = 'https://editoby-api.vercel.app/api/mark';
   const SK_SNAPS       = 'mea-snaps-v1';
-  const SNAP_QUARTERLY = 50; // snaps per period for Student Pass
-  // Snap periods count from the student's payment date (3 months each),
-  // not calendar quarters.
-  const SNAP_PERIOD_DAYS = 90;
+  const SNAP_QUARTERLY = 50; // snaps per quarter paid for (server: ALLOWANCE.mea)
+  // Snaps are counted on the server, one shared balance per pass, so every
+  // phone on a pass (and My JAMB App, which the Student Pass includes) draws
+  // from the same allowance. The pass's secret snap token is saved here;
+  // SK_SNAPS just holds the last balance the server reported, for display.
+  const SK_SNAP_TOKEN  = 'mea-snap-token-v1'; // My JAMB App reads this key too
 
-  // Start of the current snap period: the payment date, then every
-  // SNAP_PERIOD_DAYS after it. Access saved before this change has no
-  // start date, so it gets one (today) the first time it's needed.
-  function snapPeriodStart() {
-    const acc = loadSafe(SK.access);
-    let start = acc?.start;
-    if (!start) { start = Date.now(); if (acc) saveSafe(SK.access, { ...acc, start }); }
-    const P = SNAP_PERIOD_DAYS * 86400000;
-    return start + Math.max(0, Math.floor((Date.now() - start) / P)) * P;
+  function snapToken() { return loadSafe(SK_SNAP_TOKEN); }
+  function setSnapPass(token, left) {
+    if (token) saveSafe(SK_SNAP_TOKEN, token);
+    if (typeof left === 'number') setSnapsLeft(left);
   }
-
+  function setSnapsLeft(n) {
+    saveSafe(SK_SNAPS, { n: Math.max(0, n) });
+    updateSnapCreditsBadge();
+  }
+  // Last balance the server reported (0 with no pass on this phone).
   function getSnapCredits() {
-    const ps = snapPeriodStart();
-    const d  = loadSafe(SK_SNAPS);
-    if (!d || d.periodStart !== ps) {
-      saveSafe(SK_SNAPS, { n: SNAP_QUARTERLY, periodStart: ps });
-      return SNAP_QUARTERLY;
-    }
-    return d.n;
+    if (!snapToken()) return 0;
+    const d = loadSafe(SK_SNAPS);
+    return typeof d?.n === 'number' ? d.n : SNAP_QUARTERLY;
   }
-
-  function useSnapCredit() {
-    const c = getSnapCredits();
-    if (c <= 0) return false;
-    saveSafe(SK_SNAPS, { n: c - 1, periodStart: snapPeriodStart() });
-    return true;
+  async function syncSnapCredits() {
+    const token = snapToken();
+    if (!token) return 0;
+    try {
+      const r = await fetch(SNAP_API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ checkSnaps: true, snapToken: token }) });
+      const d = await r.json();
+      if (typeof d.snapsLeft === 'number') { setSnapsLeft(d.snapsLeft); return d.snapsLeft; }
+    } catch {}
+    return null;
   }
 
   function updateSnapCreditsBadge() {
     if (!E.snapCreditsBadge) return;
     const c = getSnapCredits();
-    E.snapCreditsBadge.textContent = `${c} snap${c===1?'':'s'} left this quarter`;
+    E.snapCreditsBadge.textContent = `${c} snap${c===1?'':'s'} left`;
     E.snapCreditsBadge.style.color = c < 5 ? '#e74c3c' : 'var(--text-dim)';
   }
 
-  function triggerSnap() {
+  async function triggerSnap() {
     if (!S.hasAccess) { showPaywall('upgrade'); return; }
-    const credits = getSnapCredits();
-    if (credits <= 0) {
-      alert(`You have used all your snap credits for this quarter. Your quarter is the 3 months from your payment date.\n\nTop up: ₦500 = 10 more snaps.`);
+    if (!snapToken()) {
+      alert('Snaps are linked to your pass. If you paid on another phone, restore your pass on this phone to use your snaps here.');
       return;
     }
-    // Open file picker — on mobile this triggers camera
-    if (E.snapFileInput) E.snapFileInput.click();
+    // Open the camera straight away (browsers only allow it from the tap
+    // itself); the server makes the final check when the photo is sent.
+    if (getSnapCredits() > 0) { if (E.snapFileInput) E.snapFileInput.click(); syncSnapCredits(); return; }
+    const left = await syncSnapCredits();
+    if (left > 0) { alert(`You have ${left} snaps — tap Snap again.`); return; }
+    alert(`You have used all the snaps on your pass.\n\nTop up: ₦500 = 10 more snaps.`);
   }
 
   function handleSnapFile(e) {
@@ -4818,12 +4827,6 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     // Show processing overlay
     if (E.snapProcessing) E.snapProcessing.classList.remove('hidden');
 
-    if (!useSnapCredit()) {
-      if (E.snapProcessing) E.snapProcessing.classList.add('hidden');
-      alert('No snap credits remaining.');
-      return;
-    }
-    updateSnapCreditsBadge();
 
     const scheme = (q.markingScheme || []).map(s => ({
       point: s.point,
@@ -4836,6 +4839,7 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          snapToken:  snapToken(),
           image:      base64,
           mediaType,
           question:   q.question,
@@ -4850,7 +4854,12 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        if (err.code === 'IMAGE_TOO_LARGE') {
+        if (typeof err.snapsLeft === 'number') setSnapsLeft(err.snapsLeft);
+        if (err.code === 'NO_SNAPS') {
+          alert('You have used all the snaps on your pass.\n\nTop up: ₦500 = 10 more snaps.');
+        } else if (err.code === 'NO_PASS') {
+          alert(err.error || 'Snaps are linked to your pass. Restore your pass on this phone to use them.');
+        } else if (err.code === 'IMAGE_TOO_LARGE') {
           alert('Image is too large even after compression. Please try again with better lighting to avoid needing maximum quality.');
         } else {
           alert(err.error || 'Could not reach marking server. Check your connection.');
@@ -4859,6 +4868,7 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
       }
 
       const result = await res.json();
+      if (typeof result.snapsLeft === 'number') setSnapsLeft(result.snapsLeft);
       showSnapResult(result);
 
     } catch (err) {
