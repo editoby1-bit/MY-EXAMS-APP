@@ -4185,31 +4185,25 @@
     });
   };
 
-  function redeemCode() {
+  // Access codes for testers are checked on the server (they used to be
+  // listed here, readable by anyone who viewed the page source).
+  async function redeemCode() {
     const code = (E.accessCodeInput.value||'').trim().toUpperCase();
     if (!code) { E.accessCodeInput.focus(); return; }
-    const codes = {
-      'MEA-DEMO-2025':  { days: 90,  tier: 'student' },
-      'MEA-PLUS-DEMO':  { days: 90,  tier: 'plus'    },
-      // 'WAEC-PROMO' and 'NECO-PROMO' — not in the official demo-code list,
-      // disabled here since they'd have been visible to anyone via view-source
-      // and grant free access. Re-enable only if this was an intentional campaign.
-      'JAMB-PROMO':     { days: 90,  tier: 'jamb'    },
-      'TEST7':          { days: 7,   tier: 'student' },
-    };
-    // ⚠️ These codes are still readable by anyone who views this file's source.
-    // For long-lived or high-value codes, validate them server-side (via the
-    // same Vercel API) instead of listing them in client JS.
-    if (codes[code]) {
-      grantAccess(codes[code].days, codes[code].tier);
-      // Demo snaps come from the server (5 per code per network).
-      fetch(API_BASE + '/api/verify-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ demoSnaps: true, code }) })
-        .then(r => r.json()).then(d => { if (d.ok) setSnapPass(d.snapToken, d.snapsLeft); }).catch(() => {});
-    } else {
+    try {
+      const r = await fetch(API_BASE + '/api/verify-payment', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ redeemCode: true, code }) });
+      const d = await r.json().catch(() => ({}));
+      if (d.ok) {
+        grantAccess(d.days, d.tier);
+        if (d.snapToken) setSnapPass(d.snapToken, d.snapsLeft);
+        return;
+      }
       E.accessCodeInput.style.borderColor = 'var(--red, #e55)';
       setTimeout(() => { E.accessCodeInput.style.borderColor = ''; }, 1500);
-      alert('Invalid or expired code.');
+      alert(d.error || 'Invalid or expired code.');
+    } catch {
+      alert('No connection. Check your internet and try again.');
     }
   }
 
