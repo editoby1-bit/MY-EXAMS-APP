@@ -4732,7 +4732,7 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
   function updateSnapCreditsBadge() {
     if (!E.snapCreditsBadge) return;
     const c = getSnapCredits();
-    E.snapCreditsBadge.textContent = `${c} snap${c===1?'':'s'} left`;
+    E.snapCreditsBadge.textContent = `${c} snap${c===1?'':'s'} left this quarter`;
     E.snapCreditsBadge.style.color = c < 5 ? '#e74c3c' : 'var(--text-dim)';
   }
 
@@ -4740,7 +4740,7 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     if (!S.hasAccess) { showPaywall('upgrade'); return; }
     const credits = getSnapCredits();
     if (credits <= 0) {
-      alert(`You have used all your snap credits for now. They refill every 3 months from your payment date.\n\nTop up: ₦300 = 10 more snaps.`);
+      alert(`You have used all your snap credits for this quarter. Your quarter is the 3 months from your payment date.\n\nTop up: ₦300 = 10 more snaps.`);
       return;
     }
     // Open file picker — on mobile this triggers camera
