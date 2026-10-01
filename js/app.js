@@ -81,7 +81,8 @@
   const FREE_TRIAL_LIMIT    = 10;   // lifetime questions, not daily
   const FREE_SNAP_LIMIT     = 3;    // lifetime snaps on free tier
   const EARLY_ADOPTER_PRICE = 200000; // ₦2,000 in kobo
-  const STANDARD_PRICE      = 250000; // ₦2,500 in kobo
+  const STANDARD_PRICE      = 300000; // ₦3,000 in kobo
+  const YEARLY_PRICE        = 900000; // ₦9,000 in kobo
   const EARLY_ADOPTER_CAP   = 100;    // first 100 students
 
   const S = {
@@ -1463,7 +1464,7 @@
             <strong>${tierLabel} Bundle — Active</strong>
             <span style="font-size:.8rem; color:var(--text-dim,#8a94a6);">Expires ${expDate}</span>
           </div>
-          <p style="font-size:.82rem; color:var(--text-dim,#8a94a6); margin:.35rem 0;">${bundle.seatsUsed} of ${bundle.tier === 'standard' ? bundle.seatLimit : 'unlimited'} seats used · students who join get ${bundle.tier === 'standard' ? 'Student Pass' : 'Student Pass Plus'} automatically</p>
+          <p style="font-size:.82rem; color:var(--text-dim,#8a94a6); margin:.35rem 0;">${bundle.seatsUsed} of ${bundle.tier === 'standard' ? bundle.seatLimit : 'unlimited'} seats used · students who join get Student Pass automatically</p>
           ${nearExpiry ? `<button class="btn-secondary" id="bundleRenewBtn" style="width:100%; margin-top:.5rem;">Renew Bundle</button>` : ''}
         </div>
         <div id="bundlePickerOut"></div>
@@ -2836,13 +2837,27 @@
     E.paywallOverlay.classList.remove('hidden');
   }
 
-  function updateEarlyAdopterBanner() {
-    // In production this would fetch from backend. For now simulate with localStorage count.
-    const sold = loadSafe('mea-ea-sold') || 0;
-    const remaining = Math.max(0, EARLY_ADOPTER_CAP - sold);
+  // Asks the server how many early-adopter spots are taken (and whether
+  // this email holds one). null if the server can't be reached.
+  async function fetchEarlyAdopterStatus(email) {
+    try {
+      const res = await fetch(API_BASE + '/api/verify-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ earlyAdopterStatus: true, email: email || '' })
+      });
+      const d = await res.json();
+      return res.ok && typeof d.sold === 'number' ? d : null;
+    } catch { return null; }
+  }
+
+  async function updateEarlyAdopterBanner() {
+    const ea = await fetchEarlyAdopterStatus();
+    // Unknown (offline / server down): hide the offer rather than guess.
+    const remaining = ea ? Math.max(0, ea.cap - ea.sold) : 0;
     if (E.earlyAdopterCounter) {
       if (remaining > 0) {
-        E.earlyAdopterCounter.textContent = `${remaining} of 100 spots remaining`;
+        E.earlyAdopterCounter.textContent = `${remaining} of ${ea.cap} spots remaining`;
         if (E.earlyAdopterBanner) E.earlyAdopterBanner.style.display = '';
         if (E.payBtn) {
           E.payBtn.textContent = `Get Early Access — ₦2,000/quarter →`;
@@ -2850,7 +2865,7 @@
       } else {
         // Early adopter cap reached — show standard price
         if (E.earlyAdopterBanner) E.earlyAdopterBanner.style.display = 'none';
-        if (E.payBtn) E.payBtn.textContent = `Get Student Pass — ₦2,500/quarter →`;
+        if (E.payBtn) E.payBtn.textContent = `Get Student Pass — ₦3,000/quarter →`;
       }
     }
   }
@@ -3044,45 +3059,39 @@
   async function handlePayment(tier, period) {
     tier   = tier   || 'student';
     period = period || 'quarterly';
+    // There is one Student Pass with everything; 'plus' is kept as an alias
+    // for old buttons and saved links.
+    if (tier === 'plus') tier = 'student';
 
-    const sold          = loadSafe('mea-ea-sold') || 0;
-    const isEarlyAdopter = sold < EARLY_ADOPTER_CAP;
-
-    // Amount map in kobo
-    const amounts = {
-      'student-quarterly': isEarlyAdopter ? EARLY_ADOPTER_PRICE : STANDARD_PRICE,
-      'student-yearly':    750000,
-      'plus-quarterly':    350000,
-      'plus-yearly':       1050000,
-      'jamb-quarterly':    150000,
-    };
-
-    const labels = {
-      'student-quarterly': isEarlyAdopter ? 'Student Pass — Early Access (₦2,000/quarter)' : 'Student Pass (₦2,500/quarter)',
-      'student-yearly':    'Student Pass — Full Year (₦7,500)',
-      'plus-quarterly':    'Student Pass Plus (₦3,500/quarter)',
-      'plus-yearly':       'Student Pass Plus — Full Year (₦10,500)',
-      'jamb-quarterly':    'JAMB Only (₦1,500/quarter)',
-    };
-
-    // Days of access granted
-    const days = {
-      'student-quarterly': 90,
-      'student-yearly':    365,
-      'plus-quarterly':    90,
-      'plus-yearly':       365,
-      'jamb-quarterly':    90,
-    };
-
-    const key    = tier + '-' + period;
-    const amount = amounts[key];
-    const label  = labels[key];
-    const daysToGrant = days[key];
-
-    if (!amount) return;
+    const key = tier + '-' + period;
+    if (!['student-quarterly', 'student-yearly', 'jamb-quarterly'].includes(key)) return;
 
     const email = await getEmailViaModal();
     if (!email) return; // cancelled
+
+    // Early-adopter price: the server counts spots (by email) so the first
+    // 100 students keep ₦2,000 for life, on any device.
+    let isEarlyAdopter = false;
+    if (key === 'student-quarterly') {
+      const ea = await fetchEarlyAdopterStatus(email);
+      isEarlyAdopter = !!ea && (ea.member || ea.sold < ea.cap);
+    }
+
+    const amounts = {
+      'student-quarterly': isEarlyAdopter ? EARLY_ADOPTER_PRICE : STANDARD_PRICE,
+      'student-yearly':    YEARLY_PRICE,
+      'jamb-quarterly':    150000,
+    };
+    const labels = {
+      'student-quarterly': isEarlyAdopter ? 'Student Pass — Early Access (₦2,000/quarter)' : 'Student Pass (₦3,000/quarter)',
+      'student-yearly':    'Student Pass — Full Year (₦9,000)',
+      'jamb-quarterly':    'JAMB Only (₦1,500/quarter)',
+    };
+    const days = { 'student-quarterly': 90, 'student-yearly': 365, 'jamb-quarterly': 90 };
+
+    const amount = amounts[key];
+    const label  = labels[key];
+    const daysToGrant = days[key];
 
     const PAYSTACK_KEY = 'pk_live_5d12ee2a90900116dc222107e059a06214c085ff';
     // 🔑 When Paystack approves your account, replace the line above with:
@@ -3107,10 +3116,7 @@
         // internal validation (it wants a plain function reference), so we
         // keep this synchronous and run the actual async verification inside.
         (async () => {
-          const verified = await verifyAndGrant(response.reference, tier, daysToGrant);
-          if (verified && (tier === 'student' || tier === 'jamb') && isEarlyAdopter && period === 'quarterly') {
-            saveSafe('mea-ea-sold', sold + 1);
-          }
+          await verifyAndGrant(response.reference, tier === 'student' ? 'plus' : tier, daysToGrant);
         })();
       }
     });
@@ -4478,7 +4484,7 @@
   }
 
   /* ════════════════════════════════
-     AI EXPLANATIONS (Plus tier)
+     AI EXPLANATIONS (Teach Me — every Student Pass)
   ════════════════════════════════ */
   const SK_MEA_AI     = 'mea-ai-credits-v1';
   const MEA_AI_QUOTA  = 100; // per quarter
@@ -4493,10 +4499,10 @@
     return d.n;
   }
 
-  // Teach Me is a Plus-only feature, and Plus gets it unlimited: each
-  // explanation is generated once and cached for everyone, so usage can't
-  // grow the API bill. The credit helpers are kept as no-ops for Plus.
-  function isMeaPlus() { return S.hasAccess && loadSafe(SK.tier) === 'plus'; }
+  // Student Pass (one plan, everything included) gets unlimited Teach Me:
+  // each explanation is generated once and cached for everyone, so usage
+  // can't grow the API bill. Credit helpers are no-ops for paid users.
+  function isMeaPlus() { return !!S.hasAccess; }
 
   function useMeaAICredit() {
     if (isMeaPlus()) return true;
@@ -4529,7 +4535,7 @@
       showInfoToast('Teach Me is only available in Practice Mode or when reviewing your results.');
       return;
     }
-    const isPlus = S.hasAccess && (loadSafe(SK.tier) === 'plus');
+    const isPlus = isMeaPlus();
     if (!S.hasAccess) {
       showPaywall('upgrade');
       return;
@@ -4917,8 +4923,8 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     if (!modal) { showPaywall('upgrade'); return; }
 
     icon.textContent  = '🧠';
-    title.textContent = '"Teach Me" is a Plus Feature';
-    sub.textContent   = 'Tap "Teach Me" on any question and AI breaks it down — the concept, the trap, a memory tip. Upgrade to Student Pass Plus for ₦3,500/quarter.';
+    title.textContent = '"Teach Me" comes with Student Pass';
+    sub.textContent   = 'Tap "Teach Me" on any question and AI breaks it down — the concept, the trap, a memory tip. Unlimited, with Student Pass: ₦3,000/quarter.';
 
     const newStay  = stay.cloneNode(true);
     const newLeave = leave.cloneNode(true);
@@ -4926,12 +4932,12 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     leave.parentNode.replaceChild(newLeave, leave);
 
     document.getElementById('exitModalStay').textContent  = 'Not Now';
-    document.getElementById('exitModalLeave').textContent = 'Upgrade to Plus — ₦3,500 →';
+    document.getElementById('exitModalLeave').textContent = 'Get Student Pass →';
     document.getElementById('exitModalStay').style.cssText  = '';
     document.getElementById('exitModalStay').addEventListener('click',  () => modal.classList.add('hidden'));
     document.getElementById('exitModalLeave').addEventListener('click', () => {
       modal.classList.add('hidden');
-      handlePayment('plus', 'quarterly');
+      handlePayment('student', 'quarterly');
     });
     modal.classList.remove('hidden');
   }
@@ -5093,7 +5099,7 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
 
   function shareApp() {
     const url  = window.location.href;
-    const text = '🎓 Preparing for WAEC/NECO? Try My Exams App!\nPast questions + model answers for 15 subjects + snap-and-mark theory.\n₦2,500 for 3 months — early access at ₦2,000.\n\n'+url;
+    const text = '🎓 Preparing for WAEC/NECO? Try My Exams App!\nPast questions + model answers for 15 subjects + AI that explains every answer + snap-and-mark theory.\n₦3,000 for 3 months — early access at ₦2,000.\n\n'+url;
     if (navigator.share) navigator.share({title:'My Exams App',text,url}).catch(()=>{});
     else if (navigator.clipboard) navigator.clipboard.writeText(text)
       .then(()=>alert('📋 Copied! Paste in WhatsApp or SMS.'));
@@ -5141,13 +5147,10 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     if (!active) {
       badge.innerHTML = `<span>🆓 Free Trial</span><button class="plan-badge-upgrade" onclick="showPaywall('upgrade')">Upgrade →</button>`;
       badge.className = 'plan-badge plan-free';
-    } else if (tier === 'plus') {
-      badge.innerHTML = `<span>⭐ Student Pass Plus${expStr ? ' · expires ' + expStr : ''}</span><button class="plan-badge-renew" onclick="handlePayment('plus','quarterly')">Renew →</button>`;
-      badge.className = 'plan-badge plan-plus';
     } else {
-      // Student Pass — offer upgrade to Plus
-      badge.innerHTML = `<span>✅ Student Pass${expStr ? ' · expires ' + expStr : ''}</span><button class="plan-badge-upgrade" onclick="showPlusUpgradePrompt()">Upgrade to Plus →</button>`;
-      badge.className = 'plan-badge plan-student';
+      // One Student Pass with everything ('student' and 'plus' are the same plan now)
+      badge.innerHTML = `<span>⭐ Student Pass${expStr ? ' · expires ' + expStr : ''}</span><button class="plan-badge-renew" onclick="handlePayment('student','quarterly')">Renew →</button>`;
+      badge.className = 'plan-badge plan-plus';
     }
     badge.classList.remove('hidden');
   }
@@ -5167,11 +5170,11 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     const remaining = Math.max(0, FREE_TRIAL_LIMIT - S.freeUsed);
     const msgs = [
       `⚡ ${remaining} free question${remaining===1?'':'s'} left — unlock unlimited access from ₦2,000`,
-      `🧠 Tap Teach Me you got it wrong — Student Pass Plus explains every answer`,
+      `🧠 Got it wrong? Teach Me explains every answer — unlimited with Student Pass`,
       `📸 Snap your theory answers and get marked instantly — Student Pass`,
       `🏆 WAEC & NECO prep — Teach Me, snap marking, community quiz from ₦2,000`,
       `🔓 Unlimited sessions · All 15 subjects · Year-by-year papers — Student Pass`,
-      `💡 "Why is this correct?" — Teach Me for your weak areas. Plus tier ₦3,500.`,
+      `💡 "Why is this correct?" — unlimited Teach Me with Student Pass, ₦3,000/quarter.`,
     ];
     const idx = Math.floor(Date.now() / 30000) % msgs.length;
     if (E.upgradeBarText) E.upgradeBarText.textContent = msgs[idx];
@@ -5182,7 +5185,7 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     {
       icon: '🧠',
       title: 'Got questions wrong? Tap Teach Me.',
-      sub:   'Student Pass Plus — tap "Teach Me" on any question. AI breaks down the concept, the trap, the memory tip. ₦3,500/quarter.'
+      sub:   'Student Pass — tap "Teach Me" on any question. AI breaks down the concept, the trap, the memory tip. Unlimited, ₦3,000/quarter.'
     },
     {
       icon: '📸',
@@ -5230,8 +5233,8 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
 
   /* ════════ TEASER TOAST (mid-session) ════════ */
   const SESSION_TEASERS = [
-    '🧠 Tap Teach Me you got that wrong — Student Pass Plus explains every answer. ₦3,500/quarter.',
-    '💡 "Teach Me" — tap to understand any answer — Teach Me built for WAEC & NECO. Upgrade to Plus.',
+    '🧠 Got that wrong? Teach Me explains every answer — unlimited with Student Pass, ₦3,000/quarter.',
+    '💡 "Teach Me" — tap to understand any answer, built for WAEC & NECO. Included in Student Pass.',
     '📸 Snap your theory answer and get it marked against the official scheme — Student Pass.',
     '⚡ Unlimited sessions across all 15 subjects from ₦2,000 — early access, 100 spots only.',
     '🏆 Challenge a friend on this subject — subscribe and create a quiz challenge now.',
