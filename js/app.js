@@ -2878,7 +2878,9 @@
       : new Date();                  // no active sub — start from today
     const exp = new Date(base);
     exp.setDate(exp.getDate() + days);
-    saveSafe(SK.access, { expires: exp.toISOString() });
+    // `start` anchors the snap periods: a new payment starts a fresh batch.
+    saveSafe(SK.access, { expires: exp.toISOString(), start: Date.now() });
+    try { localStorage.removeItem('mea-snaps-v1'); } catch {} // = SK_SNAPS, declared further down
     saveSafe(SK.tier, tier || 'student');
     S.hasAccess = true;
     S.tier = tier || 'student';
@@ -4694,13 +4696,27 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
   // ⚙️ Set your Vercel API URL here after deployment
   const SNAP_API_URL   = 'https://editoby-api.vercel.app/api/mark';
   const SK_SNAPS       = 'mea-snaps-v1';
-  const SNAP_QUARTERLY = 50; // snaps per quarter for Student Pass
+  const SNAP_QUARTERLY = 50; // snaps per period for Student Pass
+  // Snap periods count from the student's payment date (3 months each),
+  // not calendar quarters.
+  const SNAP_PERIOD_DAYS = 90;
+
+  // Start of the current snap period: the payment date, then every
+  // SNAP_PERIOD_DAYS after it. Access saved before this change has no
+  // start date, so it gets one (today) the first time it's needed.
+  function snapPeriodStart() {
+    const acc = loadSafe(SK.access);
+    let start = acc?.start;
+    if (!start) { start = Date.now(); if (acc) saveSafe(SK.access, { ...acc, start }); }
+    const P = SNAP_PERIOD_DAYS * 86400000;
+    return start + Math.max(0, Math.floor((Date.now() - start) / P)) * P;
+  }
 
   function getSnapCredits() {
-    const qtr = getMeaQuarter();
-    const d   = loadSafe(SK_SNAPS);
-    if (!d || d.quarter !== qtr) {
-      saveSafe(SK_SNAPS, { n: SNAP_QUARTERLY, quarter: qtr });
+    const ps = snapPeriodStart();
+    const d  = loadSafe(SK_SNAPS);
+    if (!d || d.periodStart !== ps) {
+      saveSafe(SK_SNAPS, { n: SNAP_QUARTERLY, periodStart: ps });
       return SNAP_QUARTERLY;
     }
     return d.n;
@@ -4709,14 +4725,14 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
   function useSnapCredit() {
     const c = getSnapCredits();
     if (c <= 0) return false;
-    saveSafe(SK_SNAPS, { n: c - 1, quarter: getMeaQuarter() });
+    saveSafe(SK_SNAPS, { n: c - 1, periodStart: snapPeriodStart() });
     return true;
   }
 
   function updateSnapCreditsBadge() {
     if (!E.snapCreditsBadge) return;
     const c = getSnapCredits();
-    E.snapCreditsBadge.textContent = `${c} snap${c===1?'':'s'} left this quarter`;
+    E.snapCreditsBadge.textContent = `${c} snap${c===1?'':'s'} left`;
     E.snapCreditsBadge.style.color = c < 5 ? '#e74c3c' : 'var(--text-dim)';
   }
 
@@ -4724,7 +4740,7 @@ Be specific to the Nigerian curriculum. Keep it practical and encouraging.`;
     if (!S.hasAccess) { showPaywall('upgrade'); return; }
     const credits = getSnapCredits();
     if (credits <= 0) {
-      alert('You have used all your snap credits for this quarter.\n\nTop up: ₦300 = 10 more snaps.');
+      alert(`You have used all your snap credits for now. They refill every 3 months from your payment date.\n\nTop up: ₦300 = 10 more snaps.`);
       return;
     }
     // Open file picker — on mobile this triggers camera
