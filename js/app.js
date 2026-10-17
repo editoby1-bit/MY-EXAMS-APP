@@ -3571,7 +3571,15 @@
         body: JSON.stringify({ action: 'leaderboard', code }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.ok) showChallengeLeaderboard(code, data.scores);
+      if (res.ok && data.ok) {
+        showChallengeLeaderboard(code, data.scores);
+        // This device's own result never reached the server: send it again.
+        const local = loadSafe(QC_STORE, {})[code];
+        if (local?.scores?.[S.currentUser] && !(data.scores || {})[S.currentUser] && Array.isArray(local.answers)) {
+          fetch(API_BASE + '/api/challenge', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'submit', code, student: S.currentUser, answers: local.answers }) }).catch(() => {});
+        }
+      }
     } catch (err) { /* local scores already shown as a fallback */ }
   }
 
@@ -4069,8 +4077,10 @@
     const challenges = loadSafe(QC_STORE, {});
     if (challenges[code]) {
       challenges[code].scores[S.currentUser] = { score, total, pct, time: new Date().toLocaleTimeString() };
+      challenges[code].answers = S.answers.slice(); // kept so a failed submit can be retried
       saveSafe(QC_STORE, challenges);
     }
+    const answers = S.answers.slice();
     S._challengeCode = null;
     refreshChallengeBadgeState();
 
@@ -4079,7 +4089,8 @@
       const res = await fetch(API_BASE + '/api/challenge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'submit', code, student: S.currentUser, score, total, pct }),
+        // The server grades the picked options itself; it never trusts a sent score.
+        body: JSON.stringify({ action: 'submit', code, student: S.currentUser, answers }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.ok) backendScores = data.scores;
@@ -4095,7 +4106,10 @@
   function showChallengeLeaderboard(code, scoresOverride) {
     const challenges = loadSafe(QC_STORE, {});
     const localChallenge = challenges[code];
-    const scores = scoresOverride || localChallenge?.scores;
+    // Server scores plus any this device recorded that the server lacks (e.g.
+    // a submit that failed offline), so a result never vanishes from the list.
+    const scores = (scoresOverride || localChallenge?.scores)
+      ? Object.assign({}, localChallenge?.scores || {}, scoresOverride || {}) : null;
     if (!scores) return;
 
     const list = document.getElementById('qcLeaderboardList');
